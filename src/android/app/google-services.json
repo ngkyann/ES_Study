@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "841877655068",
+    "project_id": "es-study-database-5fbdd",
+    "storage_bucket": "es-study-database-5fbdd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:841877655068:android:da3f9d971bfab5c40199d9",
+        "android_client_info": {
+          "package_name": "com.example.esstudy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCksriyGwtVoO3sSSRIJ-rXRe3jmEITVAg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

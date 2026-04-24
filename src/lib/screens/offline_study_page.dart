@@ -13,8 +13,8 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
   int selectedMinutes = 30;
 
   final Map<int, List<List<int>>> timePlans = {
-    15: [
-      [15],
+    1: [
+      [1],
     ],
     30: [
       [15, 5, 10],

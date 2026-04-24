@@ -3,6 +3,7 @@ import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/screens/profile_page.dart';
 import 'package:esstudy/screens/room_search_page.dart';
 import 'package:esstudy/screens/offline_study_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // --- MÀN HÌNH CHÍNH ---
 class HomePage extends StatefulWidget {
@@ -22,7 +23,61 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int userPoints = 100; // 👈 điểm ban đầu
+  int userPoints = 0; // 👈 điểm ban đầu
+  bool _isLoadingPoints = true;
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserPoints();
+  }
+
+  Future<void> _fetchUserPoints() async {
+    try {
+      var doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .get();
+
+      if (doc.exists && doc.data() != null) {
+        setState(() {
+          // Lấy giá trị từ Firebase, nếu không có mới dùng 100 làm dự phòng
+          userPoints = doc.data()!['points'] ?? 100;
+          _isLoadingPoints = false;
+        });
+      } else {
+        // Nếu user chưa có trên DB (lỗi hy hữu), tắt loading và giữ mức 0 hoặc 100
+        setState(() => _isLoadingPoints = false);
+      }
+    } catch (e) {
+      debugPrint("Lỗi tải điểm: $e");
+      setState(() => _isLoadingPoints = false);
+    }
+  }
+
+  Future<void> _updatePointsOnFirebase(int additionalPoints) async {
+    try {
+      // 1. Cập nhật lên Firebase (Cộng dồn số điểm mới vào số cũ)
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId) // Dùng ID của user hiện tại
+          .update({
+            'points': FieldValue.increment(
+              additionalPoints,
+            ), // Lệnh chuẩn để cộng dồn
+          });
+
+      // 2. Cập nhật giao diện (Local State)
+      setState(() {
+        userPoints += additionalPoints;
+      });
+
+      debugPrint("Cập nhật thành công: +$additionalPoints điểm");
+    } catch (e) {
+      debugPrint("Lỗi cập nhật điểm: $e");
+      // Thông báo cho người dùng nếu cần
+    }
+  }
+
   String getGreeting() {
     final now = DateTime.now().toUtc().add(
       const Duration(hours: 7),
@@ -64,15 +119,27 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(width: 12),
 
               /// 🏆 POINT
+              /// 🏆 POINT
               const Icon(Icons.workspace_premium, color: Colors.yellow),
               const SizedBox(width: 4),
-              Text(
-                "$userPoints",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
+
+              // Thay đổi đoạn Text cũ thành đoạn kiểm tra này:
+              _isLoadingPoints
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      "$userPoints",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
             ],
           ),
         ),
@@ -208,9 +275,7 @@ class _HomePageState extends State<HomePage> {
               );
 
               if (result is int) {
-                setState(() {
-                  userPoints += result;
-                });
+                await _updatePointsOnFirebase(result);
               }
             } else if (items[index].isSearch) {
               Navigator.push(
