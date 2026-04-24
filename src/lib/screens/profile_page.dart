@@ -6,12 +6,14 @@ class ProfilePage extends StatelessWidget {
   final String userName;
   final String userId;
   final String selectedClass;
+  final int userPoints;
 
   const ProfilePage({
     super.key,
     required this.userName,
     required this.userId,
     required this.selectedClass,
+    required this.userPoints, // 👈 thêm
   });
 
   @override
@@ -103,7 +105,11 @@ class ProfilePage extends StatelessWidget {
                 children: [
                   _infoCard(Icons.alternate_email, "ID người dùng", "@$userId"),
                   _infoCard(Icons.military_tech, "Xếp hạng", "Kim cương"),
-                  _infoCard(Icons.workspace_premium, "Tổng điểm", "1,500"),
+                  _infoCard(
+                    Icons.workspace_premium,
+                    "Tổng điểm",
+                    "$userPoints",
+                  ),
                   _infoCard(
                     Icons.calendar_month,
                     "Ngày gia nhập",

@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/screens/profile_page.dart';
 import 'package:esstudy/screens/room_search_page.dart';
+import 'package:esstudy/screens/offline_study_page.dart';
 
 // --- MÀN HÌNH CHÍNH ---
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   final String userName;
   final String userId;
   final String selectedClass;
@@ -17,22 +18,60 @@ class HomePage extends StatelessWidget {
   });
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int userPoints = 100; // 👈 điểm ban đầu
+  String getGreeting() {
+    final now = DateTime.now().toUtc().add(
+      const Duration(hours: 7),
+    ); // 🇻🇳 GMT+7
+    final hour = now.hour;
+
+    if (hour >= 5 && hour < 12) {
+      return "Chào buổi sáng";
+    } else if (hour >= 12 && hour < 18) {
+      return "Chào buổi chiều";
+    } else {
+      return "Chào buổi tối";
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
-        leadingWidth: 100,
+        leadingWidth: 160,
         leading: Container(
           margin: const EdgeInsets.only(left: 16),
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.local_fire_department, color: Colors.orangeAccent),
-              SizedBox(width: 4),
-              Text(
-                "15",
+              /// 🔥 STREAK
+              const Icon(
+                Icons.local_fire_department,
+                color: Colors.orangeAccent,
+              ),
+              const SizedBox(width: 4),
+              const Text(
+                "15", // 👉 sau này có thể làm dynamic
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+
+              const SizedBox(width: 12),
+
+              /// 🏆 POINT
+              const Icon(Icons.workspace_premium, color: Colors.yellow),
+              const SizedBox(width: 4),
+              Text(
+                "$userPoints",
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
               ),
             ],
           ),
@@ -47,9 +86,10 @@ class HomePage extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (context) => ProfilePage(
-                    userName: userName,
-                    userId: userId,
-                    selectedClass: selectedClass,
+                    userName: widget.userName,
+                    userId: widget.userId,
+                    selectedClass: widget.selectedClass,
+                    userPoints: userPoints, // 👈 truyền
                   ),
                 ),
               ),
@@ -86,12 +126,12 @@ class HomePage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Chào buổi sáng,",
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                  Text(
+                    "${getGreeting()},",
+                    style: const TextStyle(color: Colors.white70, fontSize: 16),
                   ),
                   Text(
-                    userName, // Hiển thị tên người dùng đã nhập
+                    widget.userName, // Hiển thị tên người dùng đã nhập
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
@@ -113,6 +153,7 @@ class HomePage extends StatelessWidget {
             _buildGridMenu(context, [
               _MenuData(Icons.add_home, "Tạo phòng", Colors.orange),
               _MenuData(Icons.menu_book, "Học Offline", Colors.green),
+
               _MenuData(
                 Icons.search,
                 "Tìm phòng",
@@ -133,6 +174,9 @@ class HomePage extends StatelessWidget {
               _MenuData(Icons.event_note, "Kế hoạch", Colors.purple),
               _MenuData(Icons.leaderboard, "Xếp hạng", Colors.redAccent),
               _MenuData(Icons.people, "Bạn bè", Colors.teal),
+              _MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
+              _MenuData(Icons.bar_chart, "Thống kê", Colors.indigo),
+              _MenuData(Icons.settings, "Cài đặt", Colors.grey),
             ]),
 
             const SizedBox(height: 20),
@@ -156,11 +200,22 @@ class HomePage extends StatelessWidget {
       itemCount: items.length,
       itemBuilder: (context, index) {
         return InkWell(
-          onTap: () {
-            if (items[index].isSearch) {
+          onTap: () async {
+            if (items[index].title == "Học Offline") {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const OfflineStudyPage()),
+              );
+
+              if (result is int) {
+                setState(() {
+                  userPoints += result;
+                });
+              }
+            } else if (items[index].isSearch) {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const RoomSearchPage()),
+                MaterialPageRoute(builder: (_) => const RoomSearchPage()),
               );
             }
           },
