@@ -69,6 +69,7 @@ class _LoginPageState extends State<LoginPage> {
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide.none,
                   ),
                   suffixIcon: IconButton(
                     icon: Icon(
