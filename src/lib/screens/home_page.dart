@@ -4,6 +4,7 @@ import 'package:esstudy/screens/profile_page.dart';
 import 'package:esstudy/screens/room_search_page.dart';
 import 'package:esstudy/screens/offline_study_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:esstudy/screens/leaderboard_page.dart'; // Thêm dòng này
 
 // --- MÀN HÌNH CHÍNH ---
 class HomePage extends StatefulWidget {
@@ -273,7 +274,6 @@ class _HomePageState extends State<HomePage> {
                 context,
                 MaterialPageRoute(builder: (_) => const OfflineStudyPage()),
               );
-
               if (result is int) {
                 await _updatePointsOnFirebase(result);
               }
@@ -281,6 +281,14 @@ class _HomePageState extends State<HomePage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const RoomSearchPage()),
+              );
+            } else if (items[index].title == "Xếp hạng") {
+              // 👇 THÊM ĐOẠN NÀY ĐỂ MỞ BẢNG XẾP HẠNG 👇
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => LeaderboardPage(currentUserId: widget.userId),
+                ),
               );
             }
           },
