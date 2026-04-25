@@ -4,19 +4,22 @@ import 'package:esstudy/screens/profile_page.dart';
 import 'package:esstudy/screens/room_search_page.dart';
 import 'package:esstudy/screens/offline_study_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:esstudy/screens/leaderboard_page.dart'; // Thêm dòng này
+import 'package:esstudy/screens/leaderboard_page.dart';
+import 'package:esstudy/screens/settings_page.dart';
+import 'package:esstudy/screens/plan_page.dart';
+import 'package:esstudy/screens/history_page.dart';
 
-// --- MÀN HÌNH CHÍNH ---
 class HomePage extends StatefulWidget {
   final String userName;
   final String userId;
   final String selectedClass;
-
+  final String email;
   const HomePage({
     super.key,
     required this.userName,
     required this.userId,
     required this.selectedClass,
+    required this.email,
   });
 
   @override
@@ -24,8 +27,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int userPoints = 0; // 👈 điểm ban đầu
+  int userPoints = 0;
   bool _isLoadingPoints = true;
+
   @override
   void initState() {
     super.initState();
@@ -38,15 +42,12 @@ class _HomePageState extends State<HomePage> {
           .collection('users')
           .doc(widget.userId)
           .get();
-
       if (doc.exists && doc.data() != null) {
         setState(() {
-          // Lấy giá trị từ Firebase, nếu không có mới dùng 100 làm dự phòng
           userPoints = doc.data()!['points'] ?? 100;
           _isLoadingPoints = false;
         });
       } else {
-        // Nếu user chưa có trên DB (lỗi hy hữu), tắt loading và giữ mức 0 hoặc 100
         setState(() => _isLoadingPoints = false);
       }
     } catch (e) {
@@ -57,41 +58,23 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _updatePointsOnFirebase(int additionalPoints) async {
     try {
-      // 1. Cập nhật lên Firebase (Cộng dồn số điểm mới vào số cũ)
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(widget.userId) // Dùng ID của user hiện tại
-          .update({
-            'points': FieldValue.increment(
-              additionalPoints,
-            ), // Lệnh chuẩn để cộng dồn
-          });
-
-      // 2. Cập nhật giao diện (Local State)
-      setState(() {
-        userPoints += additionalPoints;
-      });
-
+          .doc(widget.userId)
+          .update({'points': FieldValue.increment(additionalPoints)});
+      setState(() => userPoints += additionalPoints);
       debugPrint("Cập nhật thành công: +$additionalPoints điểm");
     } catch (e) {
       debugPrint("Lỗi cập nhật điểm: $e");
-      // Thông báo cho người dùng nếu cần
     }
   }
 
   String getGreeting() {
-    final now = DateTime.now().toUtc().add(
-      const Duration(hours: 7),
-    ); // 🇻🇳 GMT+7
+    final now = DateTime.now().add(const Duration(hours: 7));
     final hour = now.hour;
-
-    if (hour >= 5 && hour < 12) {
-      return "Chào buổi sáng";
-    } else if (hour >= 12 && hour < 18) {
-      return "Chào buổi chiều";
-    } else {
-      return "Chào buổi tối";
-    }
+    if (hour >= 5 && hour < 12) return "Chào buổi sáng";
+    if (hour >= 12 && hour < 18) return "Chào buổi chiều";
+    return "Chào buổi tối";
   }
 
   @override
@@ -106,25 +89,18 @@ class _HomePageState extends State<HomePage> {
           margin: const EdgeInsets.only(left: 16),
           child: Row(
             children: [
-              /// 🔥 STREAK
               const Icon(
                 Icons.local_fire_department,
                 color: Colors.orangeAccent,
               ),
               const SizedBox(width: 4),
               const Text(
-                "15", // 👉 sau này có thể làm dynamic
+                "15",
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
-
               const SizedBox(width: 12),
-
-              /// 🏆 POINT
-              /// 🏆 POINT
               const Icon(Icons.workspace_premium, color: Colors.yellow),
               const SizedBox(width: 4),
-
-              // Thay đổi đoạn Text cũ thành đoạn kiểm tra này:
               _isLoadingPoints
                   ? const SizedBox(
                       width: 16,
@@ -144,23 +120,32 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-        title: const Text("Trang chủ"),
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            "Trang chủ",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
         centerTitle: true,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProfilePage(
-                    userName: widget.userName,
-                    userId: widget.userId,
-                    selectedClass: widget.selectedClass,
-                    userPoints: userPoints, // 👈 truyền
+              onTap: () {
+                // SỬA LỖI TẠI ĐÂY: Nút profile chỉ dẫn đến ProfilePage
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProfilePage(
+                      userName: widget.userName,
+                      userId: widget.userId,
+                      selectedClass: widget.selectedClass,
+                      userPoints: userPoints,
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
               child: const CircleAvatar(
                 backgroundColor: Colors.white,
                 child: Icon(Icons.person, color: primaryColor),
@@ -186,7 +171,6 @@ class _HomePageState extends State<HomePage> {
                   BoxShadow(
                     color: Colors.black.withOpacity(0.25),
                     blurRadius: 30,
-                    spreadRadius: 4,
                     offset: const Offset(0, 12),
                   ),
                 ],
@@ -199,7 +183,7 @@ class _HomePageState extends State<HomePage> {
                     style: const TextStyle(color: Colors.white70, fontSize: 16),
                   ),
                   Text(
-                    widget.userName, // Hiển thị tên người dùng đã nhập
+                    widget.userName,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
@@ -209,7 +193,6 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
               child: Text(
@@ -217,19 +200,11 @@ class _HomePageState extends State<HomePage> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
-
             _buildGridMenu(context, [
-              _MenuData(Icons.add_home, "Tạo phòng", Colors.orange),
-              _MenuData(Icons.menu_book, "Học Offline", Colors.green),
-
-              _MenuData(
-                Icons.search,
-                "Tìm phòng",
-                primaryColor,
-                isSearch: true,
-              ),
+              MenuData(Icons.add_home, "Tạo phòng", Colors.orange),
+              MenuData(Icons.menu_book, "Học Offline", Colors.green),
+              MenuData(Icons.search, "Tìm phòng", primaryColor, isSearch: true),
             ]),
-
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
               child: Text(
@@ -237,16 +212,14 @@ class _HomePageState extends State<HomePage> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
-
             _buildGridMenu(context, [
-              _MenuData(Icons.event_note, "Kế hoạch", Colors.purple),
-              _MenuData(Icons.leaderboard, "Xếp hạng", Colors.redAccent),
-              _MenuData(Icons.people, "Bạn bè", Colors.teal),
-              _MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
-              _MenuData(Icons.bar_chart, "Thống kê", Colors.indigo),
-              _MenuData(Icons.settings, "Cài đặt", Colors.grey),
+              MenuData(Icons.event_note, "Kế hoạch", Colors.purple),
+              MenuData(Icons.leaderboard, "Xếp hạng", Colors.redAccent),
+              MenuData(Icons.people, "Bạn bè", Colors.teal),
+              MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
+              MenuData(Icons.bar_chart, "Thống kê", Colors.indigo),
+              MenuData(Icons.settings, "Cài đặt", Colors.grey),
             ]),
-
             const SizedBox(height: 20),
           ],
         ),
@@ -254,7 +227,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildGridMenu(BuildContext context, List<_MenuData> items) {
+  Widget _buildGridMenu(BuildContext context, List<MenuData> items) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -267,27 +240,56 @@ class _HomePageState extends State<HomePage> {
       ),
       itemCount: items.length,
       itemBuilder: (context, index) {
+        final item = items[index];
         return InkWell(
           onTap: () async {
-            if (items[index].title == "Học Offline") {
+            await Future.delayed(const Duration(milliseconds: 50));
+            if (!context.mounted) return;
+
+            if (item.title == "Học Offline") {
               final result = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const OfflineStudyPage()),
+                MaterialPageRoute(
+                  builder: (_) => OfflineStudyPage(userId: widget.userId),
+                ),
               );
-              if (result is int) {
-                await _updatePointsOnFirebase(result);
-              }
-            } else if (items[index].isSearch) {
+              if (result is int) await _updatePointsOnFirebase(result);
+            } else if (item.isSearch) {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const RoomSearchPage()),
               );
-            } else if (items[index].title == "Xếp hạng") {
-              // 👇 THÊM ĐOẠN NÀY ĐỂ MỞ BẢNG XẾP HẠNG 👇
+            } else if (item.title == "Kế hoạch") {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PlanPage(userId: widget.userId),
+                ),
+              );
+            } else if (item.title == "Xếp hạng") {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => LeaderboardPage(currentUserId: widget.userId),
+                ),
+              );
+            } else if (item.title == "Lịch sử học tập") {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HistoryPage(userId: widget.userId),
+                ),
+              );
+            } else if (item.title == "Cài đặt") {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SettingsPage(
+                    userName: widget.userName,
+                    selectedClass: widget.selectedClass,
+                    userId: widget.userId,
+                    email: widget.email,
+                  ),
                 ),
               );
             }
@@ -302,11 +304,6 @@ class _HomePageState extends State<HomePage> {
                   blurRadius: 12,
                   offset: const Offset(0, 6),
                 ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
               ],
             ),
             child: Column(
@@ -315,18 +312,14 @@ class _HomePageState extends State<HomePage> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: items[index].color.withOpacity(0.1),
+                    color: item.color.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    items[index].icon,
-                    color: items[index].color,
-                    size: 30,
-                  ),
+                  child: Icon(item.icon, color: item.color, size: 30),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  items[index].title,
+                  item.title,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 12,
@@ -342,10 +335,10 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class _MenuData {
+class MenuData {
   final IconData icon;
   final String title;
   final Color color;
   final bool isSearch;
-  _MenuData(this.icon, this.title, this.color, {this.isSearch = false});
+  MenuData(this.icon, this.title, this.color, {this.isSearch = false});
 }

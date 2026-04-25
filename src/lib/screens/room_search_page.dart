@@ -83,7 +83,10 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Tìm phòng học"),
+        title: const Text(
+          "Tìm phòng học",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
       ),

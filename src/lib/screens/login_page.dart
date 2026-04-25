@@ -75,6 +75,7 @@ class _LoginPageState extends State<LoginPage> {
               userData['name'],
               userData['id'],
               userData['class'],
+              userData['email'],
             );
           } else {
             Navigator.pop(context);
@@ -119,12 +120,16 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  void _navigateToHome(String name, String id, String className) {
+  void _navigateToHome(String name, String id, String className, String email) {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            HomePage(userName: name, userId: id, selectedClass: className),
+        builder: (context) => HomePage(
+          userName: name,
+          userId: id,
+          selectedClass: className,
+          email: email,
+        ),
       ),
     );
   }
