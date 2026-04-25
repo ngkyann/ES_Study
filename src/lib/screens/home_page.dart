@@ -8,6 +8,7 @@ import 'package:esstudy/screens/leaderboard_page.dart';
 import 'package:esstudy/screens/settings_page.dart';
 import 'package:esstudy/screens/plan_page.dart';
 import 'package:esstudy/screens/history_page.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -70,8 +71,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   String getGreeting() {
-    final now = DateTime.now().add(const Duration(hours: 7));
+    final vn = tz.getLocation('Asia/Ho_Chi_Minh');
+    final now = tz.TZDateTime.now(vn);
     final hour = now.hour;
+
     if (hour >= 5 && hour < 12) return "Chào buổi sáng";
     if (hour >= 12 && hour < 18) return "Chào buổi chiều";
     return "Chào buổi tối";

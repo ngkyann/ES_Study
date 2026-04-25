@@ -3,10 +3,14 @@ import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/screens/login_page.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:esstudy/timezone_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  tz.initializeTimeZones();
+  vn = tz.getLocation('Asia/Ho_Chi_Minh');
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(MyApp());
 }
