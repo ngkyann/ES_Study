@@ -173,10 +173,24 @@ class _PlanPageState extends State<PlanPage> {
 
           // rỗng
           if (docs.isEmpty) {
-            return const Center(
-              child: Text(
-                "Chưa có kế hoạch nào",
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+            // 🔥 ĐÃ THÊM: Vuốt tải lại khi danh sách trống
+            return RefreshIndicator(
+              color: primaryColor,
+              backgroundColor: Colors.white,
+              onRefresh: () async {
+                await Future.delayed(const Duration(seconds: 1));
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  SizedBox(height: 300), // Căn giữa dòng chữ
+                  Center(
+                    child: Text(
+                      "Chưa có kế hoạch nào",
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ),
+                ],
               ),
             );
           }
@@ -188,29 +202,38 @@ class _PlanPageState extends State<PlanPage> {
             return timeA.compareTo(timeB);
           });
 
-          return ListView.builder(
-            itemCount: docs.length,
-            itemBuilder: (_, index) {
-              final data = docs[index];
-              DateTime time = (data['time'] as Timestamp).toDate();
-
-              return ListTile(
-                leading: const Icon(Icons.schedule, color: primaryColor),
-                title: Text(data['title']),
-                subtitle: Text(
-                  "${time.day}/${time.month}/${time.year} - ${time.hour}:${time.minute.toString().padLeft(2, '0')}",
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () {
-                    FirebaseFirestore.instance
-                        .collection('plans')
-                        .doc(data.id)
-                        .delete();
-                  },
-                ),
-              );
+          // 🔥 ĐÃ THÊM: Vuốt tải lại khi có danh sách
+          return RefreshIndicator(
+            color: primaryColor,
+            backgroundColor: Colors.white,
+            onRefresh: () async {
+              await Future.delayed(const Duration(seconds: 1));
             },
+            child: ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(), // Bắt buộc
+              itemCount: docs.length,
+              itemBuilder: (_, index) {
+                final data = docs[index];
+                DateTime time = (data['time'] as Timestamp).toDate();
+
+                return ListTile(
+                  leading: const Icon(Icons.schedule, color: primaryColor),
+                  title: Text(data['title']),
+                  subtitle: Text(
+                    "${time.day}/${time.month}/${time.year} - ${time.hour}:${time.minute.toString().padLeft(2, '0')}",
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () {
+                      FirebaseFirestore.instance
+                          .collection('plans')
+                          .doc(data.id)
+                          .delete();
+                    },
+                  ),
+                );
+              },
+            ),
           );
         },
       ),

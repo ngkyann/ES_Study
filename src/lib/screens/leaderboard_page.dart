@@ -47,28 +47,39 @@ class LeaderboardPage extends StatelessWidget {
 
             final users = snapshot.data!.docs;
 
-            return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                100,
-              ), // Cách đáy để không bị đè bởi thanh bottom
-              itemCount: users.length,
-              itemBuilder: (context, index) {
-                final userData = users[index].data() as Map<String, dynamic>;
-                final String userId = users[index].id;
-                final int rank = index + 1;
-                bool isMe = userId == currentUserId;
-
-                return _buildLeaderboardItem(
-                  rank,
-                  userData['name'] ?? 'Ẩn danh',
-                  userData['class'] ?? 'Lớp ?',
-                  userData['points'] ?? 0,
-                  isMe,
-                );
+            // 🔥 ĐÃ THÊM: RefreshIndicator để vuốt tải lại trang
+            return RefreshIndicator(
+              color: primaryColor,
+              backgroundColor: Colors.white,
+              onRefresh: () async {
+                // Giả lập thời gian load 1 giây để hiện vòng xoay cho mượt
+                await Future.delayed(const Duration(seconds: 1));
               },
+              child: ListView.builder(
+                // 🔥 BẮT BUỘC: Thêm physics để nội dung ngắn vẫn vuốt được
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(
+                  16,
+                  16,
+                  16,
+                  100,
+                ), // Cách đáy để không bị đè bởi thanh bottom
+                itemCount: users.length,
+                itemBuilder: (context, index) {
+                  final userData = users[index].data() as Map<String, dynamic>;
+                  final String userId = users[index].id;
+                  final int rank = index + 1;
+                  bool isMe = userId == currentUserId;
+
+                  return _buildLeaderboardItem(
+                    rank,
+                    userData['name'] ?? 'Ẩn danh',
+                    userData['class'] ?? 'Lớp ?',
+                    userData['points'] ?? 0,
+                    isMe,
+                  );
+                },
+              ),
             );
           },
         ),
@@ -249,7 +260,7 @@ class LeaderboardPage extends StatelessWidget {
         children: [
           const Icon(Icons.emoji_events, color: Color(0xFFC0C0C0), size: 28),
           Text(
-            "#2",
+            "#$rank",
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.bold,
@@ -264,7 +275,7 @@ class LeaderboardPage extends StatelessWidget {
         children: [
           const Icon(Icons.emoji_events, color: Color(0xFFCD7F32), size: 28),
           Text(
-            "#3",
+            "#$rank",
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.bold,

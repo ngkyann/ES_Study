@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:esstudy/constants/colors.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // --- TRANG CÁ NHÂN (Hiển thị dữ liệu động) ---
 class ProfilePage extends StatelessWidget {
@@ -13,7 +14,7 @@ class ProfilePage extends StatelessWidget {
     required this.userName,
     required this.userId,
     required this.selectedClass,
-    required this.userPoints, // 👈 thêm
+    required this.userPoints,
   });
 
   @override
@@ -24,112 +25,162 @@ class ProfilePage extends StatelessWidget {
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 30),
-              decoration: BoxDecoration(
-                color: primaryColor,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.25),
-                    blurRadius: 25,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-                // borderRadius: const BorderRadius.only(
-                //   bottomLeft: Radius.circular(30),
-                //   bottomRight: Radius.circular(30),
-                // ),
-              ),
-              child: Column(
-                children: [
-                  const CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.person, color: primaryColor),
-                  ),
-                  const SizedBox(height: 15),
-                  Text(
-                    userName, // Hiển thị tên từ Login
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+      // 🔥 ĐÃ THÊM: RefreshIndicator bao bọc bên ngoài
+      body: RefreshIndicator(
+        color: primaryColor,
+        backgroundColor: Colors.white,
+        onRefresh: () async {
+          // Giả lập thời gian tải 1 giây để hiện vòng xoay mượt mà
+          await Future.delayed(const Duration(seconds: 1));
+        },
+        child: SingleChildScrollView(
+          // 🔥 BẮT BUỘC: Thêm physics để luôn vuốt được dù màn hình ngắn
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 30),
+                decoration: BoxDecoration(
+                  color: primaryColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.25),
+                      blurRadius: 25,
+                      offset: const Offset(0, 10),
                     ),
-                  ),
-                  Text(
-                    "@$userId", // Hiển thị ID từ Login
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white70,
-                      fontWeight: FontWeight.w500,
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    const CircleAvatar(
+                      radius: 50,
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.person, color: primaryColor, size: 50),
                     ),
-                  ),
-                  const SizedBox(height: 15),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+                    const SizedBox(height: 15),
+                    Text(
+                      userName,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
+                    Text(
+                      "@$userId",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.local_fire_department,
-                          color: Colors.orangeAccent,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          "Chuỗi 15 ngày học",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                    const SizedBox(height: 15),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.local_fire_department,
+                            color: Colors.orangeAccent,
                           ),
-                        ),
-                      ],
+                          SizedBox(width: 8),
+                          Text(
+                            "Chuỗi 15 ngày học",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  _infoCard(Icons.alternate_email, "ID người dùng", "@$userId"),
-                  _infoCard(Icons.military_tech, "Xếp hạng", "Kim cương"),
-                  _infoCard(
-                    Icons.workspace_premium,
-                    "Tổng điểm",
-                    "$userPoints",
-                  ),
-                  _infoCard(
-                    Icons.calendar_month,
-                    "Ngày gia nhập",
-                    "24/04/2026",
-                  ),
-                  _infoCard(Icons.school, "Lớp hiện tại", selectedClass),
-                  const SizedBox(height: 30),
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.edit),
-                    label: const Text("Chỉnh sửa thông tin"),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 50),
-                      side: const BorderSide(color: primaryColor),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    _infoCard(
+                      Icons.alternate_email,
+                      "ID người dùng",
+                      "@$userId",
                     ),
-                  ),
-                ],
+
+                    // 🔥 TỰ ĐỘNG ĐỒNG BỘ XẾP HẠNG TỪ FIREBASE
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .orderBy('points', descending: true)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        String rankText = "Đang tải...";
+                        if (snapshot.hasData) {
+                          final docs = snapshot.data!.docs;
+                          int myRank = 0;
+                          for (int i = 0; i < docs.length; i++) {
+                            if (docs[i].id == userId) {
+                              myRank = i + 1;
+                              break;
+                            }
+                          }
+
+                          // Phân loại danh hiệu giống Leaderboard
+                          if (myRank == 1) {
+                            rankText = "Hạng 1 (Quán quân)";
+                          } else if (myRank >= 2 && myRank <= 10) {
+                            rankText = "Hạng $myRank (Top 10)";
+                          } else if (myRank >= 11 && myRank <= 50) {
+                            rankText = "Hạng $myRank (Top 50)";
+                          } else if (myRank > 50) {
+                            rankText = "Hạng $myRank";
+                          } else {
+                            rankText = "Chưa xếp hạng";
+                          }
+                        }
+                        return _infoCard(
+                          Icons.military_tech,
+                          "Xếp hạng",
+                          rankText,
+                        );
+                      },
+                    ),
+
+                    _infoCard(
+                      Icons.workspace_premium,
+                      "Tổng điểm",
+                      "$userPoints",
+                    ),
+                    _infoCard(
+                      Icons.calendar_month,
+                      "Ngày gia nhập",
+                      "24/04/2026",
+                    ),
+                    _infoCard(Icons.school, "Lớp hiện tại", selectedClass),
+                    const SizedBox(height: 30),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.edit),
+                      label: const Text("Chỉnh sửa thông tin"),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                        side: const BorderSide(color: primaryColor),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

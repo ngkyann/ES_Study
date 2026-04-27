@@ -136,7 +136,6 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.only(right: 16),
             child: GestureDetector(
               onTap: () {
-                // SỬA LỖI TẠI ĐÂY: Nút profile chỉ dẫn đến ProfilePage
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -157,74 +156,95 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: primaryColor,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.25),
-                    blurRadius: 30,
-                    offset: const Offset(0, 12),
+      // 🔥 ĐÃ THÊM: RefreshIndicator để vuốt tải lại trang
+      body: RefreshIndicator(
+        color: primaryColor,
+        backgroundColor: Colors.white,
+        onRefresh: () async {
+          // Bật lại hiệu ứng loading vòng xoay nhỏ ở góc trên
+          setState(() => _isLoadingPoints = true);
+          // Gọi lại hàm lấy dữ liệu từ Firebase
+          await _fetchUserPoints();
+        },
+        child: SingleChildScrollView(
+          // 🔥 BẮT BUỘC: Thêm physics để nội dung luôn vuốt được
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: primaryColor,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30),
                   ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "${getGreeting()},",
-                    style: const TextStyle(color: Colors.white70, fontSize: 16),
-                  ),
-                  Text(
-                    widget.userName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.25),
+                      blurRadius: 30,
+                      offset: const Offset(0, 12),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "${getGreeting()},",
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      widget.userName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
-              child: Text(
-                "Bắt đầu học",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
+                child: Text(
+                  "Bắt đầu học",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
-            _buildGridMenu(context, [
-              MenuData(Icons.add_home, "Tạo phòng", Colors.orange),
-              MenuData(Icons.menu_book, "Học Offline", Colors.green),
-              MenuData(Icons.search, "Tìm phòng", primaryColor, isSearch: true),
-            ]),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
-              child: Text(
-                "Tiện ích khác",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              _buildGridMenu(context, [
+                MenuData(Icons.add_home, "Tạo phòng", Colors.orange),
+                MenuData(Icons.menu_book, "Học Offline", Colors.green),
+                MenuData(
+                  Icons.search,
+                  "Tìm phòng",
+                  primaryColor,
+                  isSearch: true,
+                ),
+              ]),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
+                child: Text(
+                  "Tiện ích khác",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
               ),
-            ),
-            _buildGridMenu(context, [
-              MenuData(Icons.event_note, "Kế hoạch", Colors.purple),
-              MenuData(Icons.leaderboard, "Xếp hạng", Colors.redAccent),
-              MenuData(Icons.people, "Bạn bè", Colors.teal),
-              MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
-              MenuData(Icons.bar_chart, "Thống kê", Colors.indigo),
-              MenuData(Icons.settings, "Cài đặt", Colors.grey),
-            ]),
-            const SizedBox(height: 20),
-          ],
+              _buildGridMenu(context, [
+                MenuData(Icons.event_note, "Kế hoạch", Colors.purple),
+                MenuData(Icons.leaderboard, "Xếp hạng", Colors.redAccent),
+                MenuData(Icons.people, "Bạn bè", Colors.teal),
+                MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
+                MenuData(Icons.bar_chart, "Thống kê", Colors.indigo),
+                MenuData(Icons.settings, "Cài đặt", Colors.grey),
+              ]),
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
@@ -256,6 +276,7 @@ class _HomePageState extends State<HomePage> {
                   builder: (_) => OfflineStudyPage(userId: widget.userId),
                 ),
               );
+              // Nếu hoàn thành và được cộng điểm, tự động tải lại điểm luôn
               if (result is int) await _updatePointsOnFirebase(result);
             } else if (item.isSearch) {
               Navigator.push(

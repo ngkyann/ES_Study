@@ -3,7 +3,7 @@ import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/models/study_room.dart';
 import 'package:esstudy/widgets/room_card.dart';
 
-// --- MÀN HÌNH TÌM PHÒNG HỌC (Đã cập nhật Dropdown List) ---
+// --- MÀN HÌNH TÌM PHÒNG HỌC (Đã có Pull-to-Refresh) ---
 class RoomSearchPage extends StatefulWidget {
   const RoomSearchPage({super.key});
 
@@ -92,6 +92,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
       ),
       body: Column(
         children: [
+          // THANH TÌM KIẾM VÀ LỌC CỐ ĐỊNH Ở TRÊN
           Container(
             padding: const EdgeInsets.all(16),
             color: Colors.white,
@@ -140,33 +141,47 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
               ],
             ),
           ),
+
+          // DANH SÁCH PHÒNG CÓ THỂ VUỐT ĐỂ TẢI LẠI
           Expanded(
-            child: filteredRooms.isEmpty
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
+            child: RefreshIndicator(
+              color: primaryColor,
+              backgroundColor: Colors.white,
+              onRefresh: () async {
+                // Giả lập thời gian load dữ liệu từ Firebase
+                await Future.delayed(const Duration(seconds: 1));
+                setState(() {}); // Làm mới lại danh sách nếu có data mới
+              },
+              child: filteredRooms.isEmpty
+                  // 🔥 CẬP NHẬT: Dùng ListView cho màn hình trống để vẫn có thể vuốt được
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(top: 80),
+                      children: const [
                         Icon(Icons.search_off, size: 80, color: Colors.grey),
                         SizedBox(height: 10),
                         Text(
                           "Không tìm thấy phòng học nào",
+                          textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.grey, fontSize: 16),
                         ),
                       ],
+                    )
+                  : ListView.builder(
+                      // 🔥 BẮT BUỘC: Thêm physics để nội dung ngắn vẫn vuốt được
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filteredRooms.length,
+                      itemBuilder: (context, index) {
+                        return RoomCard(
+                          room: filteredRooms[index],
+                          onJoin: () {
+                            debugPrint("Join room");
+                          },
+                        );
+                      },
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredRooms.length,
-                    itemBuilder: (context, index) {
-                      return RoomCard(
-                        room: filteredRooms[index],
-                        onJoin: () {
-                          debugPrint("Join room");
-                        },
-                      );
-                    },
-                  ),
+            ),
           ),
         ],
       ),
