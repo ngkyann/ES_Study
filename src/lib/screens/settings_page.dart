@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:esstudy/constants/colors.dart';
 // import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:esstudy/screens/login_page.dart';
+// import 'package:esstudy/screens/login_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -297,24 +297,32 @@ class SettingsPage extends StatelessWidget {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: const Text("Xác nhận"),
         content: const Text("Bạn muốn đăng xuất?"),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
+            onPressed: () => Navigator.pop(dialogContext), // Tắt dialog nếu huỷ
             child: const Text("Huỷ"),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            onPressed: () {
-              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => const LoginPage()),
-                (route) => false,
-              );
-              FirebaseAuth.instance.signOut();
+            onPressed: () async {
+              // 1. Tắt hộp thoại Dialog
+              Navigator.pop(dialogContext);
+
+              // 2. Lùi tất cả các trang (Settings...) về trang gốc (Home)
+              Navigator.of(context).popUntil((route) => route.isFirst);
+
+              // 3. Gọi Firebase Đăng xuất.
+              // Lúc này StreamBuilder ở main.dart sẽ tự động phát hiện và chuyển mượt mà sang LoginPage
+              await FirebaseAuth.instance.signOut();
             },
             child: const Text("Đăng xuất"),
           ),
