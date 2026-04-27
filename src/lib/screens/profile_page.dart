@@ -25,7 +25,6 @@ class ProfilePage extends StatelessWidget {
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
       ),
-      // 🔥 ĐÃ THÊM: RefreshIndicator bao bọc bên ngoài
       body: RefreshIndicator(
         color: primaryColor,
         backgroundColor: Colors.white,
@@ -34,7 +33,7 @@ class ProfilePage extends StatelessWidget {
           await Future.delayed(const Duration(seconds: 1));
         },
         child: SingleChildScrollView(
-          // 🔥 BẮT BUỘC: Thêm physics để luôn vuốt được dù màn hình ngắn
+          // BẮT BUỘC: Thêm physics để luôn vuốt được dù màn hình ngắn
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
@@ -116,7 +115,7 @@ class ProfilePage extends StatelessWidget {
                       "@$userId",
                     ),
 
-                    // 🔥 TỰ ĐỘNG ĐỒNG BỘ XẾP HẠNG TỪ FIREBASE
+                    // TỰ ĐỘNG ĐỒNG BỘ XẾP HẠNG TỪ FIREBASE
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
@@ -160,22 +159,51 @@ class ProfilePage extends StatelessWidget {
                       "Tổng điểm",
                       "$userPoints",
                     ),
-                    _infoCard(
-                      Icons.calendar_month,
-                      "Ngày gia nhập",
-                      "24/04/2026",
+
+                    // TỰ ĐỘNG LẤY NGÀY GIA NHẬP TỪ FIREBASE
+                    StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(userId)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        String joinDateText = "Đang tải...";
+
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          final data =
+                              snapshot.data!.data() as Map<String, dynamic>;
+
+                          if (data['createdAt'] != null) {
+                            // Ép kiểu Timestamp của Firebase sang DateTime của Dart
+                            DateTime date = (data['createdAt'] as Timestamp)
+                                .toDate();
+
+                            // Định dạng ngày: DD/MM/YYYY
+                            String day = date.day.toString().padLeft(2, '0');
+                            String month = date.month.toString().padLeft(
+                              2,
+                              '0',
+                            );
+                            String year = date.year.toString();
+
+                            joinDateText = "$day/$month/$year";
+                          } else {
+                            joinDateText = "Không xác định";
+                          }
+                        }
+
+                        return _infoCard(
+                          Icons.calendar_month,
+                          "Ngày gia nhập",
+                          joinDateText,
+                        );
+                      },
                     ),
+
                     _infoCard(Icons.school, "Lớp hiện tại", selectedClass),
-                    const SizedBox(height: 30),
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.edit),
-                      label: const Text("Chỉnh sửa thông tin"),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        side: const BorderSide(color: primaryColor),
-                      ),
-                    ),
+                    const SizedBox(
+                      height: 30,
+                    ), // Giữ lại khoảng trống nhỏ ở cuối cho đẹp mắt
                   ],
                 ),
               ),

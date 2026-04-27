@@ -83,6 +83,8 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor:
+          Colors.grey.shade50, // Đồng bộ nền xám để bóng đổ hiển thị đẹp
       appBar: AppBar(
         elevation: 0,
         backgroundColor: primaryColor,
@@ -156,60 +158,72 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      // 🔥 ĐÃ THÊM: RefreshIndicator để vuốt tải lại trang
       body: RefreshIndicator(
         color: primaryColor,
         backgroundColor: Colors.white,
         onRefresh: () async {
-          // Bật lại hiệu ứng loading vòng xoay nhỏ ở góc trên
           setState(() => _isLoadingPoints = true);
-          // Gọi lại hàm lấy dữ liệu từ Firebase
           await _fetchUserPoints();
         },
         child: SingleChildScrollView(
-          // 🔥 BẮT BUỘC: Thêm physics để nội dung luôn vuốt được
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: primaryColor,
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(30),
-                    bottomRight: Radius.circular(30),
+              // 🔥 ĐÃ FIX: Thủ thuật lấp đầy khoảng trắng bằng Stack khi vuốt
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Miếng dán tàng hình vươn lên 500px để lấp khoảng hở khi vuốt
+                  Positioned(
+                    top: -500,
+                    left: 0,
+                    right: 0,
+                    height: 500,
+                    child: Container(color: primaryColor),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.25),
-                      blurRadius: 30,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "${getGreeting()},",
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 16,
+                  // Giao diện Header bo tròn gốc của bạn
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: primaryColor,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(30),
+                        bottomRight: Radius.circular(30),
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.25),
+                          blurRadius: 30,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
                     ),
-                    Text(
-                      widget.userName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "${getGreeting()},",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          widget.userName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+
               const Padding(
                 padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
                 child: Text(
