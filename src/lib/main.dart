@@ -8,6 +8,7 @@ import 'package:esstudy/timezone_helper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/screens/home_page.dart';
+import 'widgets/ai_assistant_fab.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +25,22 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: 'ES Study',
+      
+      // --- PHẦN THÊM MỚI (Vỏ bọc AI) ---
+      builder: (context, child) {
+        return Scaffold(
+          body: Stack(
+            children: [
+              child!, // Giữ nguyên toàn bộ logic Home/Login bên dưới
+              const AIAssistantFAB(), // Chèn thêm bong bóng AI lên trên cùng
+            ],
+          ),
+        );
+      },
+      // --------------------------------
+
+      // LOGIC CŨ GIỮ NGUYÊN 100%
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, authSnapshot) {
@@ -58,13 +75,9 @@ class MyApp extends StatelessWidget {
                   );
                 }
 
-                // Nếu KHÔNG có dữ liệu (Trường hợp vừa đăng ký, Auth chạy trước Firestore)
-                // Chỉ cần trả về Loading, sau khi Firestore lưu xong nó sẽ tự động update và qua Home
-                // Nếu KHÔNG có dữ liệu (Trường hợp tài khoản bị lỗi hoặc data bị xóa trên Firebase)
+                // Nếu KHÔNG có dữ liệu
                 if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                  // Ép đăng xuất ngầm để dọn dẹp trạng thái lỗi
                   FirebaseAuth.instance.signOut();
-                  // Trả thẳng về màn hình đăng nhập
                   return const LoginPage();
                 }
 
