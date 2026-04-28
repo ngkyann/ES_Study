@@ -27,7 +27,8 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
     'gemma-3-1b-it',
     'gemma-3-4b-it',
     'gemma-3-8b-it',
-    'ggemma-3-27b-it'
+    'gemma-3-27b-it',
+    'gemma-3-2b-it'
   ];
   int _currentModelIndex = 0;
   
@@ -44,7 +45,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
     _model = GenerativeModel(
       model: _modelPool[_currentModelIndex],
       apiKey: _apiKey,
-      // Dùng v1beta để hỗ trợ nhiều model mới nhất
       requestOptions: const RequestOptions(apiVersion: 'v1beta'),
     );
   }
