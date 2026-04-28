@@ -62,7 +62,7 @@ class SettingsPage extends StatelessWidget {
               _buildActionTile(
                 Icons.info,
                 "Thông tin phiên bản",
-                "Beta 1.0",
+                "Beta 0.5.0",
                 onTap: () => _showVersionInfoDialog(context),
               ),
               const SizedBox(height: 30),

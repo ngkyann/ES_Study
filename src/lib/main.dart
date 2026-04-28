@@ -26,35 +26,36 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ES Study',
-      
-      // --- PHẦN FIX BUILDER ---
+
+      // --- PHẦN THÊM MỚI (Vỏ bọc AI) ---
       builder: (context, child) {
         return Scaffold(
-          // QUAN TRỌNG: Ngăn bàn phím đẩy toàn bộ các trang bên dưới lên
-          resizeToAvoidBottomInset: false, 
           body: Stack(
             children: [
-              child!, 
-              // Bong bóng AI sẽ luôn nằm trên cùng của mọi Page
-              const AIAssistantFAB(), 
+              child!, // Giữ nguyên toàn bộ logic Home/Login bên dưới
+              const AIAssistantFAB(), // Chèn thêm bong bóng AI lên trên cùng
             ],
           ),
         );
       },
-      // -------------------------
+      // --------------------------------
 
+      // LOGIC CŨ GIỮ NGUYÊN 100%
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, authSnapshot) {
+          // 1. Chờ kiểm tra trạng thái đăng nhập
           if (authSnapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
 
+          // 2. Nếu đã đăng nhập (Auth thành công)
           if (authSnapshot.hasData && authSnapshot.data != null) {
             final user = authSnapshot.data!;
 
+            // Kiểm tra email phòng hờ lúc signOut bị null giữa chừng
             if (user.email == null || !user.email!.contains('@')) {
               return const LoginPage();
             }
@@ -67,18 +68,20 @@ class MyApp extends StatelessWidget {
                   .doc(docId)
                   .snapshots(),
               builder: (context, userSnapshot) {
+                // Nếu đang chờ dữ liệu Firestore
                 if (userSnapshot.connectionState == ConnectionState.waiting) {
                   return const Scaffold(
                     body: Center(child: CircularProgressIndicator()),
                   );
                 }
 
+                // Nếu KHÔNG có dữ liệu
                 if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                  // Tránh gọi signOut trực tiếp trong build, nhưng tạm chấp nhận với logic hiện tại của bạn
-                  Future.microtask(() => FirebaseAuth.instance.signOut());
+                  FirebaseAuth.instance.signOut();
                   return const LoginPage();
                 }
 
+                // Có dữ liệu rồi mới vào Home
                 final data = userSnapshot.data!.data() as Map<String, dynamic>;
                 return HomePage(
                   userName: data['name'] ?? "",
@@ -90,6 +93,7 @@ class MyApp extends StatelessWidget {
             );
           }
 
+          // 3. Nếu chưa đăng nhập
           return const LoginPage();
         },
       ),

@@ -10,44 +10,26 @@ class AIAssistantFAB extends StatefulWidget {
 
 class _AIAssistantFABState extends State<AIAssistantFAB> {
   bool _isChatOpen = false;
-  Offset _offset = const Offset(25, 25); // Vị trí kéo thả
-
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
-  // Lưu lịch sử dưới dạng Content để gửi cho API
-  final List<Content> _apiHistory = [];
-  // Lưu dưới dạng Map để hiển thị UI
+
+  // Danh sách lưu trữ hội thoại
   final List<Map<String, String>> _messages = [];
-  
   bool _isLoading = false;
 
-  final List<String> _modelPool = [
-    'gemma-3-1b-it',
-    'gemma-3-4b-it',
-    'gemma-3-12b-it',
-    'gemma-3-27b-it',
-  ];
-  
-  int _currentModelIndex = 0;
-  late GenerativeModel _model;
-  final String _apiKey = 'AIzaSyConvnHnodpl11TI9kb-P_kFTF34Q78JDo';
+  late final GenerativeModel _model;
+  late final ChatSession _chat;
 
   @override
   void initState() {
     super.initState();
-    _initModel();
-  }
-
-  void _initModel() {
+    // Khởi tạo model Gemini
     _model = GenerativeModel(
-      model: _modelPool[_currentModelIndex],
-      apiKey: _apiKey,
-      requestOptions: const RequestOptions(apiVersion: 'v1beta'),
+      model: 'gemini-2.5-flash', // Hoặc 'models/gemini-2.0-flash' nếu đã có
+      apiKey: 'AIzaSyConvnHnodpl11TI9kb-P_kFTF34Q78JDo',
     );
-    if (_apiHistory.isEmpty) {
-      _apiHistory.add(Content.text("Hệ thống: Bạn là trợ lý học tập của ES Study."));
-    }
+
+    _chat = _model.startChat();
   }
 
   void _scrollToBottom() {
@@ -63,81 +45,50 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
   }
 
   Future<void> _sendMessage() async {
-    final prompt = _textController.text.trim();
-    if (prompt.isEmpty) return;
+    final message = _textController.text.trim();
+    if (message.isEmpty) return;
 
     setState(() {
-      _messages.add({'role': 'user', 'text': prompt});
-      _apiHistory.add(Content.text(prompt)); // Lưu vào lịch sử gửi đi
+      _messages.add({'role': 'user', 'text': message});
       _isLoading = true;
       _textController.clear();
     });
     _scrollToBottom();
 
-    bool success = false;
-    int retryCount = 0;
+    try {
+      final response = await _chat.sendMessage(Content.text(message));
+      final text = response.text;
 
-    while (!success && retryCount < _modelPool.length) {
-      try {
-        // Gửi toàn bộ lịch sử _apiHistory đi thay vì dùng ChatSession
-        final response = await _model.generateContent(_apiHistory);
-        final text = response.text;
-
-        setState(() {
-          _messages.add({'role': 'model', 'text': text ?? 'AI im lặng...'});
-          _apiHistory.add(Content.model([TextPart(text ?? '')])); // Lưu câu trả lời của AI vào sử
-          _isLoading = false;
+      setState(() {
+        _messages.add({
+          'role': 'model',
+          'text': text ?? 'AI không phản hồi...',
         });
-        success = true;
-      } catch (e) {
-        String errorStr = e.toString();
-        if (errorStr.contains('429') || errorStr.contains('503')) {
-          retryCount++;
-          if (_currentModelIndex < _modelPool.length - 1) {
-            _currentModelIndex++;
-            _initModel();
-            debugPrint('Chuyển model: ${_modelPool[_currentModelIndex]} - Lịch sử vẫn giữ nguyên');
-          } else {
-            _addSystemMessage('Tất cả model đều bận, vui lòng thử lại sau.');
-            break;
-          }
-        } else {
-          _addSystemMessage('Lỗi: $errorStr');
-          break;
-        }
-      }
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _messages.add({'role': 'model', 'text': 'Lỗi: ${e.toString()}'});
+        _isLoading = false;
+      });
     }
     _scrollToBottom();
-  }
-
-  void _addSystemMessage(String msg) {
-    setState(() {
-      _messages.add({'role': 'model', 'text': msg});
-      _isLoading = false;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Nút FAB kéo thả
+        // Nút bong bóng chính
         Positioned(
-          bottom: _offset.dy,
-          right: _offset.dx,
-          child: GestureDetector(
-            onPanUpdate: (details) {
-              setState(() {
-                _offset = Offset(
-                  (_offset.dx - details.delta.dx).clamp(10, MediaQuery.of(context).size.width - 60),
-                  (_offset.dy - details.delta.dy).clamp(10, MediaQuery.of(context).size.height - 100),
-                );
-              });
-            },
-            child: FloatingActionButton(
-              backgroundColor: Colors.blueAccent,
-              onPressed: () => setState(() => _isChatOpen = !_isChatOpen),
-              child: Icon(_isChatOpen ? Icons.close : Icons.smart_toy, color: Colors.white),
+          bottom: 25,
+          right: 25,
+          child: FloatingActionButton(
+            backgroundColor: Colors.blueAccent,
+            onPressed: () => setState(() => _isChatOpen = !_isChatOpen),
+            child: Icon(
+              _isChatOpen ? Icons.close : Icons.smart_toy,
+              color: Colors.white,
             ),
           ),
         ),
@@ -145,97 +96,114 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
         // Cửa sổ Chat
         if (_isChatOpen)
           Positioned(
-            bottom: _offset.dy + 70,
-            right: _offset.dx,
+            bottom: 95,
+            right: 25,
             child: Material(
-              elevation: 12,
-              borderRadius: BorderRadius.circular(20),
+              elevation: 10,
+              borderRadius: BorderRadius.circular(16),
               child: Container(
                 width: MediaQuery.of(context).size.width * 0.85,
-                height: MediaQuery.of(context).size.height * 0.45,
-                constraints: const BoxConstraints(maxWidth: 400),
+                height: MediaQuery.of(context).size.height * 0.5,
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: 600,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
                   children: [
                     // Header
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.all(16),
                       decoration: const BoxDecoration(
                         color: Colors.blueAccent,
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
                       ),
-                      child: Row(
+                      child: const Row(
                         children: [
-                          const Icon(Icons.bolt, color: Colors.yellow, size: 20),
-                          const SizedBox(width: 8),
-                          const Text("ES Assistant", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          const Spacer(),
-                          Text(_modelPool[_currentModelIndex].split('-')[2].toUpperCase(), 
-                               style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                          Icon(
+                            Icons.auto_awesome,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            "AI Assistant",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    // Chat List
+                    // Danh sách tin nhắn
                     Expanded(
                       child: ListView.builder(
                         controller: _scrollController,
-                        padding: const EdgeInsets.all(15),
+                        padding: const EdgeInsets.all(12),
                         itemCount: _messages.length,
                         itemBuilder: (context, index) {
                           final msg = _messages[index];
                           bool isUser = msg['role'] == 'user';
                           return Align(
-                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                            alignment: isUser
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
                             child: Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: isUser ? Colors.blue[50] : Colors.grey[100],
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(15),
-                                  topRight: const Radius.circular(15),
-                                  bottomLeft: Radius.circular(isUser ? 15 : 0),
-                                  bottomRight: Radius.circular(isUser ? 0 : 15),
-                                ),
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
                               ),
-                              child: Text(msg['text']!, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+                              decoration: BoxDecoration(
+                                color: isUser
+                                    ? Colors.blue[100]
+                                    : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                msg['text']!,
+                                style: const TextStyle(fontSize: 14),
+                              ),
                             ),
                           );
                         },
                       ),
                     ),
-                    if (_isLoading) const LinearProgressIndicator(minHeight: 2, backgroundColor: Colors.transparent),
-                    // Input
+                    if (_isLoading) const LinearProgressIndicator(minHeight: 2),
+                    // Input field
                     Padding(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(8.0),
                       child: Row(
                         children: [
                           Expanded(
                             child: TextField(
                               controller: _textController,
-                              decoration: InputDecoration(
-                                hintText: "Hỏi AI bài tập...",
-                                filled: true,
-                                fillColor: Colors.grey[50],
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 15),
+                              decoration: const InputDecoration(
+                                hintText: "Nhập câu hỏi...",
                                 border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(25),
-                                  borderSide: BorderSide.none,
+                                  borderRadius: BorderRadius.all(
+                                    Radius.circular(20),
+                                  ),
+                                ),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16,
                                 ),
                               ),
                               onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
-                          const SizedBox(width: 5),
-                          CircleAvatar(
-                            backgroundColor: Colors.blueAccent,
-                            child: IconButton(
-                              icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                              onPressed: _sendMessage,
+                          IconButton(
+                            icon: const Icon(
+                              Icons.send,
+                              color: Colors.blueAccent,
                             ),
+                            onPressed: _sendMessage,
                           ),
                         ],
                       ),
