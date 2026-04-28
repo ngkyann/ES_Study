@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:esstudy/constants/colors.dart';
-// import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:esstudy/screens/login_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends StatefulWidget {
   final String userName;
   final String selectedClass;
   final String userId;
@@ -19,6 +18,11 @@ class SettingsPage extends StatelessWidget {
   });
 
   @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -26,37 +30,35 @@ class SettingsPage extends StatelessWidget {
           "Cài đặt",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: primaryColor,
+        backgroundColor: primaryColor, // Sẽ tự động đổi màu khi state thay đổi
         foregroundColor: Colors.white,
         centerTitle: true,
         elevation: 0,
       ),
       body: Container(
         color: Colors.grey.shade50,
-        // 🔥 1. BỌC BẰNG REFRESH INDICATOR
         child: RefreshIndicator(
           color: primaryColor,
           backgroundColor: Colors.white,
           onRefresh: () async {
-            // Giả lập load 1 giây để hiện vòng xoay cho mượt
             await Future.delayed(const Duration(seconds: 1));
           },
-          // 🔥 2. BÊN TRONG LÀ LISTVIEW CŨ CỦA BẠN
           child: ListView(
-            // 🔥 3. BẮT BUỘC: Thêm physics này để nội dung ngắn vẫn vuốt được
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(vertical: 10),
             children: [
               _buildSectionHeader("Thông tin cá nhân"),
-              _buildInfoTile(Icons.person, "Họ và tên", userName),
-              _buildInfoTile(Icons.school, "Lớp", selectedClass),
-              _buildInfoTile(Icons.email, "Email", email),
+              _buildInfoTile(Icons.person, "Họ và tên", widget.userName),
+              _buildInfoTile(Icons.school, "Lớp", widget.selectedClass),
+              _buildInfoTile(Icons.email, "Email", widget.email),
               _buildPasswordTile(context),
               const SizedBox(height: 10),
+
               _buildSectionHeader("Cài đặt giao diện"),
-              _buildThemeSelector(),
+              _buildThemeSelector(), // Giao diện chọn màu
               _buildActionTile(Icons.language, "Ngôn ngữ", "Tiếng Việt"),
               const SizedBox(height: 10),
+
               _buildSectionHeader("Ứng dụng"),
               _buildActionTile(Icons.privacy_tip, "Chính sách bảo mật", ""),
               _buildActionTile(
@@ -112,7 +114,7 @@ class SettingsPage extends StatelessWidget {
     return Container(
       color: Colors.white,
       child: ListTile(
-        leading: const Icon(Icons.lock, color: primaryColor),
+        leading: Icon(Icons.lock, color: primaryColor),
         title: const Text("Mật khẩu", style: TextStyle(fontSize: 15)),
         subtitle: const Text(
           "********",
@@ -120,7 +122,7 @@ class SettingsPage extends StatelessWidget {
         ),
         trailing: TextButton(
           onPressed: () => _showChangePasswordDialog(context),
-          child: const Text(
+          child: Text(
             "Đổi mật khẩu",
             style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
           ),
@@ -129,7 +131,6 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  // 🔥 ĐÃ SỬA: Cấp thêm tham số onTap để Widget này bấm được
   Widget _buildActionTile(
     IconData icon,
     String title,
@@ -153,11 +154,12 @@ class SettingsPage extends StatelessWidget {
             const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
           ],
         ),
-        onTap: onTap, // Gắn hành động vào đây
+        onTap: onTap,
       ),
     );
   }
 
+  // 🔥 ĐÃ SỬA: Bảng chọn màu
   Widget _buildThemeSelector() {
     return Container(
       color: Colors.white,
@@ -169,10 +171,10 @@ class SettingsPage extends StatelessWidget {
           padding: const EdgeInsets.only(top: 8.0),
           child: Row(
             children: [
-              _buildColorCircle(primaryColor, true),
-              _buildColorCircle(Colors.green, false),
-              _buildColorCircle(Colors.orange, false),
-              _buildColorCircle(Colors.purple, false),
+              _buildColorCircle(const Color(0xFF87CEFA)), // Màu xanh mặc định
+              _buildColorCircle(Colors.green),
+              _buildColorCircle(Colors.orange),
+              _buildColorCircle(Colors.purple),
             ],
           ),
         ),
@@ -180,19 +182,36 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildColorCircle(Color color, bool isSelected) {
-    return Container(
-      margin: const EdgeInsets.only(right: 12),
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: isSelected ? Border.all(color: Colors.black45, width: 2) : null,
+  // 🔥 ĐÃ SỬA: Logic bấm chọn đổi màu
+  Widget _buildColorCircle(Color color) {
+    bool isSelected = primaryColor == color;
+
+    return GestureDetector(
+      onTap: () async {
+        setState(() {
+          primaryColor = color;
+          themeNotifier.value = color;
+        });
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('theme_color', color.value);
+
+        debugPrint("Đã lưu màu: ${color.value}");
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: isSelected
+              ? Border.all(color: Colors.black45, width: 2)
+              : null,
+        ),
+        child: isSelected
+            ? const Icon(Icons.check, color: Colors.white, size: 18)
+            : null,
       ),
-      child: isSelected
-          ? const Icon(Icons.check, color: Colors.white, size: 18)
-          : null,
     );
   }
 
@@ -226,9 +245,8 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  // --- HỘP THOẠI THÔNG TIN PHIÊN BẢN (MỚI THÊM) ---
+  // --- CÁC HỘP THOẠI DIALOG BÊN DƯỚI GIỮ NGUYÊN (Version, Logout, ChangePassword) ---
   void _showVersionInfoDialog(BuildContext context) {
-    // Lấy ngày tháng năm hiện tại
     final DateTime now = DateTime.now();
     final String todayStr =
         "${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}";
@@ -241,10 +259,10 @@ class SettingsPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(15),
           ),
           title: Row(
-            children: const [
+            children: [
               Icon(Icons.info_outline, color: primaryColor, size: 28),
-              SizedBox(width: 10),
-              Text("Thông tin ứng dụng"),
+              const SizedBox(width: 10),
+              const Text("Thông tin ứng dụng"),
             ],
           ),
           content: Column(
@@ -292,7 +310,6 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  // --- HỘP THOẠI ĐĂNG XUẤT ---
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -302,7 +319,7 @@ class SettingsPage extends StatelessWidget {
         content: const Text("Bạn muốn đăng xuất?"),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext), // Tắt dialog nếu huỷ
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("Huỷ"),
           ),
           ElevatedButton(
@@ -314,14 +331,8 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
             onPressed: () async {
-              // 1. Tắt hộp thoại Dialog
               Navigator.pop(dialogContext);
-
-              // 2. Lùi tất cả các trang (Settings...) về trang gốc (Home)
               Navigator.of(context).popUntil((route) => route.isFirst);
-
-              // 3. Gọi Firebase Đăng xuất.
-              // Lúc này StreamBuilder ở main.dart sẽ tự động phát hiện và chuyển mượt mà sang LoginPage
               await FirebaseAuth.instance.signOut();
             },
             child: const Text("Đăng xuất"),
@@ -331,13 +342,10 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  // --- ĐỔI MẬT KHẨU (ĐÃ CÓ NÚT ẨN/HIỆN MẬT KHẨU HOÀN HẢO) ---
   void _showChangePasswordDialog(BuildContext context) {
     final oldPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
-
-    // Khai báo các biến trạng thái ẩn/hiện cho từng ô
     bool obscureOld = true;
     bool obscureNew = true;
     bool obscureConfirm = true;
@@ -366,9 +374,7 @@ class SettingsPage extends StatelessWidget {
                                 : Icons.visibility,
                           ),
                           onPressed: () {
-                            setState(() {
-                              obscureOld = !obscureOld;
-                            });
+                            setState(() => obscureOld = !obscureOld);
                           },
                         ),
                       ),
@@ -385,9 +391,7 @@ class SettingsPage extends StatelessWidget {
                                 : Icons.visibility,
                           ),
                           onPressed: () {
-                            setState(() {
-                              obscureNew = !obscureNew;
-                            });
+                            setState(() => obscureNew = !obscureNew);
                           },
                         ),
                       ),
@@ -404,9 +408,7 @@ class SettingsPage extends StatelessWidget {
                                 : Icons.visibility,
                           ),
                           onPressed: () {
-                            setState(() {
-                              obscureConfirm = !obscureConfirm;
-                            });
+                            setState(() => obscureConfirm = !obscureConfirm);
                           },
                         ),
                       ),
@@ -437,7 +439,6 @@ class SettingsPage extends StatelessWidget {
                             );
                             return;
                           }
-
                           if (newP != confirmP) {
                             _showSnackBar(
                               context,
@@ -447,7 +448,6 @@ class SettingsPage extends StatelessWidget {
                           }
 
                           setState(() => isLoading = true);
-
                           try {
                             User? user = FirebaseAuth.instance.currentUser;
                             if (user != null && user.email != null) {
@@ -459,7 +459,6 @@ class SettingsPage extends StatelessWidget {
                               await user.reauthenticateWithCredential(
                                 credential,
                               );
-
                               await user.updatePassword(newP);
 
                               if (!dialogContext.mounted) return;

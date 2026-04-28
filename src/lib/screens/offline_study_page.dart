@@ -325,10 +325,29 @@ class _StudySessionPageState extends State<StudySessionPage> {
   }
 
   Future<void> _initNotification() async {
+    // 1. Cấu hình icon cho Android
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    await notifications.initialize(
-      const InitializationSettings(android: android),
+
+    // 2. Cấu hình cho iOS (Bắt buộc phải có nếu muốn chạy trên iPhone)
+    const ios = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
     );
+
+    final settings = InitializationSettings(android: android, iOS: ios);
+
+    // 3. Khởi tạo plugin
+    await notifications.initialize(settings);
+
+    // 4. XIN QUYỀN HIỂN THỊ THÔNG BÁO CHO ANDROID 13+
+    final androidPlugin = notifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (androidPlugin != null) {
+      await androidPlugin.requestNotificationsPermission();
+    }
   }
 
   void startTimer() {

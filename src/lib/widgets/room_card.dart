@@ -35,7 +35,7 @@ class RoomCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     backgroundColor: primaryColor,
                     child: Icon(Icons.person, color: Colors.white),
                   ),
@@ -53,7 +53,7 @@ class RoomCard extends StatelessWidget {
                         ),
                         Text(
                           room.hostId,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: primaryColor,
                             fontWeight: FontWeight.w500,
                             fontSize: 13,

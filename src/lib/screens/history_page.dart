@@ -87,7 +87,7 @@ class HistoryPage extends StatelessWidget {
 
                 return Card(
                   child: ListTile(
-                    leading: const Icon(Icons.history, color: primaryColor),
+                    leading: Icon(Icons.history, color: primaryColor),
                     title: Text("Hoàn thành $completed/$total mục tiêu"),
                     subtitle: Text("$timeText - $minutes phút"),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),

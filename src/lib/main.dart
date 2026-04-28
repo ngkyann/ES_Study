@@ -9,9 +9,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/screens/home_page.dart';
 import 'widgets/ai_assistant_fab.dart';
+import 'package:esstudy/constants/colors.dart'; // 🔥 Import file màu
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  int? savedColorValue = prefs.getInt('theme_color');
+
+  if (savedColorValue != null) {
+    primaryColor = Color(savedColorValue);
+    themeNotifier.value =
+        primaryColor; // Cập nhật tín hiệu cho AI Assistant luôn
+  }
   tz.initializeTimeZones();
   vn = tz.getLocation('Asia/Ho_Chi_Minh');
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -27,35 +37,38 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'ES Study',
 
-      // --- PHẦN THÊM MỚI (Vỏ bọc AI) ---
+      // --- PHẦN VỎ BỌC AI (ĐÃ ĐƯỢC NÂNG CẤP) ---
       builder: (context, child) {
         return Scaffold(
           body: Stack(
             children: [
-              child!, // Giữ nguyên toàn bộ logic Home/Login bên dưới
-              const AIAssistantFAB(), // Chèn thêm bong bóng AI lên trên cùng
+              child!,
+              // 🔥 Kẻ lắng nghe tín hiệu: Bất cứ khi nào themeNotifier thay đổi giá trị
+              // Nó sẽ tự động vẽ lại (rebuild) duy nhất cái bong bóng AI này
+              ValueListenableBuilder<Color>(
+                valueListenable: themeNotifier,
+                builder: (context, value, _) {
+                  return AIAssistantFAB(); // Giờ thì nó sẽ tự động đổi màu ngay lập tức!
+                },
+              ),
             ],
           ),
         );
       },
-      // --------------------------------
 
-      // LOGIC CŨ GIỮ NGUYÊN 100%
+      // --------------------------------
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, authSnapshot) {
-          // 1. Chờ kiểm tra trạng thái đăng nhập
           if (authSnapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
 
-          // 2. Nếu đã đăng nhập (Auth thành công)
           if (authSnapshot.hasData && authSnapshot.data != null) {
             final user = authSnapshot.data!;
 
-            // Kiểm tra email phòng hờ lúc signOut bị null giữa chừng
             if (user.email == null || !user.email!.contains('@')) {
               return const LoginPage();
             }
@@ -68,20 +81,17 @@ class MyApp extends StatelessWidget {
                   .doc(docId)
                   .snapshots(),
               builder: (context, userSnapshot) {
-                // Nếu đang chờ dữ liệu Firestore
                 if (userSnapshot.connectionState == ConnectionState.waiting) {
                   return const Scaffold(
                     body: Center(child: CircularProgressIndicator()),
                   );
                 }
 
-                // Nếu KHÔNG có dữ liệu
                 if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
                   FirebaseAuth.instance.signOut();
                   return const LoginPage();
                 }
 
-                // Có dữ liệu rồi mới vào Home
                 final data = userSnapshot.data!.data() as Map<String, dynamic>;
                 return HomePage(
                   userName: data['name'] ?? "",
@@ -93,7 +103,6 @@ class MyApp extends StatelessWidget {
             );
           }
 
-          // 3. Nếu chưa đăng nhập
           return const LoginPage();
         },
       ),

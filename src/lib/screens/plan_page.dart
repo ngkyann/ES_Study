@@ -27,13 +27,32 @@ class _PlanPageState extends State<PlanPage> {
 
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Asia/Ho_Chi_Minh'));
+
+    // Đã xóa phần gọi Popup ở đây vì Trang Chủ (Home Page) đã đảm nhận việc nhắc nhở
   }
 
   Future<void> _initNotification() async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: android);
+
+    // Thêm cấu hình iOS phòng trường hợp chạy trên iPhone
+    const ios = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const settings = InitializationSettings(android: android, iOS: ios);
 
     await notificationsPlugin.initialize(settings);
+
+    // Xin quyền thông báo cho Android 13+
+    final androidPlugin = notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (androidPlugin != null) {
+      await androidPlugin.requestNotificationsPermission();
+    }
   }
 
   Future<void> _scheduleNotification(String title, DateTime dateTime) async {
@@ -73,6 +92,7 @@ class _PlanPageState extends State<PlanPage> {
             ),
             const SizedBox(height: 10),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
               onPressed: () async {
                 final date = await showDatePicker(
                   context: context,
@@ -98,7 +118,10 @@ class _PlanPageState extends State<PlanPage> {
                   time.minute,
                 );
               },
-              child: const Text("Chọn ngày giờ"),
+              child: const Text(
+                "Chọn ngày giờ",
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
@@ -108,6 +131,7 @@ class _PlanPageState extends State<PlanPage> {
             child: const Text("Hủy"),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
             onPressed: () async {
               if (titleController.text.isEmpty || selectedDate == null) return;
 
@@ -119,9 +143,9 @@ class _PlanPageState extends State<PlanPage> {
 
               await _scheduleNotification(titleController.text, selectedDate!);
 
-              Navigator.pop(context);
+              if (mounted) Navigator.pop(context);
             },
-            child: const Text("Lưu"),
+            child: const Text("Lưu", style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -137,43 +161,36 @@ class _PlanPageState extends State<PlanPage> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: primaryColor,
-        centerTitle: true, // ✅ căn giữa
-        iconTheme: const IconThemeData(
-          color: Colors.white, // ✅ mũi tên back màu trắng
-        ),
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: primaryColor,
         onPressed: _addPlan,
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('plans')
             .where('userId', isEqualTo: widget.userId)
-            .snapshots(), // ❌ bỏ orderBy để tránh lỗi index
+            .snapshots(),
         builder: (context, snapshot) {
-          // loading lần đầu
           if (snapshot.connectionState == ConnectionState.waiting &&
               _cachedDocs == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // lỗi
           if (snapshot.hasError) {
             return Center(child: Text("Lỗi: ${snapshot.error}"));
           }
 
-          // cập nhật cache nếu có dữ liệu mới
           if (snapshot.hasData) {
             _cachedDocs = snapshot.data!.docs;
           }
 
           final docs = _cachedDocs ?? [];
 
-          // rỗng
           if (docs.isEmpty) {
-            // 🔥 ĐÃ THÊM: Vuốt tải lại khi danh sách trống
             return RefreshIndicator(
               color: primaryColor,
               backgroundColor: Colors.white,
@@ -183,7 +200,7 @@ class _PlanPageState extends State<PlanPage> {
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: const [
-                  SizedBox(height: 300), // Căn giữa dòng chữ
+                  SizedBox(height: 300),
                   Center(
                     child: Text(
                       "Chưa có kế hoạch nào",
@@ -195,14 +212,12 @@ class _PlanPageState extends State<PlanPage> {
             );
           }
 
-          // sort theo thời gian
           docs.sort((a, b) {
             DateTime timeA = (a['time'] as Timestamp).toDate();
             DateTime timeB = (b['time'] as Timestamp).toDate();
             return timeA.compareTo(timeB);
           });
 
-          // 🔥 ĐÃ THÊM: Vuốt tải lại khi có danh sách
           return RefreshIndicator(
             color: primaryColor,
             backgroundColor: Colors.white,
@@ -210,17 +225,17 @@ class _PlanPageState extends State<PlanPage> {
               await Future.delayed(const Duration(seconds: 1));
             },
             child: ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(), // Bắt buộc
+              physics: const AlwaysScrollableScrollPhysics(),
               itemCount: docs.length,
               itemBuilder: (_, index) {
                 final data = docs[index];
                 DateTime time = (data['time'] as Timestamp).toDate();
 
                 return ListTile(
-                  leading: const Icon(Icons.schedule, color: primaryColor),
+                  leading: Icon(Icons.schedule, color: primaryColor),
                   title: Text(data['title']),
                   subtitle: Text(
-                    "${time.day}/${time.month}/${time.year} - ${time.hour}:${time.minute.toString().padLeft(2, '0')}",
+                    "${time.day}/${time.month}/${time.year} - ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}",
                   ),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),

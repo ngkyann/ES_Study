@@ -186,11 +186,11 @@ class _LoginPageState extends State<LoginPage> {
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               children: [
-                const Icon(Icons.auto_stories, size: 80, color: primaryColor),
+                Icon(Icons.auto_stories, size: 80, color: primaryColor),
                 const SizedBox(height: 10),
                 Text(
                   _isLogin ? "ĐĂNG NHẬP" : "ĐĂNG KÝ",
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: primaryColor,
@@ -341,7 +341,7 @@ class _LoginPageState extends State<LoginPage> {
                     _isLogin
                         ? "Chưa có tài khoản? Đăng ký ngay"
                         : "Đã có tài khoản? Đăng nhập",
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       color: primaryColor,
                       fontWeight: FontWeight.w600,

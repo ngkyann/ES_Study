@@ -29,44 +29,224 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int userPoints = 0;
-  bool _isLoadingPoints = true;
+  int userStreak = 0; // 🔥 ĐÃ THÊM: Biến lưu chuỗi ngày học
+  bool _isLoadingData = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchUserPoints();
+    _fetchUserData(); // 🔥 Tải cả điểm và chuỗi
+
+    // 🔥 ĐÃ THÊM: Kiểm tra kế hoạch ngay khi vừa vào App
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkTodayPlansAndShowPopup();
+    });
   }
 
-  Future<void> _fetchUserPoints() async {
+  // 🔥 ĐÃ THÊM: Logic hiển thị thông báo kế hoạch ngay tại Trang Chủ
+  Future<void> _checkTodayPlansAndShowPopup() async {
+    try {
+      final now = DateTime.now();
+      final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('plans')
+          .where('userId', isEqualTo: widget.userId)
+          .get();
+
+      List<QueryDocumentSnapshot> todayPlans = [];
+
+      for (var doc in snapshot.docs) {
+        DateTime time = (doc['time'] as Timestamp).toDate();
+        // Lấy tất cả kế hoạch từ HÔM NAY TRỞ VỀ TRƯỚC (bao gồm cả quá hạn)
+        if (time.isBefore(endOfToday)) {
+          todayPlans.add(doc);
+        }
+      }
+
+      if (todayPlans.isNotEmpty && mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Row(
+                children: [
+                  Icon(Icons.auto_awesome, color: primaryColor),
+                  SizedBox(width: 10),
+                  Text(
+                    "Nhắc nhở ngày mới",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Chào ${widget.userName}, hôm nay bạn có kế hoạch học tập:",
+                  ),
+                  const SizedBox(height: 15),
+                  ...todayPlans.map((doc) {
+                    DateTime time = (doc['time'] as Timestamp).toDate();
+                    String timeStr =
+                        "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        "• ${doc['title']} ($timeStr)",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    minimumSize: const Size(double.infinity, 45),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () async {
+                    // Tự động xoá kế hoạch sau khi người dùng bấm Xác nhận
+                    for (var doc in todayPlans) {
+                      await FirebaseFirestore.instance
+                          .collection('plans')
+                          .doc(doc.id)
+                          .delete();
+                    }
+                    if (mounted) Navigator.pop(context);
+                  },
+                  child: const Text(
+                    "Đã hiểu & Bắt đầu!",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint("Lỗi kiểm tra kế hoạch: $e");
+    }
+  }
+
+  // 🔥 ĐÃ SỬA: Tải dữ liệu user và kiểm tra xem có bị đứt chuỗi không
+  Future<void> _fetchUserData() async {
     try {
       var doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
           .get();
+
       if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        int points = data['points'] ?? 100;
+        int streak = data['streakCount'] ?? 0;
+        Timestamp? lastStudyTs = data['lastStudyDate'];
+
+        // Kiểm tra xem đã quá 1 ngày chưa học chưa (đứt chuỗi)
+        if (lastStudyTs != null && streak > 0) {
+          DateTime lastStudy = lastStudyTs.toDate();
+          DateTime now = DateTime.now();
+          DateTime today = DateTime(now.year, now.month, now.day);
+          DateTime lastStudyDay = DateTime(
+            lastStudy.year,
+            lastStudy.month,
+            lastStudy.day,
+          );
+
+          if (today.difference(lastStudyDay).inDays > 1) {
+            streak = 0; // Bị đứt chuỗi do nghỉ hơn 1 ngày
+            // Cập nhật lại trên Firebase
+            FirebaseFirestore.instance
+                .collection('users')
+                .doc(widget.userId)
+                .update({'streakCount': 0});
+          }
+        }
+
         setState(() {
-          userPoints = doc.data()!['points'] ?? 100;
-          _isLoadingPoints = false;
+          userPoints = points;
+          userStreak = streak;
+          _isLoadingData = false;
         });
       } else {
-        setState(() => _isLoadingPoints = false);
+        setState(() => _isLoadingData = false);
       }
     } catch (e) {
-      debugPrint("Lỗi tải điểm: $e");
-      setState(() => _isLoadingPoints = false);
+      debugPrint("Lỗi tải dữ liệu: $e");
+      setState(() => _isLoadingData = false);
     }
   }
 
-  Future<void> _updatePointsOnFirebase(int additionalPoints) async {
+  // 🔥 ĐÃ SỬA: Cập nhật cả điểm và tính toán chuỗi ngày học mới khi học xong
+  Future<void> _updateStudyProgress(int additionalPoints) async {
     try {
-      await FirebaseFirestore.instance
+      final userRef = FirebaseFirestore.instance
           .collection('users')
-          .doc(widget.userId)
-          .update({'points': FieldValue.increment(additionalPoints)});
-      setState(() => userPoints += additionalPoints);
-      debugPrint("Cập nhật thành công: +$additionalPoints điểm");
+          .doc(widget.userId);
+      final doc = await userRef.get();
+
+      int newStreak = 1;
+      DateTime now = DateTime.now();
+      DateTime today = DateTime(now.year, now.month, now.day);
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        int currentStreak = data['streakCount'] ?? 0;
+        Timestamp? lastStudyTs = data['lastStudyDate'];
+
+        if (lastStudyTs != null) {
+          DateTime lastStudy = lastStudyTs.toDate();
+          DateTime lastStudyDay = DateTime(
+            lastStudy.year,
+            lastStudy.month,
+            lastStudy.day,
+          );
+          int difference = today.difference(lastStudyDay).inDays;
+
+          if (difference == 0) {
+            newStreak = currentStreak; // Hôm nay đã học rồi -> Giữ nguyên chuỗi
+          } else if (difference == 1) {
+            newStreak =
+                currentStreak + 1; // Hôm qua học, nay học tiếp -> Cộng dồn
+          } else {
+            newStreak = 1; // Cách quá 1 ngày -> Tạo chuỗi mới
+          }
+        }
+      }
+
+      // Cập nhật vào Database
+      await userRef.set({
+        'points': FieldValue.increment(additionalPoints),
+        'streakCount': newStreak,
+        'lastStudyDate': Timestamp.fromDate(now),
+      }, SetOptions(merge: true)); // Dùng merge để không đè mất dữ liệu khác
+
+      setState(() {
+        userPoints += additionalPoints;
+        userStreak = newStreak;
+      });
+      debugPrint(
+        "Cập nhật thành công: +$additionalPoints điểm, Chuỗi: $newStreak ngày",
+      );
     } catch (e) {
-      debugPrint("Lỗi cập nhật điểm: $e");
+      debugPrint("Lỗi cập nhật tiến trình: $e");
     }
   }
 
@@ -83,8 +263,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          Colors.grey.shade50, // Đồng bộ nền xám để bóng đổ hiển thị đẹp
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: primaryColor,
@@ -99,14 +278,27 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.orangeAccent,
               ),
               const SizedBox(width: 4),
-              const Text(
-                "15",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
+              // 🔥 HIỂN THỊ CHUỖI NGÀY ĐỘNG
+              _isLoadingData
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      "$userStreak",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
               const SizedBox(width: 12),
               const Icon(Icons.workspace_premium, color: Colors.yellow),
               const SizedBox(width: 4),
-              _isLoadingPoints
+              _isLoadingData
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -137,8 +329,9 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: GestureDetector(
-              onTap: () {
-                Navigator.push(
+              onTap: () async {
+                // 🔥 SỬA CHỖ NÀY CHO TRANG CÁ NHÂN: Để khi đổi màu về từ trang cá nhân cũng tự cập nhật
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => ProfilePage(
@@ -146,11 +339,13 @@ class _HomePageState extends State<HomePage> {
                       userId: widget.userId,
                       selectedClass: widget.selectedClass,
                       userPoints: userPoints,
+                      userStreak: userStreak,
                     ),
                   ),
                 );
+                if (mounted) setState(() {});
               },
-              child: const CircleAvatar(
+              child: CircleAvatar(
                 backgroundColor: Colors.white,
                 child: Icon(Icons.person, color: primaryColor),
               ),
@@ -162,19 +357,17 @@ class _HomePageState extends State<HomePage> {
         color: primaryColor,
         backgroundColor: Colors.white,
         onRefresh: () async {
-          setState(() => _isLoadingPoints = true);
-          await _fetchUserPoints();
+          setState(() => _isLoadingData = true);
+          await _fetchUserData();
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 🔥 ĐÃ FIX: Thủ thuật lấp đầy khoảng trắng bằng Stack khi vuốt
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // Miếng dán tàng hình vươn lên 500px để lấp khoảng hở khi vuốt
                   Positioned(
                     top: -500,
                     left: 0,
@@ -182,7 +375,6 @@ class _HomePageState extends State<HomePage> {
                     height: 500,
                     child: Container(color: primaryColor),
                   ),
-                  // Giao diện Header bo tròn gốc của bạn
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
@@ -290,36 +482,42 @@ class _HomePageState extends State<HomePage> {
                   builder: (_) => OfflineStudyPage(userId: widget.userId),
                 ),
               );
-              // Nếu hoàn thành và được cộng điểm, tự động tải lại điểm luôn
-              if (result is int) await _updatePointsOnFirebase(result);
+              // 🔥 GỌI HÀM CẬP NHẬT CHUỖI VÀ ĐIỂM
+              if (result is int) await _updateStudyProgress(result);
+              if (mounted) setState(() {}); // Refresh theme nếu có
             } else if (item.isSearch) {
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const RoomSearchPage()),
               );
+              if (mounted) setState(() {});
             } else if (item.title == "Kế hoạch") {
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => PlanPage(userId: widget.userId),
                 ),
               );
+              if (mounted) setState(() {});
             } else if (item.title == "Xếp hạng") {
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => LeaderboardPage(currentUserId: widget.userId),
                 ),
               );
+              if (mounted) setState(() {});
             } else if (item.title == "Lịch sử học tập") {
-              Navigator.push(
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => HistoryPage(userId: widget.userId),
                 ),
               );
+              if (mounted) setState(() {});
             } else if (item.title == "Cài đặt") {
-              Navigator.push(
+              // 🔥 ĐÃ FIX LỖI TẠI ĐÂY: Thêm lệnh await và gọi setState
+              await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => SettingsPage(
@@ -330,6 +528,10 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               );
+              // Cập nhật lại giao diện (màu sắc) sau khi đóng trang Cài đặt
+              if (mounted) {
+                setState(() {});
+              }
             }
           },
           child: Container(

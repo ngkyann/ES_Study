@@ -31,7 +31,7 @@ class LeaderboardPage extends StatelessWidget {
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
+              return Center(
                 child: CircularProgressIndicator(color: primaryColor),
               );
             }
@@ -224,7 +224,7 @@ class LeaderboardPage extends StatelessWidget {
             ),
             Text(
               "$points pt",
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: primaryColor,
               ),

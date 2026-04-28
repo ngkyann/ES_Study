@@ -1,3 +1,4 @@
 import 'package:flutter/material.dart';
 
-const Color primaryColor = Color(0xFF87CEFA);
+Color primaryColor = Color(0xFF87CEFA);
+final ValueNotifier<Color> themeNotifier = ValueNotifier(primaryColor);

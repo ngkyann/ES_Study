@@ -8,13 +8,14 @@ class ProfilePage extends StatelessWidget {
   final String userId;
   final String selectedClass;
   final int userPoints;
-
+  final int userStreak;
   const ProfilePage({
     super.key,
     required this.userName,
     required this.userId,
     required this.selectedClass,
     required this.userPoints,
+    required this.userStreak,
   });
 
   @override
@@ -52,7 +53,7 @@ class ProfilePage extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    const CircleAvatar(
+                    CircleAvatar(
                       radius: 50,
                       backgroundColor: Colors.white,
                       child: Icon(Icons.person, color: primaryColor, size: 50),
@@ -84,17 +85,18 @@ class ProfilePage extends StatelessWidget {
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
+                          const Icon(
+                            // 🔥 Thêm const vào Icon
                             Icons.local_fire_department,
                             color: Colors.orangeAccent,
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Text(
-                            "Chuỗi 15 ngày học",
-                            style: TextStyle(
+                            "Chuỗi $userStreak ngày học", // 🔥 THAY BẰNG BIẾN userStreak
+                            style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
