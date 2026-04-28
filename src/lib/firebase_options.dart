@@ -85,4 +85,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'es-study-database-5fbdd.firebasestorage.app',
     measurementId: 'G-TQG55DGWXS',
   );
+
 }
