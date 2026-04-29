@@ -12,7 +12,7 @@ class AIAssistantFAB extends StatefulWidget {
 class _AIAssistantFABState extends State<AIAssistantFAB> {
   bool _isChatOpen = false;
   Offset _offset = const Offset(25, 25);
-  bool _isDragging = false; // Biến kiểm soát trạng thái kéo
+  bool _isDragging = false;
 
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -67,12 +67,11 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
     });
   }
 
-  // Chỉnh lại logic: Chỉ tự dạt nếu khung chat đang lấn chiếm màn hình quá nhiều (> 1/4 màn hình)
   void _autoAdjustPosition() {
     final screenWidth = MediaQuery.of(context).size.width;
-    if (_messages.length > 5 && _offset.dx > screenWidth * 0.2) { 
+    if (_messages.length > 5 && _offset.dx > screenWidth * 0.2) {
       setState(() {
-        _offset = Offset(20, _offset.dy); 
+        _offset = Offset(20, _offset.dy);
       });
     }
   }
@@ -88,7 +87,7 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
     
     _textController.clear(); 
     _scrollToBottom();
-    // Bỏ _autoAdjustPosition() ở đây để tránh việc vừa enter là nó giật sang phải ngay lập tức
+    _autoAdjustPosition(); // Gọi hàm sau khi gửi để check dạt lề
 
     bool success = false;
     int attempt = 0;
@@ -107,8 +106,7 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
             _isLoading = false;
           });
           _scrollToBottom();
-          // Chỉ dạt khi AI phản hồi xong nếu ông muốn UI gọn gàng
-          // _autoAdjustPosition(); 
+          _autoAdjustPosition();
         }
         success = true;
       } catch (e) {
@@ -132,14 +130,13 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
       children: [
         // Nút FAB
         AnimatedPositioned(
-          // Fix delay: Nếu đang kéo (isDragging) thì duration = 0, nếu không thì trượt nhẹ
           duration: Duration(milliseconds: _isDragging ? 0 : 200),
           curve: Curves.linear,
           bottom: _offset.dy,
           right: _offset.dx,
           child: GestureDetector(
-            onPanStart: (_) => setState(() => _isDragging = true), // Bắt đầu kéo
-            onPanEnd: (_) => setState(() => _isDragging = false),  // Thả tay
+            onPanStart: (_) => setState(() => _isDragging = true),
+            onPanEnd: (_) => setState(() => _isDragging = false),
             onPanUpdate: (details) {
               setState(() {
                 _offset = Offset(
@@ -159,7 +156,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
         // Cửa sổ Chat
         if (_isChatOpen)
           AnimatedPositioned(
-            // Nếu đang kéo thì duration = 0 để khung chat dính chặt vào tay, không bị lag
             duration: Duration(milliseconds: _isDragging ? 0 : 250),
             curve: Curves.easeOutCubic,
             bottom: _offset.dy + 70,
@@ -231,9 +227,13 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                         children: [
                           Expanded(
                             child: TextField(
-                              key: const ValueKey('chat_input_unique'),
                               controller: _textController,
                               style: const TextStyle(fontSize: 14),
+                              // --- FIX LỖI NHẬP CHỮ TRÊN ANDROID ---
+                              autocorrect: false, // Tắt tự động sửa
+                              enableSuggestions: false, // Tắt gợi ý từ
+                              keyboardType: TextInputType.text, // Để bàn phím ở chế độ text thuần
+                              textInputAction: TextInputAction.send, // Hiện nút Send thay vì Xuống dòng
                               decoration: InputDecoration(
                                 hintText: "Hỏi AI...",
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
