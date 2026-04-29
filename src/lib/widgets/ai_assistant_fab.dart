@@ -16,6 +16,8 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
 
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _focusNode =
+      FocusNode(); // Đưa FocusNode vào để quản lý bàn phím
 
   final List<Map<String, String>> _messages = [];
   final List<Content> _history = [];
@@ -37,6 +39,14 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
   void initState() {
     super.initState();
     _initModel();
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _scrollController.dispose();
+    _focusNode.dispose(); // Dọn dẹp FocusNode để tránh tràn bộ nhớ
+    super.dispose();
   }
 
   void _initModel() {
@@ -85,12 +95,14 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
       _isLoading = true;
     });
 
-    // --- FIX LỖI LƯU BỘ ĐỆM BÀN PHÍM CHỐNG LẶP CHỮ ---
-    _textController.value = const TextEditingValue(
-      text: '',
-      selection: TextSelection.collapsed(offset: 0),
-      composing: TextRange.empty, // Ép bộ gõ hệ thống xóa lịch sử ghép chữ
-    );
+    // --- FIX TRIỆT ĐỂ LỖI LẶP CHỮ BỘ GÕ TIẾNG VIỆT ---
+    // Đợi Flutter hoàn tất chu kỳ vẽ lại UI (setState) rồi mới báo cho bộ gõ xóa chữ.
+    // Cách này sẽ ép IME của Android/iOS đồng bộ chính xác nhịp độ với UI.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _textController.clear();
+      }
+    });
     // ------------------------------------------------
 
     _scrollToBottom();
@@ -132,7 +144,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    // Lấy chiều cao của bàn phím để tránh bị che mất khung chat
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Stack(
@@ -141,8 +152,7 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
         AnimatedPositioned(
           duration: Duration(milliseconds: _isDragging ? 0 : 200),
           curve: Curves.linear,
-          bottom:
-              _offset.dy + bottomInset, // Đẩy FAB lên khi có bàn phím (nếu cần)
+          bottom: _offset.dy + bottomInset,
           right: _offset.dx,
           child: GestureDetector(
             onPanStart: (_) => setState(() => _isDragging = true),
@@ -177,7 +187,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
           AnimatedPositioned(
             duration: Duration(milliseconds: _isDragging ? 0 : 250),
             curve: Curves.easeOutCubic,
-            // Cộng thêm bottomInset để khung chat dâng lên theo bàn phím
             bottom: _offset.dy + 70 + bottomInset,
             right: _offset.dx,
             child: Material(
@@ -266,12 +275,12 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                     Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Row(
-                        // Thêm dòng này để nút Send luôn nằm dưới cùng khi TextField nở rộng
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Expanded(
                             child: TextField(
                               controller: _textController,
+                              focusNode: _focusNode, // Gắn FocusNode vào đây
                               style: const TextStyle(fontSize: 14),
                               autocorrect: true,
                               enableSuggestions: true,
