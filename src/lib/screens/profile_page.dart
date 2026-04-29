@@ -167,11 +167,11 @@ class ProfilePage extends StatelessWidget {
 
                           // Phân loại danh hiệu giống Leaderboard
                           if (myRank == 1) {
-                            rankText = "Hạng 1 (Quán quân)";
+                            rankText = "🥇 Hạng 1 (Quán quân)";
                           } else if (myRank >= 2 && myRank <= 10) {
-                            rankText = "Hạng $myRank (Top 10)";
+                            rankText = "🥈 Hạng $myRank (Top 10)";
                           } else if (myRank >= 11 && myRank <= 50) {
-                            rankText = "Hạng $myRank (Top 50)";
+                            rankText = "🥉 Hạng $myRank (Top 50)";
                           } else if (myRank > 50) {
                             rankText = "Hạng $myRank";
                           } else {

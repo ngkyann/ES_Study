@@ -10,6 +10,8 @@ import 'package:esstudy/screens/plan_page.dart';
 import 'package:esstudy/screens/history_page.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:esstudy/screens/ai_assistant_page.dart';
+import 'package:esstudy/screens/friends_page.dart'; // 🔥 ĐÃ THÊM IMPORT NÀY
+import 'package:esstudy/screens/statistics_page.dart'; // Đổi đường dẫn theo dự án của bạn
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -30,21 +32,19 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int userPoints = 0;
-  int userStreak = 0; // 🔥 ĐÃ THÊM: Biến lưu chuỗi ngày học
+  int userStreak = 0;
   bool _isLoadingData = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchUserData(); // 🔥 Tải cả điểm và chuỗi
+    _fetchUserData();
 
-    // 🔥 ĐÃ THÊM: Kiểm tra kế hoạch ngay khi vừa vào App
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkTodayPlansAndShowPopup();
     });
   }
 
-  // 🔥 ĐÃ THÊM: Logic hiển thị thông báo kế hoạch ngay tại Trang Chủ
   Future<void> _checkTodayPlansAndShowPopup() async {
     try {
       final now = DateTime.now();
@@ -59,7 +59,6 @@ class _HomePageState extends State<HomePage> {
 
       for (var doc in snapshot.docs) {
         DateTime time = (doc['time'] as Timestamp).toDate();
-        // Lấy tất cả kế hoạch từ HÔM NAY TRỞ VỀ TRƯỚC (bao gồm cả quá hạn)
         if (time.isBefore(endOfToday)) {
           todayPlans.add(doc);
         }
@@ -77,9 +76,9 @@ class _HomePageState extends State<HomePage> {
               title: Row(
                 children: [
                   Icon(Icons.auto_awesome, color: primaryColor),
-                  SizedBox(width: 10),
-                  Text(
-                    "Nhắc nhở ngày mới",
+                  const SizedBox(width: 10),
+                  const Text(
+                    "Nhắc nhở học tập",
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
                 ],
@@ -89,7 +88,7 @@ class _HomePageState extends State<HomePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Chào ${widget.userName}, hôm nay bạn có kế hoạch học tập:",
+                    "Chào ${widget.userName}, bạn có các kế hoạch chưa hoàn thành:",
                   ),
                   const SizedBox(height: 15),
                   ...todayPlans.map((doc) {
@@ -118,18 +117,11 @@ class _HomePageState extends State<HomePage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () async {
-                    // Tự động xoá kế hoạch sau khi người dùng bấm Xác nhận
-                    for (var doc in todayPlans) {
-                      await FirebaseFirestore.instance
-                          .collection('plans')
-                          .doc(doc.id)
-                          .delete();
-                    }
+                  onPressed: () {
                     if (mounted) Navigator.pop(context);
                   },
                   child: const Text(
-                    "Đã hiểu & Bắt đầu!",
+                    "Đã hiểu, vào học thôi!",
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -146,7 +138,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // 🔥 ĐÃ SỬA: Tải dữ liệu user và kiểm tra xem có bị đứt chuỗi không
   Future<void> _fetchUserData() async {
     try {
       var doc = await FirebaseFirestore.instance
@@ -160,7 +151,6 @@ class _HomePageState extends State<HomePage> {
         int streak = data['streakCount'] ?? 0;
         Timestamp? lastStudyTs = data['lastStudyDate'];
 
-        // Kiểm tra xem đã quá 1 ngày chưa học chưa (đứt chuỗi)
         if (lastStudyTs != null && streak > 0) {
           DateTime lastStudy = lastStudyTs.toDate();
           DateTime now = DateTime.now();
@@ -172,8 +162,7 @@ class _HomePageState extends State<HomePage> {
           );
 
           if (today.difference(lastStudyDay).inDays > 1) {
-            streak = 0; // Bị đứt chuỗi do nghỉ hơn 1 ngày
-            // Cập nhật lại trên Firebase
+            streak = 0;
             FirebaseFirestore.instance
                 .collection('users')
                 .doc(widget.userId)
@@ -190,12 +179,10 @@ class _HomePageState extends State<HomePage> {
         setState(() => _isLoadingData = false);
       }
     } catch (e) {
-      debugPrint("Lỗi tải dữ liệu: $e");
       setState(() => _isLoadingData = false);
     }
   }
 
-  // 🔥 ĐÃ SỬA: Cập nhật cả điểm và tính toán chuỗi ngày học mới khi học xong
   Future<void> _updateStudyProgress(int additionalPoints) async {
     try {
       final userRef = FirebaseFirestore.instance
@@ -222,30 +209,25 @@ class _HomePageState extends State<HomePage> {
           int difference = today.difference(lastStudyDay).inDays;
 
           if (difference == 0) {
-            newStreak = currentStreak; // Hôm nay đã học rồi -> Giữ nguyên chuỗi
+            newStreak = currentStreak;
           } else if (difference == 1) {
-            newStreak =
-                currentStreak + 1; // Hôm qua học, nay học tiếp -> Cộng dồn
+            newStreak = currentStreak + 1;
           } else {
-            newStreak = 1; // Cách quá 1 ngày -> Tạo chuỗi mới
+            newStreak = 1;
           }
         }
       }
 
-      // Cập nhật vào Database
       await userRef.set({
         'points': FieldValue.increment(additionalPoints),
         'streakCount': newStreak,
         'lastStudyDate': Timestamp.fromDate(now),
-      }, SetOptions(merge: true)); // Dùng merge để không đè mất dữ liệu khác
+      }, SetOptions(merge: true));
 
       setState(() {
         userPoints += additionalPoints;
         userStreak = newStreak;
       });
-      debugPrint(
-        "Cập nhật thành công: +$additionalPoints điểm, Chuỗi: $newStreak ngày",
-      );
     } catch (e) {
       debugPrint("Lỗi cập nhật tiến trình: $e");
     }
@@ -279,7 +261,6 @@ class _HomePageState extends State<HomePage> {
                 color: Colors.orangeAccent,
               ),
               const SizedBox(width: 4),
-              // 🔥 HIỂN THỊ CHUỖI NGÀY ĐỘNG
               _isLoadingData
                   ? const SizedBox(
                       width: 16,
@@ -331,7 +312,6 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.only(right: 16),
             child: GestureDetector(
               onTap: () async {
-                // 🔥 SỬA CHỖ NÀY CHO TRANG CÁ NHÂN: Để khi đổi màu về từ trang cá nhân cũng tự cập nhật
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -417,7 +397,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-
               const Padding(
                 padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
                 child: Text(
@@ -484,9 +463,8 @@ class _HomePageState extends State<HomePage> {
                   builder: (_) => OfflineStudyPage(userId: widget.userId),
                 ),
               );
-              // 🔥 GỌI HÀM CẬP NHẬT CHUỖI VÀ ĐIỂM
               if (result is int) await _updateStudyProgress(result);
-              if (mounted) setState(() {}); // Refresh theme nếu có
+              if (mounted) setState(() {});
             } else if (item.title == "Trợ lý ảo") {
               await Navigator.push(
                 context,
@@ -523,8 +501,15 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
               if (mounted) setState(() {});
+            } else if (item.title == "Thống kê") {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StatisticsPage(userId: widget.userId),
+                ),
+              );
+              if (mounted) setState(() {});
             } else if (item.title == "Cài đặt") {
-              // 🔥 ĐÃ FIX LỖI TẠI ĐÂY: Thêm lệnh await và gọi setState
               await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -536,10 +521,19 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               );
-              // Cập nhật lại giao diện (màu sắc) sau khi đóng trang Cài đặt
-              if (mounted) {
-                setState(() {});
-              }
+              if (mounted) setState(() {});
+            } else if (item.title == "Bạn bè") {
+              // 🔥 KÍCH HOẠT NÚT BẠN BÈ TẠI ĐÂY
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => FriendsPage(
+                    currentUserId: widget.userId,
+                    currentUserName: widget.userName,
+                  ),
+                ),
+              );
+              if (mounted) setState(() {});
             }
           },
           child: Container(

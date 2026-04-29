@@ -24,28 +24,20 @@ class _PlanPageState extends State<PlanPage> {
   void initState() {
     super.initState();
     _initNotification();
-
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Asia/Ho_Chi_Minh'));
-
-    // Đã xóa phần gọi Popup ở đây vì Trang Chủ (Home Page) đã đảm nhận việc nhắc nhở
   }
 
   Future<void> _initNotification() async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    // Thêm cấu hình iOS phòng trường hợp chạy trên iPhone
     const ios = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-
     const settings = InitializationSettings(android: android, iOS: ios);
 
     await notificationsPlugin.initialize(settings);
-
-    // Xin quyền thông báo cho Android 13+
     final androidPlugin = notificationsPlugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -57,7 +49,7 @@ class _PlanPageState extends State<PlanPage> {
 
   Future<void> _scheduleNotification(String title, DateTime dateTime) async {
     await notificationsPlugin.zonedSchedule(
-      dateTime.millisecondsSinceEpoch ~/ 1000, // ID duy nhất
+      dateTime.millisecondsSinceEpoch ~/ 1000,
       "📚 Đến giờ học!",
       title,
       tz.TZDateTime.from(dateTime, tz.local),
@@ -77,78 +69,180 @@ class _PlanPageState extends State<PlanPage> {
 
   Future<void> _addPlan() async {
     TextEditingController titleController = TextEditingController();
+    TextEditingController taskController = TextEditingController();
     DateTime? selectedDate;
+    List<String> tasks = [];
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Thêm kế hoạch"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(labelText: "Nội dung"),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-              onPressed: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime(2100),
-                  initialDate: DateTime.now(),
-                );
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Tạo Kế Hoạch"),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: titleController,
+                        decoration: const InputDecoration(
+                          labelText: "Tên kế hoạch (VD: Toán 15 phút)",
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                        ),
+                        onPressed: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime(2100),
+                            initialDate: DateTime.now(),
+                          );
+                          if (date == null) return;
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.now(),
+                          );
+                          if (time == null) return;
 
-                if (date == null) return;
-
-                final time = await showTimePicker(
-                  context: context,
-                  initialTime: TimeOfDay.now(),
-                );
-
-                if (time == null) return;
-
-                selectedDate = DateTime(
-                  date.year,
-                  date.month,
-                  date.day,
-                  time.hour,
-                  time.minute,
-                );
-              },
-              child: const Text(
-                "Chọn ngày giờ",
-                style: TextStyle(color: Colors.white),
+                          setDialogState(() {
+                            selectedDate = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                              time.hour,
+                              time.minute,
+                            );
+                          });
+                        },
+                        icon: const Icon(Icons.timer, color: Colors.white),
+                        label: Text(
+                          selectedDate == null
+                              ? "Chọn thời gian"
+                              : "${selectedDate!.hour}:${selectedDate!.minute.toString().padLeft(2, '0')} - ${selectedDate!.day}/${selectedDate!.month}",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      const Divider(height: 30),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          "Nhiệm vụ cần làm:",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: taskController,
+                              decoration: const InputDecoration(
+                                hintText: "Nhập nhiệm vụ...",
+                              ),
+                              onSubmitted: (_) {
+                                if (taskController.text.trim().isNotEmpty) {
+                                  setDialogState(() {
+                                    tasks.add(taskController.text.trim());
+                                    taskController.clear();
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.add_circle, color: primaryColor),
+                            onPressed: () {
+                              if (taskController.text.trim().isNotEmpty) {
+                                setDialogState(() {
+                                  tasks.add(taskController.text.trim());
+                                  taskController.clear();
+                                });
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      if (tasks.isNotEmpty)
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: tasks.length,
+                          itemBuilder: (context, i) {
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text("- ${tasks[i]}"),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  Icons.remove_circle,
+                                  color: Colors.red,
+                                  size: 20,
+                                ),
+                                onPressed: () =>
+                                    setDialogState(() => tasks.removeAt(i)),
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Hủy"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-            onPressed: () async {
-              if (titleController.text.isEmpty || selectedDate == null) return;
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Hủy"),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                  ),
+                  onPressed: () async {
+                    if (titleController.text.isEmpty ||
+                        selectedDate == null ||
+                        tasks.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Vui lòng nhập đủ thông tin!"),
+                        ),
+                      );
+                      return;
+                    }
 
-              await FirebaseFirestore.instance.collection('plans').add({
-                'userId': widget.userId,
-                'title': titleController.text,
-                'time': selectedDate,
-              });
+                    await FirebaseFirestore.instance.collection('plans').add({
+                      'userId': widget.userId,
+                      'title': titleController.text,
+                      'time': selectedDate,
+                      'tasks': tasks,
+                      'completedTasks': List.generate(
+                        tasks.length,
+                        (_) => false,
+                      ),
+                    });
 
-              await _scheduleNotification(titleController.text, selectedDate!);
-
-              if (mounted) Navigator.pop(context);
-            },
-            child: const Text("Lưu", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+                    await _scheduleNotification(
+                      titleController.text,
+                      selectedDate!,
+                    );
+                    if (mounted) Navigator.pop(context);
+                  },
+                  child: const Text(
+                    "Lưu",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -179,24 +273,15 @@ class _PlanPageState extends State<PlanPage> {
               _cachedDocs == null) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          if (snapshot.hasError) {
+          if (snapshot.hasError)
             return Center(child: Text("Lỗi: ${snapshot.error}"));
-          }
+          if (snapshot.hasData) _cachedDocs = snapshot.data!.docs;
 
-          if (snapshot.hasData) {
-            _cachedDocs = snapshot.data!.docs;
-          }
-
-          final docs = _cachedDocs ?? [];
-
+          final docs = List<QueryDocumentSnapshot>.from(_cachedDocs ?? []);
           if (docs.isEmpty) {
             return RefreshIndicator(
-              color: primaryColor,
-              backgroundColor: Colors.white,
-              onRefresh: () async {
-                await Future.delayed(const Duration(seconds: 1));
-              },
+              onRefresh: () async =>
+                  await Future.delayed(const Duration(seconds: 1)),
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: const [
@@ -204,7 +289,7 @@ class _PlanPageState extends State<PlanPage> {
                   Center(
                     child: Text(
                       "Chưa có kế hoạch nào",
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                      style: TextStyle(color: Colors.grey),
                     ),
                   ),
                 ],
@@ -219,33 +304,103 @@ class _PlanPageState extends State<PlanPage> {
           });
 
           return RefreshIndicator(
-            color: primaryColor,
-            backgroundColor: Colors.white,
-            onRefresh: () async {
-              await Future.delayed(const Duration(seconds: 1));
-            },
+            onRefresh: () async =>
+                await Future.delayed(const Duration(seconds: 1)),
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               itemCount: docs.length,
               itemBuilder: (_, index) {
                 final data = docs[index];
                 DateTime time = (data['time'] as Timestamp).toDate();
+                final mapData = data.data() as Map<String, dynamic>;
+                final tasksList = List<String>.from(mapData['tasks'] ?? []);
+                final completedTasks = List<bool>.from(
+                  mapData['completedTasks'] ??
+                      List.generate(tasksList.length, (_) => false),
+                );
+                final completedCount = completedTasks.where((e) => e).length;
 
                 return ListTile(
                   leading: Icon(Icons.schedule, color: primaryColor),
-                  title: Text(data['title']),
+                  title: Text(
+                    data['title'],
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   subtitle: Text(
-                    "${time.day}/${time.month}/${time.year} - ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}",
+                    "${time.day}/${time.month}/${time.year} - ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}\nTiến độ: $completedCount/${tasksList.length} nhiệm vụ",
                   ),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      FirebaseFirestore.instance
-                          .collection('plans')
-                          .doc(data.id)
-                          .delete();
-                    },
+                    onPressed: () => FirebaseFirestore.instance
+                        .collection('plans')
+                        .doc(data.id)
+                        .delete(),
                   ),
+                  // 🔥 ĐÃ SỬA: Chế độ XEM NHIỆM VỤ (Read-only)
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          title: Text(
+                            data['title'],
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          content: SizedBox(
+                            width: double.maxFinite,
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: tasksList.length,
+                              itemBuilder: (context, i) {
+                                bool isDone = completedTasks[i];
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8.0,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isDone
+                                            ? Icons.check_circle
+                                            : Icons.radio_button_unchecked,
+                                        color: isDone
+                                            ? Colors.green
+                                            : Colors.grey,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          tasksList[i],
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            decoration: isDone
+                                                ? TextDecoration.lineThrough
+                                                : null,
+                                            color: isDone
+                                                ? Colors.grey
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text("Đóng"),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
                 );
               },
             ),

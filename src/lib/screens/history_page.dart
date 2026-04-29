@@ -45,7 +45,7 @@ class HistoryPage extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  "Lỗi khi tải lịch sử: ${snapshot.error}\n\nNếu lỗi nói requires an index, tạo composite index: userId ASC, time DESC.",
+                  "Lỗi khi tải lịch sử: ${snapshot.error}",
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -60,7 +60,6 @@ class HistoryPage extends StatelessWidget {
 
           final docs = snapshot.data!.docs;
 
-          // 🔥 ĐÃ THÊM: RefreshIndicator để vuốt tải lại
           return RefreshIndicator(
             color: primaryColor,
             backgroundColor: Colors.white,
@@ -68,7 +67,6 @@ class HistoryPage extends StatelessWidget {
               await Future.delayed(const Duration(seconds: 1));
             },
             child: ListView.builder(
-              // 🔥 BẮT BUỘC: Thêm physics để luôn vuốt được
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(12),
               itemCount: docs.length,
@@ -80,6 +78,7 @@ class HistoryPage extends StatelessWidget {
                 final completed = data['completed'] ?? 0;
                 final total = data['total'] ?? 0;
                 final minutes = data['minutes'] ?? 0;
+                final planTitle = data['planTitle'] ?? "Học tự do";
 
                 final timeText = time.millisecondsSinceEpoch > 0
                     ? "${time.day}/${time.month}/${time.year}"
@@ -88,9 +87,15 @@ class HistoryPage extends StatelessWidget {
                 return Card(
                   child: ListTile(
                     leading: Icon(Icons.history, color: primaryColor),
-                    title: Text("Hoàn thành $completed/$total mục tiêu"),
-                    subtitle: Text("$timeText - $minutes phút"),
+                    title: Text(
+                      planTitle,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      "Hoàn thành $completed/$total - $minutes phút\n$timeText",
+                    ),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    isThreeLine: true,
                     onTap: () {
                       Navigator.push(
                         context,
@@ -119,12 +124,17 @@ class HistoryDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final DateTime time = parseTime(data['time']);
 
-    final List<dynamic> goals = (data['goals'] is List)
-        ? List<dynamic>.from(data['goals'])
-        : <dynamic>[];
+    // 🔥 ĐÃ THAY ĐỔI: Chỉ lấy danh sách các mục TIÊU ĐÃ HOÀN THÀNH từ Firebase
+    final List<dynamic> finishedTasks = data.containsKey('completedGoalsList')
+        ? List<dynamic>.from(data['completedGoalsList'])
+        : (data['goals'] is List
+              ? List<dynamic>.from(data['goals'])
+              : <dynamic>[]); // Fallback cho dữ liệu cũ
+
     final int completed = data['completed'] ?? 0;
     final int total = data['total'] ?? 0;
     final int minutes = data['minutes'] ?? 0;
+    final planTitle = data['planTitle'] ?? "Học tự do";
 
     final timeText = time.millisecondsSinceEpoch > 0
         ? "${time.day}/${time.month}/${time.year}"
@@ -140,7 +150,6 @@ class HistoryDetailPage extends StatelessWidget {
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
       ),
-      // 🔥 ĐÃ THÊM: RefreshIndicator để vuốt tải lại
       body: RefreshIndicator(
         color: primaryColor,
         backgroundColor: Colors.white,
@@ -148,48 +157,62 @@ class HistoryDetailPage extends StatelessWidget {
           await Future.delayed(const Duration(seconds: 1));
         },
         child: SingleChildScrollView(
-          // 🔥 BẮT BUỘC: Thêm physics
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "Ngày: $timeText",
-                style: const TextStyle(
-                  fontSize: 18,
+                "Kế hoạch: $planTitle",
+                style: TextStyle(
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
+                  color: primaryColor,
                 ),
               ),
               const SizedBox(height: 10),
-              Text("Thời gian học: $minutes phút"),
-              Text("Hoàn thành: $completed / $total mục tiêu"),
-              const SizedBox(height: 20),
+              Text("Ngày: $timeText", style: const TextStyle(fontSize: 16)),
+              const SizedBox(height: 5),
+              Text(
+                "Thời gian học: $minutes phút",
+                style: const TextStyle(fontSize: 16),
+              ),
+              Text(
+                "Tiến độ nhiệm vụ: $completed / $total",
+                style: const TextStyle(fontSize: 16),
+              ),
+              const Divider(height: 40),
               const Text(
-                "Danh sách mục tiêu",
-                style: TextStyle(fontWeight: FontWeight.bold),
+                "Nhiệm vụ ĐÃ hoàn thành", // Đã đổi tiêu đề
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               const SizedBox(height: 10),
 
-              // Đã đổi Expanded thành cấu trúc phù hợp với SingleChildScrollView
-              if (goals.isEmpty)
+              if (finishedTasks.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Center(child: Text("Không có mục tiêu")),
+                  child: Center(
+                    child: Text(
+                      "Chưa có nhiệm vụ nào được hoàn thành trong phiên này",
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
                 )
               else
                 ListView.builder(
-                  shrinkWrap: true, // Ép ListView ôm gọn nội dung
-                  physics:
-                      const NeverScrollableScrollPhysics(), // Tắt cuộn bên trong để nhường cho cuộn bên ngoài
-                  itemCount: goals.length,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: finishedTasks.length,
                   itemBuilder: (_, i) {
                     return ListTile(
                       leading: const Icon(
-                        Icons.check_circle_outline,
+                        Icons.check_circle, // Đổi icon nhìn "đã" hơn
                         color: Colors.green,
                       ),
-                      title: Text(goals[i].toString()),
+                      title: Text(finishedTasks[i].toString()),
                     );
                   },
                 ),

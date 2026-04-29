@@ -22,6 +22,9 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  // 🔥 ĐÃ THÊM: Biến lưu trữ ngôn ngữ hiện tại
+  String _selectedLanguage = "Tiếng Việt";
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -56,15 +59,28 @@ class _SettingsPageState extends State<SettingsPage> {
 
               _buildSectionHeader("Cài đặt giao diện"),
               _buildThemeSelector(), // Giao diện chọn màu
-              _buildActionTile(Icons.language, "Ngôn ngữ", "Tiếng Việt"),
+              // 🔥 ĐÃ SỬA: Thêm sự kiện chọn ngôn ngữ
+              _buildActionTile(
+                Icons.language,
+                "Ngôn ngữ",
+                _selectedLanguage,
+                onTap: () => _showLanguageDialog(context),
+              ),
               const SizedBox(height: 10),
 
               _buildSectionHeader("Ứng dụng"),
-              _buildActionTile(Icons.privacy_tip, "Chính sách bảo mật", ""),
+
+              // 🔥 ĐÃ SỬA: Thêm sự kiện mở chính sách bảo mật
+              _buildActionTile(
+                Icons.privacy_tip,
+                "Chính sách bảo mật",
+                "",
+                onTap: () => _showPrivacyPolicyDialog(context),
+              ),
               _buildActionTile(
                 Icons.info,
                 "Thông tin phiên bản",
-                "Beta 0.5.0",
+                "Beta 0.6.0",
                 onTap: () => _showVersionInfoDialog(context),
               ),
               const SizedBox(height: 30),
@@ -159,7 +175,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // 🔥 ĐÃ SỬA: Bảng chọn màu
   Widget _buildThemeSelector() {
     return Container(
       color: Colors.white,
@@ -182,7 +197,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // 🔥 ĐÃ SỬA: Logic bấm chọn đổi màu
   Widget _buildColorCircle(Color color) {
     bool isSelected = primaryColor == color;
 
@@ -245,7 +259,130 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // --- CÁC HỘP THOẠI DIALOG BÊN DƯỚI GIỮ NGUYÊN (Version, Logout, ChangePassword) ---
+  // 🔥 ĐÃ THÊM: Hộp thoại chọn ngôn ngữ troll troll
+  void _showLanguageDialog(BuildContext context) {
+    final List<String> options = [
+      "Tiếng Việt",
+      "Tiếng Kinh",
+      "Tiếng mẹ đẻ",
+      "Vietnamese",
+    ];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.language, color: primaryColor),
+              const SizedBox(width: 10),
+              const Text("Chọn ngôn ngữ"),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: options.map((lang) {
+              return RadioListTile<String>(
+                title: Text(lang),
+                value: lang,
+                groupValue: _selectedLanguage,
+                activeColor: primaryColor,
+                contentPadding: EdgeInsets.zero,
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _selectedLanguage = value;
+                    });
+                    Navigator.pop(
+                      dialogContext,
+                    ); // Đóng hộp thoại khi chọn xong
+                  }
+                },
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  // 🔥 ĐÃ THÊM: Hộp thoại Chính sách bảo mật
+  void _showPrivacyPolicyDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.privacy_tip, color: primaryColor),
+              const SizedBox(width: 10),
+              const Text("Chính sách bảo mật"),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  "1. Thu thập dữ liệu",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  "Ứng dụng chỉ lưu trữ các thông tin cơ bản như Họ tên, Email, Lớp và Lịch sử học tập của bạn để phục vụ việc đồng bộ tiến trình.",
+                ),
+                SizedBox(height: 10),
+                Text(
+                  "2. Sử dụng thông tin",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  "Dữ liệu của bạn được sử dụng để xếp hạng trên Leaderboard, cập nhật Thống kê và cá nhân hóa trải nghiệm Trợ lý ảo AI.",
+                ),
+                SizedBox(height: 10),
+                Text(
+                  "3. Chia sẻ dữ liệu",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  "Chúng tôi cam kết KHÔNG bán, cho thuê hay chia sẻ thông tin cá nhân của bạn cho bất kỳ bên thứ ba nào với mục đích thương mại.",
+                ),
+                SizedBox(height: 10),
+                Text(
+                  "4. Quyền của người dùng",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  "Bạn hoàn toàn có quyền xóa tài khoản và mọi dữ liệu liên quan bất cứ lúc nào.",
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("Đã hiểu"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- CÁC HỘP THOẠI DIALOG BÊN DƯỚI GIỮ NGUYÊN ---
   void _showVersionInfoDialog(BuildContext context) {
     final DateTime now = DateTime.now();
     final String todayStr =
@@ -270,7 +407,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Phiên bản: Beta 0.5.0",
+                "Phiên bản: Beta 0.6.0",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
