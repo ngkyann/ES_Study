@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:esstudy/screens/settings_page.dart';
 
-// --- TRANG CÁ NHÂN (Hiển thị dữ liệu động) ---
 class ProfilePage extends StatelessWidget {
   final String userName;
   final String userId;
   final String selectedClass;
+  final String email; // 🔥 Đã thêm email
   final int userPoints;
   final int userStreak;
+
   const ProfilePage({
     super.key,
     required this.userName,
     required this.userId,
     required this.selectedClass,
+    required this.email, // 🔥 Đã thêm email
     required this.userPoints,
     required this.userStreak,
   });
@@ -22,15 +25,42 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Hồ sơ cá nhân"),
+        title: const Text(
+          "Hồ sơ cá nhân",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
+        centerTitle: true,
+        actions: [
+          // 🔥 ĐÃ SỬA: Bọc Padding để đẩy nút vào trong
+          Padding(
+            padding: const EdgeInsets.only(
+              right: 12,
+            ), // Bạn có thể tăng số này lên nếu muốn vào sâu hơn
+            child: IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SettingsPage(
+                      userName: userName,
+                      selectedClass: selectedClass,
+                      userId: userId,
+                      email: email, // Truyền email vào đây
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         color: primaryColor,
         backgroundColor: Colors.white,
         onRefresh: () async {
-          // Giả lập thời gian tải 1 giây để hiện vòng xoay mượt mà
           await Future.delayed(const Duration(seconds: 1));
         },
         child: SingleChildScrollView(

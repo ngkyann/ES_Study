@@ -9,6 +9,7 @@ import 'package:esstudy/screens/settings_page.dart';
 import 'package:esstudy/screens/plan_page.dart';
 import 'package:esstudy/screens/history_page.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:esstudy/screens/ai_assistant_page.dart';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -339,6 +340,7 @@ class _HomePageState extends State<HomePage> {
                       userId: widget.userId,
                       selectedClass: widget.selectedClass,
                       userPoints: userPoints,
+                      email: widget.email,
                       userStreak: userStreak,
                     ),
                   ),
@@ -446,7 +448,7 @@ class _HomePageState extends State<HomePage> {
                 MenuData(Icons.people, "Bạn bè", Colors.teal),
                 MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
                 MenuData(Icons.bar_chart, "Thống kê", Colors.indigo),
-                MenuData(Icons.settings, "Cài đặt", Colors.grey),
+                MenuData(Icons.smart_toy, "Trợ lý ảo", Colors.blueAccent),
               ]),
               const SizedBox(height: 20),
             ],
@@ -485,6 +487,12 @@ class _HomePageState extends State<HomePage> {
               // 🔥 GỌI HÀM CẬP NHẬT CHUỖI VÀ ĐIỂM
               if (result is int) await _updateStudyProgress(result);
               if (mounted) setState(() {}); // Refresh theme nếu có
+            } else if (item.title == "Trợ lý ảo") {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AIAssistantPage()),
+              );
+              if (mounted) setState(() {});
             } else if (item.isSearch) {
               await Navigator.push(
                 context,
