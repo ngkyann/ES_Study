@@ -16,7 +16,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
 
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final FocusNode _focusNode = FocusNode(); // Quản lý trạng thái bàn phím
 
   final List<Map<String, String>> _messages = [];
   final List<Content> _history = [];
@@ -44,7 +43,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
   void dispose() {
     _textController.dispose();
     _scrollController.dispose();
-    _focusNode.dispose();
     super.dispose();
   }
 
@@ -89,30 +87,13 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
     final prompt = _textController.text.trim();
     if (prompt.isEmpty) return;
 
+    // Chỗ này mình trả về lệnh clear bình thường cho nhẹ app
+    _textController.clear();
+
     setState(() {
       _messages.add({'role': 'user', 'text': prompt});
       _isLoading = true;
     });
-
-    // --- CƠ CHẾ MỚI: NGẮT VÀ RESET HOÀN TOÀN BÀN PHÍM ---
-    // 1. Kiểm tra xem bàn phím có đang được bật hay không
-    bool wasFocused = _focusNode.hasFocus;
-    
-    // 2. Ép ngắt kết nối bàn phím (để phá hủy bộ nhớ đệm chữ của hệ điều hành)
-    _focusNode.unfocus();
-    
-    // 3. Xóa text một cách an toàn
-    _textController.clear();
-    
-    // 4. Nếu trước đó đang mở bàn phím, gọi nó lại ngay lập tức
-    if (wasFocused) {
-      Future.delayed(const Duration(milliseconds: 50), () {
-        if (mounted) {
-          FocusScope.of(context).requestFocus(_focusNode);
-        }
-      });
-    }
-    // ----------------------------------------------------
 
     _scrollToBottom();
     _autoAdjustPosition();
@@ -279,13 +260,16 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                           Expanded(
                             child: TextField(
                               controller: _textController,
-                              focusNode: _focusNode, // Liên kết FocusNode để điều khiển
                               style: const TextStyle(fontSize: 14),
-                              autocorrect: true,
-                              enableSuggestions: true,
+                              
+                              // --- CÔNG THỨC VÀNG TRỊ LỖI GÕ TIẾNG VIỆT ---
+                              autocorrect: false,      // BẮT BUỘC FALSE: Tránh lỗi nhè chữ cũ khi gõ tiếp
+                              enableSuggestions: true, // BẮT BUỘC TRUE: Tránh lỗi liệt nút xoá (Backspace)
+                              keyboardType: TextInputType.multiline,
+                              // ------------------------------------------
+                              
                               minLines: 1,
                               maxLines: 4,
-                              keyboardType: TextInputType.multiline,
                               decoration: InputDecoration(
                                 hintText: "Hỏi AI...",
                                 contentPadding: const EdgeInsets.symmetric(
