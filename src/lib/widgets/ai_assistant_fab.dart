@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:esstudy/constants/colors.dart'; // 🔥 Import file màu chủ đề
+import 'package:esstudy/constants/colors.dart';
 
 class AIAssistantFAB extends StatefulWidget {
   const AIAssistantFAB({super.key});
@@ -11,30 +11,27 @@ class AIAssistantFAB extends StatefulWidget {
 
 class _AIAssistantFABState extends State<AIAssistantFAB> {
   bool _isChatOpen = false;
-  // Vị trí mặc định của nút
   Offset _offset = const Offset(25, 25);
+  bool _isDragging = false; // Biến kiểm soát trạng thái kéo
 
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  // Danh sách hiển thị trên UI
   final List<Map<String, String>> _messages = [];
-  // Lịch sử thực tế để gửi cho AI (giữ context)
   final List<Content> _history = [];
-
   bool _isLoading = false;
 
   final List<String> _modelPool = [
     'gemma-3-1b-it',
+    'gemma-3-2b-it',
     'gemma-3-4b-it',
     'gemma-3-8b-it',
     'gemma-3-27b-it',
-    'gemma-3-2b-it',
   ];
   int _currentModelIndex = 0;
 
   late GenerativeModel _model;
-  final String _apiKey = 'AIzaSyConvnHnodpl11TI9kb-P_kFTF34Q78JDo';
+  final String _apiKey = 'AIzaSyConvnHnodpl11TI9kb-P_kFTF34Q78JDo'; 
 
   @override
   void initState() {
@@ -50,16 +47,34 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
     );
   }
 
+  void _startNewChat() {
+    setState(() {
+      _messages.clear();
+      _history.clear();
+      _offset = const Offset(25, 25);
+    });
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
       }
     });
+  }
+
+  // Chỉnh lại logic: Chỉ tự dạt nếu khung chat đang lấn chiếm màn hình quá nhiều (> 1/4 màn hình)
+  void _autoAdjustPosition() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (_messages.length > 5 && _offset.dx > screenWidth * 0.2) { 
+      setState(() {
+        _offset = Offset(20, _offset.dy); 
+      });
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -69,206 +84,166 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
     setState(() {
       _messages.add({'role': 'user', 'text': prompt});
       _isLoading = true;
-      _textController.clear();
     });
+    
+    _textController.clear(); 
     _scrollToBottom();
+    // Bỏ _autoAdjustPosition() ở đây để tránh việc vừa enter là nó giật sang phải ngay lập tức
 
     bool success = false;
     int attempt = 0;
 
-    // Vòng lặp thử các model trong pool
     while (!success && attempt < _modelPool.length) {
       try {
-        // Khởi tạo chat với lịch sử đã có
         final chat = _model.startChat(history: _history);
         final response = await chat.sendMessage(Content.text(prompt));
 
-        setState(() {
-          _messages.add({'role': 'model', 'text': response.text ?? '...'});
-          // Lưu vào lịch sử thật để giữ context cho câu hỏi sau
-          _history.add(Content.text(prompt));
-          _history.add(Content.model([TextPart(response.text ?? '')]));
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            final aiText = response.text ?? '...';
+            _messages.add({'role': 'model', 'text': aiText});
+            _history.add(Content.text(prompt));
+            _history.add(Content.model([TextPart(aiText)]));
+            _isLoading = false;
+          });
+          _scrollToBottom();
+          // Chỉ dạt khi AI phản hồi xong nếu ông muốn UI gọn gàng
+          // _autoAdjustPosition(); 
+        }
         success = true;
       } catch (e) {
-        final errorStr = e.toString();
-        // Nếu lỗi 429 (Overloaded/Quota) hoặc 503 (Server busy)
-        if (errorStr.contains('429') ||
-            errorStr.contains('503') ||
-            errorStr.contains('quota')) {
-          attempt++;
-          if (attempt < _modelPool.length) {
-            _currentModelIndex = (_currentModelIndex + 1) % _modelPool.length;
-            _initModel(); // Đổi sang model tiếp theo
-            continue;
-          }
+        attempt++;
+        if (attempt < _modelPool.length) {
+          _currentModelIndex = (_currentModelIndex + 1) % _modelPool.length;
+          _initModel();
+          continue;
         }
-
-        // Nếu đã thử hết các model mà vẫn lỗi
-        setState(() {
-          _messages.add({
-            'role': 'model',
-            'text': 'Hệ thống đang quá tải, thử lại sau nhé!',
-          });
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
         break;
       }
     }
-    _scrollToBottom();
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+
     return Stack(
       children: [
-        // Nút FAB có khả năng kéo thả
-        Positioned(
+        // Nút FAB
+        AnimatedPositioned(
+          // Fix delay: Nếu đang kéo (isDragging) thì duration = 0, nếu không thì trượt nhẹ
+          duration: Duration(milliseconds: _isDragging ? 0 : 200),
+          curve: Curves.linear,
           bottom: _offset.dy,
           right: _offset.dx,
           child: GestureDetector(
+            onPanStart: (_) => setState(() => _isDragging = true), // Bắt đầu kéo
+            onPanEnd: (_) => setState(() => _isDragging = false),  // Thả tay
             onPanUpdate: (details) {
               setState(() {
-                // Giới hạn không cho kéo ra khỏi màn hình
                 _offset = Offset(
-                  (_offset.dx - details.delta.dx).clamp(
-                    10,
-                    MediaQuery.of(context).size.width - 60,
-                  ),
-                  (_offset.dy - details.delta.dy).clamp(
-                    10,
-                    MediaQuery.of(context).size.height - 100,
-                  ),
+                  (_offset.dx - details.delta.dx).clamp(10, screenSize.width - 60),
+                  (_offset.dy - details.delta.dy).clamp(10, screenSize.height - 100),
                 );
               });
             },
             child: FloatingActionButton(
-              backgroundColor: primaryColor, // 🔥 Dùng màu chủ đề
+              backgroundColor: primaryColor,
               onPressed: () => setState(() => _isChatOpen = !_isChatOpen),
-              child: Icon(
-                _isChatOpen ? Icons.close : Icons.smart_toy,
-                color: Colors.white,
-              ),
+              child: Icon(_isChatOpen ? Icons.close : Icons.smart_toy, color: Colors.white),
             ),
           ),
         ),
 
+        // Cửa sổ Chat
         if (_isChatOpen)
-          Positioned(
-            bottom: _offset.dy + 70, // Luôn hiện trên đầu nút FAB
+          AnimatedPositioned(
+            // Nếu đang kéo thì duration = 0 để khung chat dính chặt vào tay, không bị lag
+            duration: Duration(milliseconds: _isDragging ? 0 : 250),
+            curve: Curves.easeOutCubic,
+            bottom: _offset.dy + 70,
             right: _offset.dx,
             child: Material(
-              elevation: 10,
+              elevation: 12,
               borderRadius: BorderRadius.circular(16),
+              clipBehavior: Clip.antiAlias,
               child: Container(
-                width: MediaQuery.of(context).size.width * 0.8,
-                height: MediaQuery.of(context).size.height * 0.45,
-                constraints: const BoxConstraints(
+                width: screenSize.width * 0.85,
+                constraints: BoxConstraints(
                   maxWidth: 350,
-                  maxHeight: 500,
+                  minHeight: 100, 
+                  maxHeight: screenSize.height * 0.6,
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                decoration: const BoxDecoration(color: Colors.white),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Header hiện model đang chạy (ẩn danh cho user)
+                    // Header
                     Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:
-                            primaryColor, // 🔥 Đổi nền header thành màu chủ đề
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16),
-                        ),
-                      ),
-                      child: const Row(
+                      color: primaryColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(
-                            Icons.auto_awesome,
-                            color: Colors.white,
-                            size: 18,
+                          const Text("ES Assistant", 
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
                           ),
-                          SizedBox(width: 8),
-                          Text(
-                            "ES Study Assistant",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.white, size: 20),
+                            onPressed: _startNewChat,
+                          )
                         ],
                       ),
                     ),
-                    Expanded(
+                    
+                    Flexible(
                       child: ListView.builder(
                         controller: _scrollController,
+                        shrinkWrap: true,
                         padding: const EdgeInsets.all(10),
                         itemCount: _messages.length,
-                        itemBuilder: (c, i) {
+                        itemBuilder: (context, i) {
                           final m = _messages[i];
+                          final isUser = m['role'] == 'user';
                           return Align(
-                            alignment: m['role'] == 'user'
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
+                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                             child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                // 🔥 Khối tin nhắn user sẽ lấy màu chủ đề làm nền nhạt
-                                color: m['role'] == 'user'
-                                    ? primaryColor.withOpacity(0.15)
-                                    : Colors.grey[100],
+                                color: isUser ? primaryColor.withOpacity(0.1) : Colors.grey[200],
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Text(
-                                m['text']!,
-                                style: const TextStyle(fontSize: 13),
-                              ),
+                              child: Text(m['text']!, style: const TextStyle(fontSize: 13)),
                             ),
                           );
                         },
                       ),
                     ),
-                    if (_isLoading)
-                      LinearProgressIndicator(
-                        minHeight: 2,
-                        color: primaryColor,
-                      ), // 🔥 Thanh load dùng màu chủ đề
+
+                    if (_isLoading) LinearProgressIndicator(minHeight: 2, color: primaryColor),
+
+                    // Input Area
                     Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Row(
                         children: [
                           Expanded(
                             child: TextField(
+                              key: const ValueKey('chat_input_unique'),
                               controller: _textController,
+                              style: const TextStyle(fontSize: 14),
                               decoration: InputDecoration(
                                 hintText: "Hỏi AI...",
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                // 🔥 Viền khi đang gõ sẽ đổi theo màu chủ đề
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                  borderSide: BorderSide(
-                                    color: primaryColor,
-                                    width: 2,
-                                  ),
-                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
                               ),
                               onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
                           IconButton(
-                            icon: Icon(
-                              Icons.send,
-                              color: primaryColor,
-                            ), // 🔥 Nút gửi đổi theo màu chủ đề
+                            icon: Icon(Icons.send, color: primaryColor),
                             onPressed: _sendMessage,
                           ),
                         ],
