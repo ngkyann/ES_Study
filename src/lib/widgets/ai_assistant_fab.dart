@@ -149,8 +149,14 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
             onPanUpdate: (details) {
               setState(() {
                 _offset = Offset(
-                  (_offset.dx - details.delta.dx).clamp(10, screenSize.width - 60),
-                  (_offset.dy - details.delta.dy).clamp(10, screenSize.height - 100),
+                  (_offset.dx - details.delta.dx).clamp(
+                    10,
+                    screenSize.width - 60,
+                  ),
+                  (_offset.dy - details.delta.dy).clamp(
+                    10,
+                    screenSize.height - 100,
+                  ),
                 );
               });
             },
@@ -261,13 +267,15 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                             child: TextField(
                               controller: _textController,
                               style: const TextStyle(fontSize: 14),
-                              
+
                               // --- CÔNG THỨC VÀNG TRỊ LỖI GÕ TIẾNG VIỆT ---
-                              autocorrect: false,      // BẮT BUỘC FALSE: Tránh lỗi nhè chữ cũ khi gõ tiếp
-                              enableSuggestions: true, // BẮT BUỘC TRUE: Tránh lỗi liệt nút xoá (Backspace)
+                              autocorrect:
+                                  false, // BẮT BUỘC FALSE: Tránh lỗi nhè chữ cũ khi gõ tiếp
+                              enableSuggestions:
+                                  true, // BẮT BUỘC TRUE: Tránh lỗi liệt nút xoá (Backspace)
                               keyboardType: TextInputType.multiline,
+
                               // ------------------------------------------
-                              
                               minLines: 1,
                               maxLines: 4,
                               decoration: InputDecoration(
