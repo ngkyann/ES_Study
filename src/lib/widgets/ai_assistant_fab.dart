@@ -16,8 +16,7 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
 
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final FocusNode _focusNode =
-      FocusNode(); // Đưa FocusNode vào để quản lý bàn phím
+  final FocusNode _focusNode = FocusNode(); // Quản lý trạng thái bàn phím
 
   final List<Map<String, String>> _messages = [];
   final List<Content> _history = [];
@@ -45,7 +44,7 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
   void dispose() {
     _textController.dispose();
     _scrollController.dispose();
-    _focusNode.dispose(); // Dọn dẹp FocusNode để tránh tràn bộ nhớ
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -95,15 +94,25 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
       _isLoading = true;
     });
 
-    // --- FIX TRIỆT ĐỂ LỖI LẶP CHỮ BỘ GÕ TIẾNG VIỆT ---
-    // Đợi Flutter hoàn tất chu kỳ vẽ lại UI (setState) rồi mới báo cho bộ gõ xóa chữ.
-    // Cách này sẽ ép IME của Android/iOS đồng bộ chính xác nhịp độ với UI.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _textController.clear();
-      }
-    });
-    // ------------------------------------------------
+    // --- CƠ CHẾ MỚI: NGẮT VÀ RESET HOÀN TOÀN BÀN PHÍM ---
+    // 1. Kiểm tra xem bàn phím có đang được bật hay không
+    bool wasFocused = _focusNode.hasFocus;
+    
+    // 2. Ép ngắt kết nối bàn phím (để phá hủy bộ nhớ đệm chữ của hệ điều hành)
+    _focusNode.unfocus();
+    
+    // 3. Xóa text một cách an toàn
+    _textController.clear();
+    
+    // 4. Nếu trước đó đang mở bàn phím, gọi nó lại ngay lập tức
+    if (wasFocused) {
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) {
+          FocusScope.of(context).requestFocus(_focusNode);
+        }
+      });
+    }
+    // ----------------------------------------------------
 
     _scrollToBottom();
     _autoAdjustPosition();
@@ -148,7 +157,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
 
     return Stack(
       children: [
-        // Nút FAB
         AnimatedPositioned(
           duration: Duration(milliseconds: _isDragging ? 0 : 200),
           curve: Curves.linear,
@@ -160,14 +168,8 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
             onPanUpdate: (details) {
               setState(() {
                 _offset = Offset(
-                  (_offset.dx - details.delta.dx).clamp(
-                    10,
-                    screenSize.width - 60,
-                  ),
-                  (_offset.dy - details.delta.dy).clamp(
-                    10,
-                    screenSize.height - 100,
-                  ),
+                  (_offset.dx - details.delta.dx).clamp(10, screenSize.width - 60),
+                  (_offset.dy - details.delta.dy).clamp(10, screenSize.height - 100),
                 );
               });
             },
@@ -182,7 +184,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
           ),
         ),
 
-        // Cửa sổ Chat
         if (_isChatOpen)
           AnimatedPositioned(
             duration: Duration(milliseconds: _isDragging ? 0 : 250),
@@ -204,7 +205,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Header
                     Container(
                       color: primaryColor,
                       padding: const EdgeInsets.symmetric(
@@ -271,7 +271,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                         color: primaryColor,
                       ),
 
-                    // Input Area
                     Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Row(
@@ -280,7 +279,7 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                           Expanded(
                             child: TextField(
                               controller: _textController,
-                              focusNode: _focusNode, // Gắn FocusNode vào đây
+                              focusNode: _focusNode, // Liên kết FocusNode để điều khiển
                               style: const TextStyle(fontSize: 14),
                               autocorrect: true,
                               enableSuggestions: true,
