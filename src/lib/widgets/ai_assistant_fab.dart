@@ -31,7 +31,7 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
   int _currentModelIndex = 0;
 
   late GenerativeModel _model;
-  final String _apiKey = 'AIzaSyConvnHnodpl11TI9kb-P_kFTF34Q78JDo'; 
+  final String _apiKey = 'AIzaSyConvnHnodpl11TI9kb-P_kFTF34Q78JDo';
 
   @override
   void initState() {
@@ -84,10 +84,10 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
       _messages.add({'role': 'user', 'text': prompt});
       _isLoading = true;
     });
-    
-    _textController.clear(); 
+
+    _textController.clear();
     _scrollToBottom();
-    _autoAdjustPosition(); // Gọi hàm sau khi gửi để check dạt lề
+    _autoAdjustPosition();
 
     bool success = false;
     int attempt = 0;
@@ -125,6 +125,8 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
+    // Lấy chiều cao của bàn phím để tránh bị che mất khung chat
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Stack(
       children: [
@@ -132,7 +134,8 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
         AnimatedPositioned(
           duration: Duration(milliseconds: _isDragging ? 0 : 200),
           curve: Curves.linear,
-          bottom: _offset.dy,
+          bottom:
+              _offset.dy + bottomInset, // Đẩy FAB lên khi có bàn phím (nếu cần)
           right: _offset.dx,
           child: GestureDetector(
             onPanStart: (_) => setState(() => _isDragging = true),
@@ -140,15 +143,24 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
             onPanUpdate: (details) {
               setState(() {
                 _offset = Offset(
-                  (_offset.dx - details.delta.dx).clamp(10, screenSize.width - 60),
-                  (_offset.dy - details.delta.dy).clamp(10, screenSize.height - 100),
+                  (_offset.dx - details.delta.dx).clamp(
+                    10,
+                    screenSize.width - 60,
+                  ),
+                  (_offset.dy - details.delta.dy).clamp(
+                    10,
+                    screenSize.height - 100,
+                  ),
                 );
               });
             },
             child: FloatingActionButton(
               backgroundColor: primaryColor,
               onPressed: () => setState(() => _isChatOpen = !_isChatOpen),
-              child: Icon(_isChatOpen ? Icons.close : Icons.smart_toy, color: Colors.white),
+              child: Icon(
+                _isChatOpen ? Icons.close : Icons.smart_toy,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -158,7 +170,8 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
           AnimatedPositioned(
             duration: Duration(milliseconds: _isDragging ? 0 : 250),
             curve: Curves.easeOutCubic,
-            bottom: _offset.dy + 70,
+            // Cộng thêm bottomInset để khung chat dâng lên theo bàn phím
+            bottom: _offset.dy + 70 + bottomInset,
             right: _offset.dx,
             child: Material(
               elevation: 12,
@@ -168,7 +181,7 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                 width: screenSize.width * 0.85,
                 constraints: BoxConstraints(
                   maxWidth: 350,
-                  minHeight: 100, 
+                  minHeight: 100,
                   maxHeight: screenSize.height * 0.6,
                 ),
                 decoration: const BoxDecoration(color: Colors.white),
@@ -178,21 +191,32 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                     // Header
                     Container(
                       color: primaryColor,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text("ES Assistant", 
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                          const Text(
+                            "ES Assistant",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.white, size: 20),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                             onPressed: _startNewChat,
-                          )
+                          ),
                         ],
                       ),
                     ),
-                    
+
                     Flexible(
                       child: ListView.builder(
                         controller: _scrollController,
@@ -203,45 +227,64 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                           final m = _messages[i];
                           final isUser = m['role'] == 'user';
                           return Align(
-                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                            alignment: isUser
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
                             child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: isUser ? primaryColor.withOpacity(0.1) : Colors.grey[200],
+                                color: isUser
+                                    ? primaryColor.withOpacity(0.1)
+                                    : Colors.grey[200],
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Text(m['text']!, style: const TextStyle(fontSize: 13)),
+                              child: Text(
+                                m['text']!,
+                                style: const TextStyle(fontSize: 13),
+                              ),
                             ),
                           );
                         },
                       ),
                     ),
 
-                    if (_isLoading) LinearProgressIndicator(minHeight: 2, color: primaryColor),
+                    if (_isLoading)
+                      LinearProgressIndicator(
+                        minHeight: 2,
+                        color: primaryColor,
+                      ),
 
                     // Input Area
                     Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Row(
+                        // Thêm dòng này để nút Send luôn nằm dưới cùng khi TextField nở rộng ra 4 dòng
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Expanded(
                             child: TextField(
                               controller: _textController,
                               style: const TextStyle(fontSize: 14),
-                              // --- FIX LỖI NHẬP CHỮ TRÊN ANDROID ---
-                              autocorrect: false, // Tắt tự động sửa
-                              enableSuggestions: false, // Tắt gợi ý từ
-                              keyboardType: TextInputType.text, // Để bàn phím ở chế độ text thuần
-                              textInputAction: TextInputAction.send, // Hiện nút Send thay vì Xuống dòng
+                              autocorrect: true,
+                              enableSuggestions: true,
+                              minLines: 1,
+                              maxLines: 4,
+                              keyboardType: TextInputType.multiline,
                               decoration: InputDecoration(
                                 hintText: "Hỏi AI...",
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
                               ),
-                              onSubmitted: (_) => _sendMessage(),
                             ),
                           ),
+                          const SizedBox(width: 4),
+                          // Nút Gửi (IconButton) đã được thêm lại vào đây
                           IconButton(
                             icon: Icon(Icons.send, color: primaryColor),
                             onPressed: _sendMessage,
