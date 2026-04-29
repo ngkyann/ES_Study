@@ -85,7 +85,14 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
       _isLoading = true;
     });
 
-    _textController.clear();
+    // --- FIX LỖI LƯU BỘ ĐỆM BÀN PHÍM CHỐNG LẶP CHỮ ---
+    _textController.value = const TextEditingValue(
+      text: '',
+      selection: TextSelection.collapsed(offset: 0),
+      composing: TextRange.empty, // Ép bộ gõ hệ thống xóa lịch sử ghép chữ
+    );
+    // ------------------------------------------------
+
     _scrollToBottom();
     _autoAdjustPosition();
 
@@ -259,7 +266,7 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                     Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: Row(
-                        // Thêm dòng này để nút Send luôn nằm dưới cùng khi TextField nở rộng ra 4 dòng
+                        // Thêm dòng này để nút Send luôn nằm dưới cùng khi TextField nở rộng
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Expanded(
@@ -284,7 +291,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          // Nút Gửi (IconButton) đã được thêm lại vào đây
                           IconButton(
                             icon: Icon(Icons.send, color: primaryColor),
                             onPressed: _sendMessage,
