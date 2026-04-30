@@ -121,7 +121,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildActionTile(
                 Icons.info,
                 "Thông tin phiên bản",
-                "Beta 0.6.0",
+                "Beta 0.6.5",
                 onTap: () => _showVersionInfoDialog(context),
               ),
               const SizedBox(height: 30),
@@ -557,7 +557,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Phiên bản: Beta 0.6.0",
+                "Phiên bản: Beta 0.6.5",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
