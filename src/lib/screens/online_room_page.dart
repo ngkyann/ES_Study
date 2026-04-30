@@ -1,6 +1,7 @@
 import 'dart:async';
+// import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Để dùng Clipboard copy mã phòng
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -16,8 +17,6 @@ class OnlineRoomPage extends StatefulWidget {
   final String? planId;
   final String planTitle;
   final List<String> goals;
-
-  // 🔥 ĐÃ THÊM: Các biến quản lý phòng riêng tư
   final bool isPrivate;
   final String? roomCode;
 
@@ -41,8 +40,14 @@ class OnlineRoomPage extends StatefulWidget {
 }
 
 class _OnlineRoomPageState extends State<OnlineRoomPage> {
+  // Bản thân
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   MediaStream? _localStream;
+
+  // Lưới người dùng khác
+  final Map<String, RTCPeerConnection> _peers = {};
+  final Map<String, RTCVideoRenderer> _remoteRenderers = {};
+  final Map<String, String> _remoteNames = {};
 
   bool _isMuted = false;
   bool _isVideoOff = false;
@@ -54,17 +59,25 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   int _remainingSeconds = 0;
   Timer? _timer;
   late List<bool> _personalTaskStatus;
-
   late DateTime _joinTime;
+
+  StreamSubscription? _participantsSub;
+  StreamSubscription? _signalingSub;
+
+  final Map<String, dynamic> _iceServers = {
+    'iceServers': [
+      {'urls': 'stun:stun.l.google.com:19302'},
+      {'urls': 'stun:stun1.l.google.com:19302'},
+    ],
+  };
 
   @override
   void initState() {
     super.initState();
     _personalTaskStatus = List.generate(widget.goals.length, (_) => false);
     _joinTime = DateTime.now();
-    _initWebRTC();
-    _joinFirebaseRoom();
     _startTimer();
+    _initRoom();
   }
 
   void _startTimer() {
@@ -80,27 +93,21 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     });
   }
 
-  Future<void> _initWebRTC() async {
+  Future<void> _initRoom() async {
+    // 1. Xin quyền & Mở Camera
     await [Permission.camera, Permission.microphone].request();
     await _localRenderer.initialize();
     try {
-      final stream = await navigator.mediaDevices.getUserMedia({
+      _localStream = await navigator.mediaDevices.getUserMedia({
         'video': true,
-        // 🔥 ĐÃ SỬA: Ép các thông số audio chuẩn để Chrome nhận diện tốt hơn
         'audio': {'echoCancellation': true, 'noiseSuppression': true},
       });
-      if (mounted) {
-        setState(() {
-          _localStream = stream;
-          _localRenderer.srcObject = stream;
-        });
-      }
+      if (mounted) setState(() => _localRenderer.srcObject = _localStream);
     } catch (e) {
       debugPrint("Lỗi Camera: $e");
     }
-  }
 
-  Future<void> _joinFirebaseRoom() async {
+    // 2. Tham gia Firebase
     final roomRef = FirebaseFirestore.instance
         .collection('study_rooms')
         .doc(widget.roomId);
@@ -110,17 +117,13 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         'hostName': widget.userName,
         'duration': widget.duration,
         'maxMembers': widget.maxMembers,
-        'isPrivate': widget.isPrivate, // Lưu trạng thái
-        'roomCode': widget.roomCode, // Lưu mã phòng
+        'isPrivate': widget.isPrivate,
+        'roomCode': widget.roomCode,
         'createdAt': FieldValue.serverTimestamp(),
         'participants': [widget.userId],
         'participantNames': {widget.userId: widget.userName},
       });
-
-      // Nếu là phòng riêng tư, hiện thông báo ngay
-      if (widget.isPrivate && widget.roomCode != null) {
-        _showRoomCodeDialog();
-      }
+      if (widget.isPrivate && widget.roomCode != null) _showRoomCodeDialog();
     } else {
       await roomRef.update({
         'participants': FieldValue.arrayUnion([widget.userId]),
@@ -128,9 +131,146 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       });
     }
     _sendSystemMessage("${widget.userName} đã vào phòng.");
+
+    // 3. Lắng nghe người mới vào (Participants List)
+    _participantsSub = roomRef.snapshots().listen((snap) {
+      if (!snap.exists) return;
+      final data = snap.data()!;
+      final names = Map<String, dynamic>.from(data['participantNames'] ?? {});
+
+      names.forEach((pid, pname) {
+        if (pid != widget.userId && !_peers.containsKey(pid)) {
+          // Người mới! Gửi tín hiệu gọi (Offer) cho họ
+          _remoteNames[pid] = pname;
+          _createPeerConnection(pid, isCaller: true);
+        }
+      });
+
+      // Dọn dẹp người đã thoát
+      final currentIds = names.keys.toSet();
+      final myPeers = _peers.keys.toSet();
+      for (var id in myPeers) {
+        if (!currentIds.contains(id)) _removePeer(id);
+      }
+    });
+
+    // 4. Lắng nghe hộp thư Tín hiệu Signaling (Của riêng mình)
+    _signalingSub = FirebaseFirestore.instance
+        .collection('study_rooms')
+        .doc(widget.roomId)
+        .collection('signaling')
+        .doc(widget.userId)
+        .collection('messages')
+        .snapshots()
+        .listen((snap) {
+          for (var change in snap.docChanges) {
+            if (change.type == DocumentChangeType.added) {
+              final data = change.doc.data()!;
+              _handleSignalingMessage(data['from'], data);
+              change.doc.reference.delete(); // Đọc xong xóa luôn cho nhẹ
+            }
+          }
+        });
   }
 
-  // Bảng thông báo Mã phòng
+  // ================= WEBRTC SIGNALING CORE =================
+
+  Future<void> _createPeerConnection(
+    String peerId, {
+    required bool isCaller,
+  }) async {
+    final pc = await createPeerConnection(_iceServers);
+    _peers[peerId] = pc;
+
+    final renderer = RTCVideoRenderer();
+    await renderer.initialize();
+    _remoteRenderers[peerId] = renderer;
+    if (mounted) setState(() {});
+
+    // Nhét Camera của mình vào kết nối
+    if (_localStream != null) {
+      _localStream!.getTracks().forEach((track) {
+        pc.addTrack(track, _localStream!);
+      });
+    }
+
+    // Nhận Camera của họ
+    pc.onTrack = (event) {
+      if (event.track.kind == 'video') {
+        renderer.srcObject = event.streams[0];
+        if (mounted) setState(() {});
+      }
+    };
+
+    // Tìm được đường truyền mạng (ICE) -> Gửi cho bạn kia
+    pc.onIceCandidate = (candidate) {
+      _sendSignaling(peerId, {
+        'type': 'candidate',
+        'candidate': candidate.toMap(),
+      });
+    };
+
+    if (isCaller) {
+      // Mình là người gọi -> Gửi Offer
+      final offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      _sendSignaling(peerId, {'type': 'offer', 'sdp': offer.sdp});
+    }
+  }
+
+  Future<void> _handleSignalingMessage(
+    String fromPeerId,
+    Map<String, dynamic> data,
+  ) async {
+    final type = data['type'];
+
+    // Nếu chưa có kết nối với người này thì tạo (bị gọi)
+    if (!_peers.containsKey(fromPeerId)) {
+      await _createPeerConnection(fromPeerId, isCaller: false);
+    }
+
+    final pc = _peers[fromPeerId]!;
+
+    if (type == 'offer') {
+      await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], type));
+      final answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      _sendSignaling(fromPeerId, {'type': 'answer', 'sdp': answer.sdp});
+    } else if (type == 'answer') {
+      await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], type));
+    } else if (type == 'candidate') {
+      final candMap = data['candidate'];
+      final candidate = RTCIceCandidate(
+        candMap['candidate'],
+        candMap['sdpMid'],
+        candMap['sdpMLineIndex'],
+      );
+      await pc.addCandidate(candidate);
+    }
+  }
+
+  void _sendSignaling(String toPeerId, Map<String, dynamic> data) {
+    data['from'] = widget.userId;
+    FirebaseFirestore.instance
+        .collection('study_rooms')
+        .doc(widget.roomId)
+        .collection('signaling')
+        .doc(toPeerId)
+        .collection('messages')
+        .add(data);
+  }
+
+  void _removePeer(String peerId) {
+    _peers[peerId]?.close();
+    _peers.remove(peerId);
+    _remoteRenderers[peerId]?.dispose();
+    _remoteRenderers.remove(peerId);
+    _remoteNames.remove(peerId);
+    if (mounted) setState(() {});
+  }
+
+  // =========================================================
+
   void _showRoomCodeDialog() {
     if (!mounted) return;
     showDialog(
@@ -178,7 +318,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     );
   }
 
-  // --- Các hàm Chat, Task, Members giữ nguyên ---
   Future<void> _sendSystemMessage(String text) async {
     await FirebaseFirestore.instance
         .collection('study_rooms')
@@ -216,119 +355,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       );
   }
 
-  void _showTasksModal() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              padding: const EdgeInsets.all(16),
-              height: MediaQuery.of(context).size.height * 0.5,
-              child: Column(
-                children: [
-                  const Text(
-                    "Nhiệm vụ của bạn",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const Divider(),
-                  if (widget.goals.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text(
-                        "Bạn đang học tự do, không có nhiệm vụ cụ thể.",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: widget.goals.length,
-                        itemBuilder: (_, i) => CheckboxListTile(
-                          title: Text(
-                            widget.goals[i],
-                            style: TextStyle(
-                              decoration: _personalTaskStatus[i]
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                          ),
-                          value: _personalTaskStatus[i],
-                          onChanged: (val) => setModalState(
-                            () => _personalTaskStatus[i] = val!,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showMembersModal() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          height: MediaQuery.of(context).size.height * 0.4,
-          child: Column(
-            children: [
-              const Text(
-                "Người đang học cùng",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const Divider(),
-              Expanded(
-                child: StreamBuilder<DocumentSnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('study_rooms')
-                      .doc(widget.roomId)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData || !snapshot.data!.exists)
-                      return const Center(child: Text("Phòng đã đóng."));
-                    final data = snapshot.data!.data() as Map<String, dynamic>;
-                    final Map<String, dynamic> members =
-                        data['participantNames'] ?? {};
-                    return ListView.builder(
-                      itemCount: members.length,
-                      itemBuilder: (_, i) {
-                        String id = members.keys.elementAt(i);
-                        String name = members.values.elementAt(i);
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: primaryColor.withOpacity(0.2),
-                            child: Icon(Icons.person, color: primaryColor),
-                          ),
-                          title: Text(
-                            id == widget.userId ? "$name (Bạn)" : name,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // 🔥 LUẬT CHƠI MỚI VÀ TÍNH ĐIỂM
   Future<void> _leaveRoom({required bool isFinishedNatural}) async {
     if (!isFinishedNatural) {
       final confirm = await showDialog<bool>(
@@ -368,7 +394,11 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
 
     _timer?.cancel();
 
-    // Rút tên khỏi phòng (dù thoát giữa chừng hay hoàn thành)
+    // Dọn dẹp Peer connections trước khi tắt để tránh lỗi treo mạng
+    for (var id in _peers.keys) {
+      _peers[id]?.close();
+    }
+
     final roomRef = FirebaseFirestore.instance
         .collection('study_rooms')
         .doc(widget.roomId);
@@ -378,31 +408,21 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     if (roomSnap.exists) {
       final data = roomSnap.data() as Map<String, dynamic>;
       currentParticipants = List.from(data['participants'] ?? []).length;
-
       await roomRef.update({
         'participants': FieldValue.arrayRemove([widget.userId]),
         'participantNames.${widget.userId}': FieldValue.delete(),
       });
       await _sendSystemMessage("${widget.userName} đã rời phòng.");
-
-      // Nếu chỉ còn 1 mình mình ở trong phòng (tức là sau khi mình ra thì bằng 0)
-      if (currentParticipants <= 1) {
-        await roomRef.delete(); // Phòng sẽ tự bốc hơi trên database!
-      }
+      if (currentParticipants <= 1) await roomRef.delete();
     }
 
-    // NẾU THOÁT GIỮA CHỪNG -> BAY VỀ TRANG CHỦ MÀ KHÔNG LƯU GÌ CẢ
     if (!isFinishedNatural) {
       if (mounted) Navigator.pop(context);
       return;
     }
 
-    // 🔥 SỬ DỤNG BIẾN _joinTime ĐỂ TÍNH THỜI GIAN THỰC TẾ
     final int actualSeconds = DateTime.now().difference(_joinTime).inSeconds;
-    // Làm tròn lên: cứ học là có phút, dù chỉ 1 giây để dễ test
     final int actualMinutes = (actualSeconds / 60).ceil();
-
-    // NẾU HOÀN THÀNH -> TÍNH ĐIỂM = THỜI GIAN THỰC TẾ * SỐ NGƯỜI
     int earnedPoints = actualMinutes * currentParticipants;
 
     List<String> finishedTasks = [];
@@ -410,7 +430,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       if (_personalTaskStatus[i]) finishedTasks.add(widget.goals[i]);
     }
 
-    // Lưu vào Lịch sử (Dùng actualMinutes thay vì widget.duration)
     await FirebaseFirestore.instance.collection('study_history').add({
       'userId': widget.userId,
       'time': DateTime.now(),
@@ -419,7 +438,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       'completedGoalsList': finishedTasks,
       'completed': finishedTasks.length,
       'total': widget.goals.length,
-      'minutes': actualMinutes, // 🔥 LƯU THỜI GIAN THỰC TẾ
+      'minutes': actualMinutes,
     });
 
     final userRef = FirebaseFirestore.instance
@@ -448,7 +467,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
           newStreak = currentStreak + 1;
       }
     }
-
     await userRef.set({
       'points': FieldValue.increment(earnedPoints),
       'streakCount': newStreak,
@@ -494,22 +512,63 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
 
   void _toggleMic() {
     if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
-      final audioTrack = _localStream!.getAudioTracks()[0];
-      audioTrack.enabled = !audioTrack.enabled;
+      final track = _localStream!.getAudioTracks()[0];
+      track.enabled = !track.enabled;
       setState(() => _isMuted = !_isMuted);
     }
   }
 
   void _toggleVideo() {
     if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
-      final videoTrack = _localStream!.getVideoTracks()[0];
-      videoTrack.enabled = !videoTrack.enabled;
+      final track = _localStream!.getVideoTracks()[0];
+      track.enabled = !track.enabled;
       setState(() => _isVideoOff = !_isVideoOff);
     }
   }
 
   @override
+  void dispose() {
+    _timer?.cancel();
+    _participantsSub?.cancel();
+    _signalingSub?.cancel();
+    for (var id in _peers.keys) {
+      _peers[id]?.close();
+      _remoteRenderers[id]?.dispose();
+    }
+    _localStream?.getTracks().forEach((track) => track.stop());
+    _localStream?.dispose();
+    _localRenderer.dispose();
+    _chatController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Thu thập danh sách camera cần vẽ (Bản thân + Mọi người)
+    List<Widget> videoWidgets = [];
+
+    // 1. Vẽ bản thân
+    videoWidgets.add(
+      _buildVideoView(
+        _localRenderer,
+        "${widget.userName} (Bạn)",
+        _isVideoOff,
+        _isMuted,
+      ),
+    );
+
+    // 2. Vẽ người khác
+    _remoteRenderers.forEach((peerId, renderer) {
+      videoWidgets.add(
+        _buildVideoView(
+          renderer,
+          _remoteNames[peerId] ?? "Người dùng",
+          false,
+          false,
+        ),
+      );
+    });
+
     return WillPopScope(
       onWillPop: () async {
         _leaveRoom(isFinishedNatural: false);
@@ -558,73 +617,22 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
             Expanded(
               child: Row(
                 children: [
+                  // LƯỚI VIDEO HIỂN THỊ MỌI NGƯỜI
                   Expanded(
                     flex: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(8.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade900,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        clipBehavior: Clip.hardEdge,
-                        child: Stack(
-                          children: [
-                            if (!_isVideoOff)
-                              RTCVideoView(
-                                _localRenderer,
-                                objectFit: RTCVideoViewObjectFit
-                                    .RTCVideoViewObjectFitCover,
-                                mirror: true,
-                              )
-                            else
-                              Center(
-                                child: CircleAvatar(
-                                  radius: 40,
-                                  backgroundColor: primaryColor,
-                                  child: const Icon(
-                                    Icons.person,
-                                    size: 40,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            Positioned(
-                              bottom: 10,
-                              left: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(5),
-                                ),
-                                child: Text(
-                                  "${widget.userName} (Bạn)",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            if (_isMuted)
-                              const Positioned(
-                                top: 10,
-                                right: 10,
-                                child: Icon(
-                                  Icons.mic_off,
-                                  color: Colors.red,
-                                  size: 20,
-                                ),
-                              ),
-                          ],
-                        ),
+                      child: GridView.count(
+                        crossAxisCount: videoWidgets.length <= 2 ? 1 : 2,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                        childAspectRatio: videoWidgets.length <= 2 ? 1.5 : 1.0,
+                        children: videoWidgets,
                       ),
                     ),
                   ),
+
+                  // KHUNG CHAT BÊN PHẢI
                   if (_isChatOpen)
                     Expanded(
                       flex: 1,
@@ -798,13 +806,82 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                       icon: Icons.checklist,
                       label: "Nhiệm vụ",
                       color: Colors.white,
-                      onTap: _showTasksModal,
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          builder: (ctx) => Container(
+                            padding: const EdgeInsets.all(16),
+                            height: 300,
+                            child: Column(
+                              children: [
+                                const Text(
+                                  "Nhiệm vụ của bạn",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: ListView.builder(
+                                    itemCount: widget.goals.length,
+                                    itemBuilder: (_, i) => StatefulBuilder(
+                                      builder: (ctx, setState) =>
+                                          CheckboxListTile(
+                                            title: Text(widget.goals[i]),
+                                            value: _personalTaskStatus[i],
+                                            onChanged: (val) {
+                                              setState(
+                                                () => _personalTaskStatus[i] =
+                                                    val!,
+                                              );
+                                              this.setState(() {});
+                                            },
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _buildControlButton(
                       icon: Icons.people,
-                      label: "Thành viên",
+                      label: "Nhóm",
                       color: Colors.white,
-                      onTap: _showMembersModal,
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          builder: (ctx) => Container(
+                            padding: const EdgeInsets.all(16),
+                            height: 300,
+                            child: Column(
+                              children: [
+                                const Text(
+                                  "Người tham gia",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: ListView(
+                                    children: [
+                                      ListTile(
+                                        title: Text("${widget.userName} (Bạn)"),
+                                      ),
+                                      ..._remoteNames.values.map(
+                                        (name) => ListTile(title: Text(name)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     _buildControlButton(
                       icon: Icons.call_end,
@@ -819,6 +896,60 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildVideoView(
+    RTCVideoRenderer renderer,
+    String name,
+    bool isCamOff,
+    bool isMuted,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade900,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Stack(
+        children: [
+          if (!isCamOff)
+            RTCVideoView(
+              renderer,
+              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+              mirror: true,
+            )
+          else
+            Center(
+              child: CircleAvatar(
+                radius: 30,
+                backgroundColor: primaryColor,
+                child: const Icon(Icons.person, size: 30, color: Colors.white),
+              ),
+            ),
+          Positioned(
+            bottom: 10,
+            left: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Text(
+                name,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ),
+          ),
+          if (isMuted)
+            const Positioned(
+              top: 10,
+              right: 10,
+              child: Icon(Icons.mic_off, color: Colors.red, size: 20),
+            ),
+        ],
       ),
     );
   }
