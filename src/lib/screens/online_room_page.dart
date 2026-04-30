@@ -1,7 +1,6 @@
 import 'dart:async';
-// import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; // Để dùng Clipboard copy mã phòng
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -17,6 +16,7 @@ class OnlineRoomPage extends StatefulWidget {
   final String? planId;
   final String planTitle;
   final List<String> goals;
+
   final bool isPrivate;
   final String? roomCode;
 
@@ -61,9 +61,13 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   late List<bool> _personalTaskStatus;
   late DateTime _joinTime;
 
+  // Hàng đợi cho tín hiệu mạng đến quá sớm
+  final Map<String, List<RTCIceCandidate>> _candidateQueue = {};
+
   StreamSubscription? _participantsSub;
   StreamSubscription? _signalingSub;
 
+  // Cấu hình máy chủ Google STUN miễn phí
   final Map<String, dynamic> _iceServers = {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
@@ -94,7 +98,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   }
 
   Future<void> _initRoom() async {
-    // 1. Xin quyền & Mở Camera
+    // 1. Xin quyền & Mở Camera/Mic
     await [Permission.camera, Permission.microphone].request();
     await _localRenderer.initialize();
     try {
@@ -140,7 +144,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
 
       names.forEach((pid, pname) {
         if (pid != widget.userId && !_peers.containsKey(pid)) {
-          // Người mới! Gửi tín hiệu gọi (Offer) cho họ
+          // Người mới! Chuẩn bị Renderer và gọi họ
           _remoteNames[pid] = pname;
           _createPeerConnection(pid, isCaller: true);
         }
@@ -167,7 +171,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
             if (change.type == DocumentChangeType.added) {
               final data = change.doc.data()!;
               _handleSignalingMessage(data['from'], data);
-              change.doc.reference.delete(); // Đọc xong xóa luôn cho nhẹ
+              change.doc.reference.delete(); // Đọc xong xóa luôn
             }
           }
         });
@@ -187,19 +191,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     _remoteRenderers[peerId] = renderer;
     if (mounted) setState(() {});
 
-    // Nhét Camera của mình vào kết nối
+    // Nhét Camera & Mic của mình vào kết nối
     if (_localStream != null) {
       _localStream!.getTracks().forEach((track) {
         pc.addTrack(track, _localStream!);
       });
     }
 
-    // Nhận Camera của họ
-    pc.onTrack = (event) {
-      if (event.track.kind == 'video') {
-        renderer.srcObject = event.streams[0];
-        if (mounted) setState(() {});
-      }
+    // Bắt luồng dữ liệu (Audio + Video) của người kia
+    pc.onAddStream = (MediaStream stream) {
+      renderer.srcObject = stream;
+      if (mounted) setState(() {});
     };
 
     // Tìm được đường truyền mạng (ICE) -> Gửi cho bạn kia
@@ -211,7 +213,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     };
 
     if (isCaller) {
-      // Mình là người gọi -> Gửi Offer
+      // Mình là người gọi -> Tạo Offer
       final offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       _sendSignaling(peerId, {'type': 'offer', 'sdp': offer.sdp});
@@ -236,6 +238,16 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       final answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       _sendSignaling(fromPeerId, {'type': 'answer', 'sdp': answer.sdp});
+
+      // Thả các Tọa độ (Candidates) bị kẹt trong hàng đợi ra
+      if (_candidateQueue.containsKey(fromPeerId)) {
+        for (var c in _candidateQueue[fromPeerId]!) {
+          await pc.addCandidate(c);
+        }
+        _candidateQueue.remove(fromPeerId);
+      }
+    } else if (type == 'answer') {
+      await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], type));
     } else if (type == 'answer') {
       await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], type));
     } else if (type == 'candidate') {
@@ -245,7 +257,20 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         candMap['sdpMid'],
         candMap['sdpMLineIndex'],
       );
-      await pc.addCandidate(candidate);
+
+      // 🔥 ĐÃ SỬA LỖI: Dùng signalingState thay vì remoteDescription
+      // Trạng thái 'have-remote-offer' hoặc 'stable' (sau khi setRemoteDescription)
+      // cho biết máy đã sẵn sàng nhận Candidate
+      if (pc.signalingState == RTCSignalingState.RTCSignalingStateStable ||
+          pc.signalingState ==
+              RTCSignalingState.RTCSignalingStateHaveRemoteOffer ||
+          pc.signalingState ==
+              RTCSignalingState.RTCSignalingStateHaveRemotePrAnswer) {
+        await pc.addCandidate(candidate);
+      } else {
+        // Nếu chưa sẵn sàng, nhốt vào hàng đợi
+        _candidateQueue.putIfAbsent(fromPeerId, () => []).add(candidate);
+      }
     }
   }
 
@@ -355,6 +380,22 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       );
   }
 
+  void _toggleMic() {
+    if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
+      final track = _localStream!.getAudioTracks()[0];
+      track.enabled = !track.enabled;
+      setState(() => _isMuted = !_isMuted);
+    }
+  }
+
+  void _toggleVideo() {
+    if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+      final track = _localStream!.getVideoTracks()[0];
+      track.enabled = !track.enabled;
+      setState(() => _isVideoOff = !_isVideoOff);
+    }
+  }
+
   Future<void> _leaveRoom({required bool isFinishedNatural}) async {
     if (!isFinishedNatural) {
       final confirm = await showDialog<bool>(
@@ -394,7 +435,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
 
     _timer?.cancel();
 
-    // Dọn dẹp Peer connections trước khi tắt để tránh lỗi treo mạng
     for (var id in _peers.keys) {
       _peers[id]?.close();
     }
@@ -421,6 +461,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       return;
     }
 
+    // Tính điểm dựa trên thời gian thực tế
     final int actualSeconds = DateTime.now().difference(_joinTime).inSeconds;
     final int actualMinutes = (actualSeconds / 60).ceil();
     int earnedPoints = actualMinutes * currentParticipants;
@@ -483,7 +524,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
           ),
           title: const Text("Xuất sắc! 🎉", textAlign: TextAlign.center),
           content: Text(
-            "Bạn đã kiên trì suốt $actualMinutes phút!\nSố người cùng cố gắng: $currentParticipants người\n\n🎁 Thưởng: +$earnedPoints điểm",
+            "Thời gian học: $actualMinutes phút!\nSố người cùng cố gắng: $currentParticipants người\n\n🎁 Thưởng: +$earnedPoints điểm",
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 16),
           ),
@@ -510,22 +551,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     }
   }
 
-  void _toggleMic() {
-    if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
-      final track = _localStream!.getAudioTracks()[0];
-      track.enabled = !track.enabled;
-      setState(() => _isMuted = !_isMuted);
-    }
-  }
-
-  void _toggleVideo() {
-    if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
-      final track = _localStream!.getVideoTracks()[0];
-      track.enabled = !track.enabled;
-      setState(() => _isVideoOff = !_isVideoOff);
-    }
-  }
-
   @override
   void dispose() {
     _timer?.cancel();
@@ -544,10 +569,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Thu thập danh sách camera cần vẽ (Bản thân + Mọi người)
     List<Widget> videoWidgets = [];
-
-    // 1. Vẽ bản thân
     videoWidgets.add(
       _buildVideoView(
         _localRenderer,
@@ -556,8 +578,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         _isMuted,
       ),
     );
-
-    // 2. Vẽ người khác
     _remoteRenderers.forEach((peerId, renderer) {
       videoWidgets.add(
         _buildVideoView(
@@ -617,7 +637,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
             Expanded(
               child: Row(
                 children: [
-                  // LƯỚI VIDEO HIỂN THỊ MỌI NGƯỜI
                   Expanded(
                     flex: 2,
                     child: Padding(
@@ -632,7 +651,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                     ),
                   ),
 
-                  // KHUNG CHAT BÊN PHẢI
                   if (_isChatOpen)
                     Expanded(
                       flex: 1,
