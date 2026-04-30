@@ -363,7 +363,7 @@ class _ChatPageState extends State<ChatPage> {
                   children: [
                     IconButton(
                       icon: Icon(Icons.add_circle, color: primaryColor, size: 28),
-                      onPressed: _pickImage, // Chuyển sang dùng hàm _pickImage để chọn trước
+                      onPressed: _pickImage,
                     ),
                     const SizedBox(width: 4),
                     Expanded(

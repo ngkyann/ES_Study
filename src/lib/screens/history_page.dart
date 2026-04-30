@@ -183,7 +183,7 @@ class HistoryDetailPage extends StatelessWidget {
               ),
               const Divider(height: 40),
               const Text(
-                "Nhiệm vụ ĐÃ hoàn thành", // Đã đổi tiêu đề
+                "Nhiệm vụ đã hoàn thành", // Đã đổi tiêu đề
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               const SizedBox(height: 10),
