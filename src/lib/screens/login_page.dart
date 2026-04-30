@@ -14,7 +14,7 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   bool _obscureText = true;
   bool _isLogin = true;
-  bool _isLoading = false; // 🔥 ĐÃ THÊM: Biến quản lý vòng xoay loading
+  bool _isLoading = false;
   String? _selectedClass;
 
   final TextEditingController _nameController = TextEditingController();
