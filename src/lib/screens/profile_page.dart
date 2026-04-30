@@ -21,54 +21,6 @@ class ProfilePage extends StatelessWidget {
     required this.userStreak,
   });
 
-  // HÀM CẬP NHẬT DỮ LIỆU LÊN FIRESTORE
-  Future<void> _updateUserData(String field, String newValue) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .update({field: newValue});
-    } catch (e) {
-      debugPrint("Lỗi cập nhật $field: $e");
-    }
-  }
-
-  // HÀM HIỂN THỊ DIALOG CHỈNH SỬA
-  void _showEditDialog(BuildContext context, String title, String field, String currentValue) {
-    final TextEditingController controller = TextEditingController(text: currentValue);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Text("Đổi $title"),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: "Nhập $title mới",
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Hủy", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                _updateUserData(field, controller.text.trim());
-              }
-              Navigator.pop(context);
-            },
-            child: const Text("Lưu", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -130,37 +82,36 @@ class ProfilePage extends StatelessWidget {
                     const CircleAvatar(
                       radius: 50,
                       backgroundColor: Colors.white,
-                      child: Icon(Icons.person, color: Color(0xFF6366F1), size: 50),
+                      child: Icon(
+                        Icons.person,
+                        color: Color(0xFF6366F1),
+                        size: 50,
+                      ),
                     ),
                     const SizedBox(height: 15),
-                    
+
                     // STREAMBUILDER ĐỂ CẬP NHẬT TÊN REAL-TIME
                     StreamBuilder<DocumentSnapshot>(
-                      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(userId)
+                          .snapshots(),
                       builder: (context, snapshot) {
                         String currentName = userName;
                         if (snapshot.hasData && snapshot.data!.exists) {
                           currentName = snapshot.data!.get('name') ?? userName;
                         }
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const SizedBox(width: 40),
-                            Text(
-                              currentName,
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.white70, size: 18),
-                              onPressed: () => _showEditDialog(context, "tên", "name", currentName),
-                            ),
-                          ],
+                        // 🔥 ĐÃ SỬA: Xóa bỏ Row và SizedBox gây lệch, chỉ dùng Text căn giữa
+                        return Text(
+                          currentName,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         );
-                      }
+                      },
                     ),
 
                     Text(
@@ -173,7 +124,10 @@ class ProfilePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 15),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
@@ -181,7 +135,10 @@ class ProfilePage extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.local_fire_department, color: Colors.orangeAccent),
+                          const Icon(
+                            Icons.local_fire_department,
+                            color: Colors.orangeAccent,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             "Chuỗi $userStreak ngày học",
@@ -200,7 +157,11 @@ class ProfilePage extends StatelessWidget {
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    _infoCard(Icons.alternate_email, "ID người dùng", "@$userId"),
+                    _infoCard(
+                      Icons.alternate_email,
+                      "ID người dùng",
+                      "@$userId",
+                    ),
 
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
@@ -231,46 +192,62 @@ class ProfilePage extends StatelessWidget {
                             rankText = "Chưa xếp hạng";
                           }
                         }
-                        return _infoCard(Icons.military_tech, "Xếp hạng", rankText);
+                        return _infoCard(
+                          Icons.military_tech,
+                          "Xếp hạng",
+                          rankText,
+                        );
                       },
                     ),
 
-                    _infoCard(Icons.workspace_premium, "Tổng điểm", "$userPoints"),
+                    _infoCard(
+                      Icons.workspace_premium,
+                      "Tổng điểm",
+                      "$userPoints",
+                    ),
 
                     StreamBuilder<DocumentSnapshot>(
-                      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(userId)
+                          .snapshots(),
                       builder: (context, snapshot) {
                         String joinDateText = "Đang tải...";
                         if (snapshot.hasData && snapshot.data!.exists) {
-                          final data = snapshot.data!.data() as Map<String, dynamic>;
+                          final data =
+                              snapshot.data!.data() as Map<String, dynamic>;
                           if (data['createdAt'] != null) {
-                            DateTime date = (data['createdAt'] as Timestamp).toDate();
-                            joinDateText = "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+                            DateTime date = (data['createdAt'] as Timestamp)
+                                .toDate();
+                            joinDateText =
+                                "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
                           }
                         }
-                        return _infoCard(Icons.calendar_month, "Ngày gia nhập", joinDateText);
+                        return _infoCard(
+                          Icons.calendar_month,
+                          "Ngày gia nhập",
+                          joinDateText,
+                        );
                       },
                     ),
 
-                    // CARD LỚP HỌC - CHO PHÉP NHẤN VÀO ĐỂ ĐỔI
+                    // CARD LỚP HỌC
                     StreamBuilder<DocumentSnapshot>(
-                      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(userId)
+                          .snapshots(),
                       builder: (context, snapshot) {
                         String currentClass = selectedClass;
                         if (snapshot.hasData && snapshot.data!.exists) {
-                          currentClass = snapshot.data!.get('class') ?? selectedClass;
+                          currentClass =
+                              snapshot.data!.get('class') ?? selectedClass;
                         }
-                        return GestureDetector(
-                          onTap: () => _showEditDialog(context, "lớp", "class", currentClass),
-                          child: _infoCard(
-                            Icons.school, 
-                            "Lớp hiện tại (Nhấn để đổi)", 
-                            currentClass
-                          ),
-                        );
-                      }
+                        // 🔥 ĐÃ SỬA: Bỏ GestureDetector vì giờ đã chỉnh sửa trong Setting
+                        return _infoCard(Icons.school, "Lớp", currentClass);
+                      },
                     ),
-                    
+
                     const SizedBox(height: 30),
                   ],
                 ),

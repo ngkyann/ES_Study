@@ -23,13 +23,11 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
   int _currentPoints = 0;
   int _currentRank = 0;
-
-  // 🔥 ĐÃ THÊM: Biến lưu trữ Chuỗi ngày học
   int _currentStreak = 0;
-  int _highestStreak = 0;
 
   int _highestPoints = 0;
   int _highestRank = 0;
+  int _highestStreak = 0;
 
   @override
   void initState() {
@@ -39,7 +37,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
   Future<void> _loadStatistics() async {
     try {
-      // 1. Tải Lịch sử học tập
       final historySnap = await FirebaseFirestore.instance
           .collection('study_history')
           .where('userId', isEqualTo: widget.userId)
@@ -47,8 +44,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
       int tempMinutes = 0;
       int tempGoals = 0;
-
-      // Phục vụ tính toán chuỗi ngày
       List<DateTime> allStudyDates = [];
 
       for (var doc in historySnap.docs) {
@@ -63,12 +58,10 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
       int tempSessions = historySnap.docs.length;
 
-      // 🔥 THUẬT TOÁN: Tính Chuỗi ngày học dài nhất từ Lịch sử
       Set<String> uniqueDateStrings = {};
       List<DateTime> sortedUniqueDates = [];
 
       for (var d in allStudyDates) {
-        // Cố định giờ về UTC 00:00:00 để tính khoảng cách ngày chính xác
         DateTime dateOnly = DateTime.utc(d.year, d.month, d.day);
         String dStr = "${d.year}-${d.month}-${d.day}";
         if (!uniqueDateStrings.contains(dStr)) {
@@ -77,7 +70,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
         }
       }
 
-      // Sắp xếp ngày từ cũ đến mới
       sortedUniqueDates.sort((a, b) => a.compareTo(b));
 
       int calcHighestStreak = 0;
@@ -90,9 +82,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
         } else {
           final difference = d.difference(previousDate).inDays;
           if (difference == 1) {
-            currentLoopStreak++; // Ngày liên tiếp -> Tăng chuỗi
+            currentLoopStreak++;
           } else if (difference > 1) {
-            currentLoopStreak = 1; // Bị đứt chuỗi -> Reset về 1
+            currentLoopStreak = 1;
           }
         }
         if (currentLoopStreak > calcHighestStreak) {
@@ -101,7 +93,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
         previousDate = d;
       }
 
-      // 2. Tải Bảng xếp hạng để lấy Điểm, Hạng hiện tại và Cập nhật Kỷ lục
       final usersSnap = await FirebaseFirestore.instance
           .collection('users')
           .orderBy('points', descending: true)
@@ -117,18 +108,16 @@ class _StatisticsPageState extends State<StatisticsPage> {
           tempRank = i + 1;
           myData = usersSnap.docs[i].data();
           tempPoints = myData['points'] ?? 0;
-          tempCurrentStreak = myData['streakCount'] ?? 0; // Lấy chuỗi hiện tại
+          tempCurrentStreak = myData['streakCount'] ?? 0;
           break;
         }
       }
 
-      // Lấy kỷ lục cũ
       int savedHighestRank = myData?['highestRank'] ?? tempRank;
       int savedHighestPoints = myData?['highestPoints'] ?? tempPoints;
       int savedHighestStreak = myData?['highestStreak'] ?? 0;
       bool needsUpdateRecord = false;
 
-      // So sánh để cập nhật kỷ lục mới
       if (tempPoints > savedHighestPoints) {
         savedHighestPoints = tempPoints;
         needsUpdateRecord = true;
@@ -137,13 +126,11 @@ class _StatisticsPageState extends State<StatisticsPage> {
         savedHighestRank = tempRank;
         needsUpdateRecord = true;
       }
-      // Ưu tiên lấy giá trị lớn hơn giữa tính toán tự động và lịch sử đã lưu
       if (calcHighestStreak > savedHighestStreak) {
         savedHighestStreak = calcHighestStreak;
         needsUpdateRecord = true;
       }
 
-      // Lưu kỷ lục mới lên Firebase (nếu có phá kỷ lục)
       if (needsUpdateRecord) {
         await FirebaseFirestore.instance
             .collection('users')
@@ -193,6 +180,18 @@ class _StatisticsPageState extends State<StatisticsPage> {
     return "$hours giờ $mins phút";
   }
 
+  IconData _getRankIcon(int rank) {
+    if (rank >= 1 && rank <= 50) return Icons.emoji_events;
+    return Icons.military_tech;
+  }
+
+  Color _getRankColor(int rank) {
+    if (rank == 1) return Colors.amber;
+    if (rank >= 2 && rank <= 10) return const Color(0xFFC0C0C0);
+    if (rank >= 11 && rank <= 50) return const Color(0xFFCD7F32);
+    return Colors.blueAccent;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -221,7 +220,10 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   children: [
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 25,
+                        horizontal: 10,
+                      ),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [primaryColor, primaryColor.withOpacity(0.7)],
@@ -239,48 +241,46 @@ class _StatisticsPageState extends State<StatisticsPage> {
                       ),
                       child: Column(
                         children: [
-                          const Icon(
-                            Icons.workspace_premium,
-                            color: Colors.yellow,
-                            size: 50,
-                          ),
-                          const SizedBox(height: 10),
                           const Text(
-                            "Thành tích hiện tại",
+                            "THÀNH TÍCH HIỆN TẠI",
                             style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 16,
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
                             ),
                           ),
-                          const SizedBox(height: 5),
+                          const SizedBox(height: 20),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
-                              Text(
-                                "Hạng $_currentRank",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              _buildBannerItem(
+                                _getRankIcon(_currentRank),
+                                _getRankColor(_currentRank),
+                                "#$_currentRank",
+                                "Hạng",
                               ),
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 10),
-                                child: Text(
-                                  "•",
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 24,
-                                  ),
-                                ),
+                              Container(
+                                width: 1,
+                                height: 50,
+                                color: Colors.white30,
                               ),
-                              Text(
-                                "$_currentPoints Điểm",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              _buildBannerItem(
+                                Icons.stars,
+                                Colors.white,
+                                "$_currentPoints",
+                                "Điểm",
+                              ),
+                              Container(
+                                width: 1,
+                                height: 50,
+                                color: Colors.white30,
+                              ),
+                              _buildBannerItem(
+                                Icons.local_fire_department,
+                                Colors.orangeAccent,
+                                "$_currentStreak",
+                                "Ngày chuỗi",
                               ),
                             ],
                           ),
@@ -290,7 +290,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
                     const SizedBox(height: 25),
                     const Text(
-                      "Tổng quan quá trình",
+                      "Kỷ lục & Tổng quan",
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -299,18 +299,18 @@ class _StatisticsPageState extends State<StatisticsPage> {
                     ),
                     const SizedBox(height: 15),
 
-                    // 🔥 ĐÃ CẬP NHẬT: Lưới 8 ô cực kỳ cân đối
+                    // 🔥 ĐÃ CHỈNH SỬA: Tỷ lệ 1.15 giúp thẻ "lùn" xuống ôm sát nội dung
                     GridView.count(
                       crossAxisCount: 2,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      childAspectRatio: 1.1,
+                      childAspectRatio: 1.15,
                       children: [
                         _buildStatCard(
-                          icon: Icons.military_tech,
-                          color: Colors.redAccent,
+                          icon: _getRankIcon(_highestRank),
+                          color: _getRankColor(_highestRank),
                           title: "Hạng cao nhất",
                           value: "Top $_highestRank",
                         ),
@@ -320,16 +320,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
                           title: "Điểm cao nhất",
                           value: "$_highestPoints pt",
                         ),
-                        // 🔥 ĐÃ THÊM: Chuỗi hiện tại và Kỷ lục chuỗi
-                        _buildStatCard(
-                          icon: Icons.local_fire_department,
-                          color: Colors.deepOrange,
-                          title: "Chuỗi hiện tại",
-                          value: "$_currentStreak ngày",
-                        ),
                         _buildStatCard(
                           icon: Icons.whatshot,
-                          color: Colors.red,
+                          color: Colors.deepOrange,
                           title: "Chuỗi dài nhất",
                           value: "$_highestStreak ngày",
                         ),
@@ -351,68 +344,106 @@ class _StatisticsPageState extends State<StatisticsPage> {
                           title: "Mục tiêu đã xong",
                           value: "$_totalCompletedGoals mục tiêu",
                         ),
-                        _buildStatCard(
-                          icon: Icons.hourglass_bottom,
-                          color: Colors.purple,
-                          title: "Trung bình/buổi",
-                          value:
-                              "${_avgMinutesPerSession.toStringAsFixed(1)} phút",
-                        ),
                       ],
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 25),
+                    const Text(
+                      "Chỉ số trung bình",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
 
                     Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: primaryColor, width: 1.5),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withOpacity(0.04),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                      child: Row(
+                      child: Column(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.teal.withOpacity(0.1),
-                              shape: BoxShape.circle,
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
                             ),
-                            child: const Icon(
-                              Icons.pie_chart,
-                              color: Colors.teal,
-                              size: 30,
+                            leading: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.hourglass_bottom,
+                                color: Colors.purple,
+                                size: 34,
+                              ),
+                            ),
+                            title: const Text(
+                              "Thời gian trung bình",
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: Text(
+                              "${_avgMinutesPerSession.toStringAsFixed(1)} phút / buổi",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.black87,
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 15),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "Tốc độ hoàn thành",
-                                style: TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 14,
-                                ),
+                          const Divider(
+                            height: 1,
+                            indent: 80,
+                            endIndent: 20,
+                            color: Colors.black12,
+                          ),
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            leading: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.teal.withOpacity(0.1),
+                                shape: BoxShape.circle,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "${_avgGoalsPerSession.toStringAsFixed(1)} mục tiêu / buổi",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                  color: Colors.black87,
-                                ),
+                              child: const Icon(
+                                Icons.pie_chart,
+                                color: Colors.teal,
+                                size: 34,
                               ),
-                            ],
+                            ),
+                            title: const Text(
+                              "Tốc độ hoàn thành",
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: Text(
+                              "${_avgGoalsPerSession.toStringAsFixed(1)} mục tiêu / buổi",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Colors.black87,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -425,6 +456,38 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
+  Widget _buildBannerItem(
+    IconData icon,
+    Color iconColor,
+    String value,
+    String label,
+  ) {
+    return Column(
+      children: [
+        Icon(icon, color: iconColor, size: 42),
+        const SizedBox(height: 6),
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 🔥 ĐÃ CHỈNH SỬA: Căn giữa toàn bộ nội dung trong thẻ
   Widget _buildStatCard({
     required IconData icon,
     required Color color,
@@ -432,7 +495,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -446,29 +509,37 @@ class _StatisticsPageState extends State<StatisticsPage> {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center, // Căn giữa theo chiều dọc
+        crossAxisAlignment:
+            CrossAxisAlignment.center, // Căn giữa theo chiều ngang
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: color.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Icon(icon, color: color, size: 36),
           ),
-          const Spacer(),
-          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8), // Khoảng cách thay vì dùng Spacer()
           Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: Colors.black87,
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.grey, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center, // Căn giữa chữ khi bị co lại
+            child: Text(
+              value,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.black87,
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

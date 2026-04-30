@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,8 +23,35 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  // 🔥 ĐÃ THÊM: Biến lưu trữ ngôn ngữ hiện tại
   String _selectedLanguage = "Tiếng Việt";
+
+  // 🔥 ĐÃ THÊM: Biến State cục bộ để cập nhật giao diện ngay khi sửa xong
+  late String _currentUserName;
+  late String _currentClass;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUserName = widget.userName;
+    _currentClass = widget.selectedClass;
+  }
+
+  // --- HÀM CẬP NHẬT FIREBASE ---
+  Future<void> _updateUserData(String field, String newValue) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .update({field: newValue});
+      if (mounted) {
+        _showSnackBar(context, "Cập nhật thành công!");
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar(context, "Lỗi cập nhật: $e");
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +61,7 @@ class _SettingsPageState extends State<SettingsPage> {
           "Cài đặt",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: primaryColor, // Sẽ tự động đổi màu khi state thay đổi
+        backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         centerTitle: true,
         elevation: 0,
@@ -51,15 +79,30 @@ class _SettingsPageState extends State<SettingsPage> {
             padding: const EdgeInsets.symmetric(vertical: 10),
             children: [
               _buildSectionHeader("Thông tin cá nhân"),
-              _buildInfoTile(Icons.person, "Họ và tên", widget.userName),
-              _buildInfoTile(Icons.school, "Lớp", widget.selectedClass),
-              _buildInfoTile(Icons.email, "Email", widget.email),
+              // 🔥 ĐÃ SỬA: Thêm sự kiện onTap để sửa Tên
+              _buildInfoTile(
+                Icons.person,
+                "Họ và tên",
+                _currentUserName,
+                onTap: () => _showEditNameDialog(context),
+              ),
+              // 🔥 ĐÃ SỬA: Thêm sự kiện onTap để sửa Lớp
+              _buildInfoTile(
+                Icons.school,
+                "Lớp",
+                _currentClass,
+                onTap: () => _showEditClassDialog(context),
+              ),
+              _buildInfoTile(
+                Icons.email,
+                "Email",
+                widget.email,
+              ), // Email thường không cho sửa
               _buildPasswordTile(context),
               const SizedBox(height: 10),
 
               _buildSectionHeader("Cài đặt giao diện"),
-              _buildThemeSelector(), // Giao diện chọn màu
-              // 🔥 ĐÃ SỬA: Thêm sự kiện chọn ngôn ngữ
+              _buildThemeSelector(),
               _buildActionTile(
                 Icons.language,
                 "Ngôn ngữ",
@@ -69,8 +112,6 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 10),
 
               _buildSectionHeader("Ứng dụng"),
-
-              // 🔥 ĐÃ SỬA: Thêm sự kiện mở chính sách bảo mật
               _buildActionTile(
                 Icons.privacy_tip,
                 "Chính sách bảo mật",
@@ -109,9 +150,16 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildInfoTile(IconData icon, String title, String subtitle) {
+  // 🔥 ĐÃ SỬA: Thêm onTap và Icon chỉnh sửa
+  Widget _buildInfoTile(
+    IconData icon,
+    String title,
+    String subtitle, {
+    VoidCallback? onTap,
+  }) {
     return Container(
       color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 1),
       child: ListTile(
         leading: Icon(icon, color: primaryColor),
         title: Text(title, style: const TextStyle(fontSize: 15)),
@@ -122,6 +170,10 @@ class _SettingsPageState extends State<SettingsPage> {
             color: Colors.black87,
           ),
         ),
+        trailing: onTap != null
+            ? const Icon(Icons.edit, color: Colors.grey, size: 20)
+            : null,
+        onTap: onTap,
       ),
     );
   }
@@ -186,7 +238,7 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: const EdgeInsets.only(top: 8.0),
           child: Row(
             children: [
-              _buildColorCircle(const Color(0xFF87CEFA)), // Màu xanh mặc định
+              _buildColorCircle(const Color(0xFF87CEFA)),
               _buildColorCircle(Colors.green),
               _buildColorCircle(Colors.orange),
               _buildColorCircle(Colors.purple),
@@ -199,7 +251,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildColorCircle(Color color) {
     bool isSelected = primaryColor == color;
-
     return GestureDetector(
       onTap: () async {
         setState(() {
@@ -208,8 +259,6 @@ class _SettingsPageState extends State<SettingsPage> {
         });
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('theme_color', color.value);
-
-        debugPrint("Đã lưu màu: ${color.value}");
       },
       child: Container(
         margin: const EdgeInsets.only(right: 12),
@@ -259,7 +308,118 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // 🔥 ĐÃ THÊM: Hộp thoại chọn ngôn ngữ troll troll
+  // --- CÁC HỘP THOẠI ĐỔI THÔNG TIN CÁ NHÂN ---
+
+  // 🔥 ĐÃ THÊM: Hộp thoại sửa tên
+  void _showEditNameDialog(BuildContext context) {
+    final TextEditingController controller = TextEditingController(
+      text: _currentUserName,
+    );
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text("Đổi Họ và tên"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: "Nhập tên mới",
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Hủy", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () async {
+              if (controller.text.trim().isNotEmpty) {
+                String newName = controller.text.trim();
+                await _updateUserData('name', newName);
+                setState(() => _currentUserName = newName);
+              }
+              if (mounted) Navigator.pop(dialogContext);
+            },
+            child: const Text("Lưu"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🔥 ĐÃ THÊM: Hộp thoại chọn Lớp giống hệt trang Đăng ký
+  void _showEditClassDialog(BuildContext context) {
+    String tempClass = _currentClass;
+    final List<String> classes = List.generate(
+      12,
+      (index) => 'Lớp ${index + 1}',
+    );
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            title: const Text("Chọn Lớp"),
+            content: DropdownButtonFormField<String>(
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              value: classes.contains(tempClass) ? tempClass : classes.first,
+              items: classes
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setDialogState(() => tempClass = val);
+                }
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text("Hủy", style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () async {
+                  await _updateUserData('class', tempClass);
+                  setState(() => _currentClass = tempClass);
+                  if (mounted) Navigator.pop(dialogContext);
+                },
+                child: const Text("Lưu"),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // --- CÁC HỘP THOẠI KHÁC ---
   void _showLanguageDialog(BuildContext context) {
     final List<String> options = [
       "Tiếng Việt",
@@ -267,7 +427,6 @@ class _SettingsPageState extends State<SettingsPage> {
       "Tiếng mẹ đẻ",
       "Vietnamese",
     ];
-
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -293,12 +452,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 contentPadding: EdgeInsets.zero,
                 onChanged: (value) {
                   if (value != null) {
-                    setState(() {
-                      _selectedLanguage = value;
-                    });
-                    Navigator.pop(
-                      dialogContext,
-                    ); // Đóng hộp thoại khi chọn xong
+                    setState(() => _selectedLanguage = value);
+                    Navigator.pop(dialogContext);
                   }
                 },
               );
@@ -309,7 +464,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // 🔥 ĐÃ THÊM: Hộp thoại Chính sách bảo mật
   void _showPrivacyPolicyDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -335,25 +489,22 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  "Ứng dụng chỉ lưu trữ các thông tin cơ bản như Họ tên, Email, Lớp và Lịch sử học tập của bạn để phục vụ việc đồng bộ tiến trình.",
+                  "Ứng dụng chỉ lưu trữ các thông tin cơ bản như Họ tên, Email, Lớp và Lịch sử học tập của bạn để phục vụ việc đồng bộ tiến trình.\n",
                 ),
-                SizedBox(height: 10),
                 Text(
                   "2. Sử dụng thông tin",
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  "Dữ liệu của bạn được sử dụng để xếp hạng trên Leaderboard, cập nhật Thống kê và cá nhân hóa trải nghiệm Trợ lý ảo AI.",
+                  "Dữ liệu của bạn được sử dụng để xếp hạng trên Leaderboard, cập nhật Thống kê và cá nhân hóa trải nghiệm Trợ lý ảo AI.\n",
                 ),
-                SizedBox(height: 10),
                 Text(
                   "3. Chia sẻ dữ liệu",
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  "Chúng tôi cam kết KHÔNG bán, cho thuê hay chia sẻ thông tin cá nhân của bạn cho bất kỳ bên thứ ba nào với mục đích thương mại.",
+                  "Chúng tôi cam kết KHÔNG bán, cho thuê hay chia sẻ thông tin cá nhân của bạn cho bất kỳ bên thứ ba nào với mục đích thương mại.\n",
                 ),
-                SizedBox(height: 10),
                 Text(
                   "4. Quyền của người dùng",
                   style: TextStyle(fontWeight: FontWeight.bold),
@@ -382,7 +533,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // --- CÁC HỘP THOẠI DIALOG BÊN DƯỚI GIỮ NGUYÊN ---
   void _showVersionInfoDialog(BuildContext context) {
     final DateTime now = DateTime.now();
     final String todayStr =
@@ -457,7 +607,7 @@ class _SettingsPageState extends State<SettingsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text("Huỷ"),
+            child: const Text("Huỷ", style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -510,9 +660,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ? Icons.visibility_off
                                 : Icons.visibility,
                           ),
-                          onPressed: () {
-                            setState(() => obscureOld = !obscureOld);
-                          },
+                          onPressed: () =>
+                              setState(() => obscureOld = !obscureOld),
                         ),
                       ),
                     ),
@@ -527,9 +676,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ? Icons.visibility_off
                                 : Icons.visibility,
                           ),
-                          onPressed: () {
-                            setState(() => obscureNew = !obscureNew);
-                          },
+                          onPressed: () =>
+                              setState(() => obscureNew = !obscureNew),
                         ),
                       ),
                     ),
@@ -544,9 +692,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 ? Icons.visibility_off
                                 : Icons.visibility,
                           ),
-                          onPressed: () {
-                            setState(() => obscureConfirm = !obscureConfirm);
-                          },
+                          onPressed: () =>
+                              setState(() => obscureConfirm = !obscureConfirm),
                         ),
                       ),
                     ),
@@ -556,9 +703,16 @@ class _SettingsPageState extends State<SettingsPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text("Hủy"),
+                  child: const Text(
+                    "Hủy",
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
                 ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: isLoading
                       ? null
                       : () async {
@@ -625,7 +779,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text("Xác nhận"),
                 ),

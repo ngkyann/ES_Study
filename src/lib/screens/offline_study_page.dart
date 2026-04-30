@@ -16,8 +16,8 @@ class OfflineStudyPage extends StatefulWidget {
 class _OfflineStudyPageState extends State<OfflineStudyPage> {
   int selectedMinutes = 30;
   final Map<int, List<List<int>>> timePlans = {
-    15: [
-      [15],
+    1: [
+      [1],
     ],
     30: [
       [15, 5, 10],
@@ -135,8 +135,9 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                             .where('userId', isEqualTo: widget.userId)
                             .snapshots(),
                         builder: (context, snapshot) {
-                          if (!snapshot.hasData)
+                          if (!snapshot.hasData) {
                             return const LinearProgressIndicator();
+                          }
                           final docs = snapshot.data!.docs;
                           final now = DateTime.now();
                           final validDocs = docs.where((doc) {
@@ -184,7 +185,6 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                                         ),
                                   );
 
-                                  // 🔥 LOGIC QUAN TRỌNG: Chỉ nạp nhiệm vụ CHƯA hoàn thành
                                   for (
                                     int i = 0;
                                     i < allTasksFromFirebase.length;
@@ -247,12 +247,9 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                             MaterialPageRoute(
                               builder: (_) => StudySessionPage(
                                 plan: plans[selectedPlanIndex],
-                                goalsForRoom:
-                                    filteredGoals, // Chỉ nạp cái chưa xong
-                                originalIndices:
-                                    originalIndices, // Chỉ số đối chiếu
-                                allStatus:
-                                    allStatusFromFirebase, // Toàn bộ trạng thái để cập nhật
+                                goalsForRoom: filteredGoals,
+                                originalIndices: originalIndices,
+                                allStatus: allStatusFromFirebase,
                                 userId: widget.userId,
                                 planId: selectedFirebasePlanId,
                                 planTitle: selectedPlanTitle,
@@ -323,7 +320,7 @@ class _StudySessionPageState extends State<StudySessionPage> {
   int currentIndex = 0;
   int currentSeconds = 0;
   Timer? timer;
-  List<bool> sessionDone = []; // Trạng thái tích chọn trong phòng
+  List<bool> sessionDone = [];
   bool isBreak = false;
   final player = AudioPlayer();
   final notifications = FlutterLocalNotificationsPlugin();
@@ -364,32 +361,28 @@ class _StudySessionPageState extends State<StudySessionPage> {
   Future<void> _finishStudySession() async {
     int minutes = sessions.fold(0, (a, b) => a + b);
 
-    // Cập nhật trạng thái
     List<bool> updatedStatus = List.from(widget.allStatus);
-    List<String> finishedTasks =
-        []; // 🔥 ĐÃ THÊM: Danh sách chứa tên các task đã tick
+    List<String> finishedTasks = [];
 
     for (int i = 0; i < sessionDone.length; i++) {
       if (sessionDone[i] == true) {
         int originalIdx = widget.originalIndices[i];
         updatedStatus[originalIdx] = true;
-        finishedTasks.add(widget.goalsForRoom[i]); // 🔥 Lưu tên task đã tick
+        finishedTasks.add(widget.goalsForRoom[i]);
       }
     }
 
-    // 1. Lưu lịch sử
     await FirebaseFirestore.instance.collection('study_history').add({
       'userId': widget.userId,
       'time': DateTime.now(),
       'planTitle': widget.planTitle,
-      'goals': widget.goalsForRoom, // Tổng nhiệm vụ ban đầu mang vào phòng
-      'completedGoalsList': finishedTasks, // 🔥 CHỈ LƯU NHỮNG MỤC ĐÃ TICK
+      'goals': widget.goalsForRoom,
+      'completedGoalsList': finishedTasks,
       'completed': sessionDone.where((e) => e).length,
       'total': widget.goalsForRoom.length,
       'minutes': minutes,
     });
 
-    // 2. Cập nhật Kế hoạch hoặc Xoá nếu đã xong hết
     if (widget.planId != null) {
       bool isAllFinished = updatedStatus.every((status) => status == true);
       if (isAllFinished) {
@@ -425,7 +418,7 @@ class _StudySessionPageState extends State<StudySessionPage> {
           Center(
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor, // Nút dùng màu chủ đề cho đẹp
+                backgroundColor: primaryColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),
                 ),
@@ -445,78 +438,132 @@ class _StudySessionPageState extends State<StudySessionPage> {
     );
   }
 
-  // Các hàm build UI giữ nguyên như cũ (Timer, CheckboxListTile dùng sessionDone)...
+  // 🔥 ĐÃ THÊM: Hàm hiển thị cảnh báo khi thoát ngang
+  Future<bool> _showExitWarning() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text("Thoát phiên học?"),
+          ],
+        ),
+        content: const Text(
+          "Phiên học đang diễn ra. Nếu thoát ngang, mọi tiến trình và điểm số của buổi này sẽ không được lưu lại.\n\nBạn có chắc chắn muốn thoát?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Ở lại", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () {
+              timer?.cancel(); // Dừng bộ đếm thời gian
+              Navigator.pop(context, true);
+            },
+            child: const Text("Thoát", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return confirm ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     double progress = sessions.isEmpty
         ? 0
         : currentSeconds /
               (sessions[currentIndex.clamp(0, sessions.length - 1)] * 60);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.planTitle),
-        backgroundColor: primaryColor,
-      ),
-      body: Column(
-        children: [
-          const SizedBox(height: 20),
-          Text(
-            isBreak ? "Giải lao ☕" : "Đang học 📚",
-            style: TextStyle(
-              fontSize: 22,
+
+    // 🔥 ĐÃ THÊM: Bọc Scaffold trong WillPopScope để chặn nút Back
+    return WillPopScope(
+      onWillPop: _showExitWarning,
+      child: Scaffold(
+        appBar: AppBar(
+          // 🔥 ĐÃ SỬA: Chỉnh Text màu trắng in đậm
+          title: Text(
+            widget.planTitle,
+            style: const TextStyle(
+              color: Colors.white,
               fontWeight: FontWeight.bold,
-              color: isBreak ? Colors.orange : primaryColor,
             ),
           ),
-          const SizedBox(height: 20),
-          Center(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 180,
-                  height: 180,
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 10,
-                    color: isBreak ? Colors.orange : primaryColor,
-                  ),
-                ),
-                Text(
-                  "${(currentSeconds ~/ 60).toString().padLeft(2, '0')}:${(currentSeconds % 60).toString().padLeft(2, '0')}",
-                  style: const TextStyle(
-                    fontSize: 35,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 30),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: widget.goalsForRoom.length,
-              itemBuilder: (_, i) => CheckboxListTile(
-                title: Text(
-                  widget.goalsForRoom[i],
-                  style: TextStyle(
-                    decoration: sessionDone[i]
-                        ? TextDecoration.lineThrough
-                        : null,
-                  ),
-                ),
-                value: sessionDone[i],
-                onChanged: (v) => setState(() => sessionDone[i] = v!),
+          backgroundColor: primaryColor,
+          foregroundColor:
+              Colors.white, // Đảm bảo mũi tên Back cũng là màu trắng
+        ),
+        body: Column(
+          children: [
+            const SizedBox(height: 20),
+            Text(
+              isBreak ? "Giải lao ☕" : "Đang học 📚",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: isBreak ? Colors.orange : primaryColor,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 20),
+            Center(
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: 180,
+                    height: 180,
+                    child: CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: 10,
+                      color: isBreak ? Colors.orange : primaryColor,
+                    ),
+                  ),
+                  Text(
+                    "${(currentSeconds ~/ 60).toString().padLeft(2, '0')}:${(currentSeconds % 60).toString().padLeft(2, '0')}",
+                    style: const TextStyle(
+                      fontSize: 35,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: widget.goalsForRoom.length,
+                itemBuilder: (_, i) => CheckboxListTile(
+                  title: Text(
+                    widget.goalsForRoom[i],
+                    style: TextStyle(
+                      decoration: sessionDone[i]
+                          ? TextDecoration.lineThrough
+                          : null,
+                    ),
+                  ),
+                  value: sessionDone[i],
+                  onChanged: (v) => setState(() => sessionDone[i] = v!),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Future<void> _initNotification() async {} // Giữ nguyên code thông báo của bạn
+
   @override
   void dispose() {
     timer?.cancel();

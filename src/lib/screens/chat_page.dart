@@ -1,4 +1,4 @@
-import 'dart:typed_data'; 
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,7 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+// import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ChatPage extends StatefulWidget {
   final String chatId;
@@ -39,7 +39,8 @@ class _ChatPageState extends State<ChatPage> {
 
       if (image != null) {
         setState(() {
-          _selectedImage = image; // Gán vào biến tạm để hiển thị preview trên UI
+          _selectedImage =
+              image; // Gán vào biến tạm để hiển thị preview trên UI
         });
       }
     } catch (e) {
@@ -51,71 +52,69 @@ class _ChatPageState extends State<ChatPage> {
       }
     }
   }
-  
+
   Future<void> _sendMessage() async {
-  final text = _msgController.text.trim();
-  
-  // Nếu không có cả chữ lẫn ảnh thì không làm gì
-  if (text.isEmpty && _selectedImage == null) return;
-  
-  // Tránh việc nhấn gửi liên tục khi đang upload
-  if (_isUploading) return;
+    final text = _msgController.text.trim();
 
-  setState(() => _isUploading = true);
+    // Nếu không có cả chữ lẫn ảnh thì không làm gì
+    if (text.isEmpty && _selectedImage == null) return;
 
-  try {
-    String? imageUrl;
+    // Tránh việc nhấn gửi liên tục khi đang upload
+    if (_isUploading) return;
 
-    if (_selectedImage != null) {
+    setState(() => _isUploading = true);
 
-      Uint8List imageData = await _selectedImage!.readAsBytes();
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      
-      Reference ref = FirebaseStorage.instance
-          .ref()
-          .child('chat_images/${widget.chatId}/$fileName');
+    try {
+      String? imageUrl;
 
-      UploadTask uploadTask = ref.putData(
-        imageData,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
+      if (_selectedImage != null) {
+        Uint8List imageData = await _selectedImage!.readAsBytes();
+        String fileName = DateTime.now().millisecondsSinceEpoch.toString();
 
-      TaskSnapshot snapshot = await uploadTask;
-      imageUrl = await snapshot.ref.getDownloadURL();
-    }
+        Reference ref = FirebaseStorage.instance.ref().child(
+          'chat_images/${widget.chatId}/$fileName',
+        );
 
-    _msgController.clear();
+        UploadTask uploadTask = ref.putData(
+          imageData,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
 
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.chatId)
-        .collection('messages')
-        .add({
-      'senderId': widget.currentUserId,
-      'text': text,
-      'imageUrl': imageUrl ?? '',
-      'type': imageUrl != null ? 'image' : 'text',
-      'timestamp': FieldValue.serverTimestamp(),
-      'deletedBy': [],
-    });
+        TaskSnapshot snapshot = await uploadTask;
+        imageUrl = await snapshot.ref.getDownloadURL();
+      }
 
-    // 3. RESET TRẠNG THÁI SAU KHI GỬI THÀNH CÔNG
-    setState(() {
-      _selectedImage = null;
-      _isUploading = false;
-    });
+      _msgController.clear();
 
-  } catch (e) {
-    debugPrint("Lỗi khi gửi tin nhắn: $e");
-    setState(() => _isUploading = false);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Không thể gửi tin nhắn. Vui lòng thử lại!")),
-      );
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .collection('messages')
+          .add({
+            'senderId': widget.currentUserId,
+            'text': text,
+            'imageUrl': imageUrl ?? '',
+            'type': imageUrl != null ? 'image' : 'text',
+            'timestamp': FieldValue.serverTimestamp(),
+            'deletedBy': [],
+          });
+
+      // 3. RESET TRẠNG THÁI SAU KHI GỬI THÀNH CÔNG
+      setState(() {
+        _selectedImage = null;
+        _isUploading = false;
+      });
+    } catch (e) {
+      debugPrint("Lỗi khi gửi tin nhắn: $e");
+      setState(() => _isUploading = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Không thể gửi tin nhắn. Vui lòng thử lại!")),
+        );
+      }
     }
   }
-}
 
   Future<void> _clearChatHistory() async {
     bool? confirm = await showDialog(
@@ -244,7 +243,8 @@ class _ChatPageState extends State<ChatPage> {
                     final data =
                         visibleMessages[index].data() as Map<String, dynamic>;
                     bool isMe = data['senderId'] == widget.currentUserId;
-                    bool isImage = data['type'] == 'image'; // Kiểm tra loại tin nhắn
+                    bool isImage =
+                        data['type'] == 'image'; // Kiểm tra loại tin nhắn
 
                     return Align(
                       alignment: isMe
@@ -252,9 +252,12 @@ class _ChatPageState extends State<ChatPage> {
                           : Alignment.centerLeft,
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
-                        padding: isImage 
+                        padding: isImage
                             ? const EdgeInsets.all(5) // Padding nhỏ cho ảnh
-                            : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            : const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
                         constraints: BoxConstraints(
                           maxWidth: MediaQuery.of(context).size.width * 0.75,
                         ),
@@ -282,28 +285,30 @@ class _ChatPageState extends State<ChatPage> {
                           ],
                         ),
                         // 🔥 ĐÃ THAY ĐỔI: Hiển thị Text hoặc Image
-                        child: isImage 
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(15),
-                              child: Image.network(
-                                data['imageUrl'],
-                                fit: BoxFit.cover,
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return const Padding(
-                                    padding: EdgeInsets.all(20),
-                                    child: CircularProgressIndicator(),
-                                  );
-                                },
+                        child: isImage
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(15),
+                                child: Image.network(
+                                  data['imageUrl'],
+                                  fit: BoxFit.cover,
+                                  loadingBuilder:
+                                      (context, child, loadingProgress) {
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return const Padding(
+                                          padding: EdgeInsets.all(20),
+                                          child: CircularProgressIndicator(),
+                                        );
+                                      },
+                                ),
+                              )
+                            : Text(
+                                data['text'] ?? '',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: isMe ? Colors.black87 : Colors.black,
+                                ),
                               ),
-                            )
-                          : Text(
-                              data['text'] ?? '',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: isMe ? Colors.black87 : Colors.black,
-                              ),
-                            ),
                       ),
                     );
                   },
@@ -325,8 +330,10 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ],
             ),
-            child: Column( // Sử dụng Column để chứa thêm phần Preview ảnh
-              mainAxisSize: MainAxisSize.min, // Giúp Container co giãn theo nội dung
+            child: Column(
+              // Sử dụng Column để chứa thêm phần Preview ảnh
+              mainAxisSize:
+                  MainAxisSize.min, // Giúp Container co giãn theo nội dung
               children: [
                 // --- HIỂN THỊ ẢNH XEM TRƯỚC (CHỈ HIỆN KHI CÓ ẢNH) ---
                 if (_selectedImage != null)
@@ -339,7 +346,11 @@ class _ChatPageState extends State<ChatPage> {
                           child: kIsWeb
                               ? Image.network(_selectedImage!.path, height: 80)
                               : Image.memory(
-                                  Uint8List.fromList(File(_selectedImage!.path).readAsBytesSync()),
+                                  Uint8List.fromList(
+                                    File(
+                                      _selectedImage!.path,
+                                    ).readAsBytesSync(),
+                                  ),
                                   height: 80,
                                 ),
                         ),
@@ -349,20 +360,31 @@ class _ChatPageState extends State<ChatPage> {
                           child: GestureDetector(
                             onTap: () => setState(() => _selectedImage = null),
                             child: Container(
-                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                              child: const Icon(Icons.close, size: 18, color: Colors.white),
+                              decoration: const BoxDecoration(
+                                color: Colors.black54,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                size: 18,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                
+
                 // --- DÒNG NHẬP TIN NHẮN (GIỮ NGUYÊN LAYOUT CŨ) ---
                 Row(
                   children: [
                     IconButton(
-                      icon: Icon(Icons.add_circle, color: primaryColor, size: 28),
+                      icon: Icon(
+                        Icons.add_circle,
+                        color: primaryColor,
+                        size: 28,
+                      ),
                       onPressed: _pickImage,
                     ),
                     const SizedBox(width: 4),
@@ -392,10 +414,17 @@ class _ChatPageState extends State<ChatPage> {
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
                             )
                           : IconButton(
-                              icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                              icon: const Icon(
+                                Icons.send,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                               onPressed: _sendMessage,
                             ),
                     ),

@@ -12,6 +12,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:esstudy/screens/ai_assistant_page.dart';
 import 'package:esstudy/screens/friends_page.dart'; // 🔥 ĐÃ THÊM IMPORT NÀY
 import 'package:esstudy/screens/statistics_page.dart'; // Đổi đường dẫn theo dự án của bạn
+import 'package:esstudy/screens/create_room_page.dart';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -456,7 +457,19 @@ class _HomePageState extends State<HomePage> {
             await Future.delayed(const Duration(milliseconds: 50));
             if (!context.mounted) return;
 
-            if (item.title == "Học Offline") {
+            if (item.title == "Tạo phòng") {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CreateRoomPage(
+                    userId: widget.userId,
+                    userName: widget.userName,
+                    userClass: widget.selectedClass,
+                  ),
+                ),
+              );
+              if (mounted) setState(() {});
+            } else if (item.title == "Học Offline") {
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -472,9 +485,15 @@ class _HomePageState extends State<HomePage> {
               );
               if (mounted) setState(() {});
             } else if (item.isSearch) {
+              // 🔥 ĐÃ SỬA: Truyền currentUserId vào RoomSearchPage
               await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const RoomSearchPage()),
+                MaterialPageRoute(
+                  builder: (_) => RoomSearchPage(
+                    currentUserId: widget.userId,
+                    currentUserName: widget.userName,
+                  ),
+                ),
               );
               if (mounted) setState(() {});
             } else if (item.title == "Kế hoạch") {
@@ -523,7 +542,6 @@ class _HomePageState extends State<HomePage> {
               );
               if (mounted) setState(() {});
             } else if (item.title == "Bạn bè") {
-              // 🔥 KÍCH HOẠT NÚT BẠN BÈ TẠI ĐÂY
               await Navigator.push(
                 context,
                 MaterialPageRoute(
