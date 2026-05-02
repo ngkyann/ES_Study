@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Để dùng Clipboard copy mã phòng
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -49,8 +49,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   final Map<String, RTCVideoRenderer> _remoteRenderers = {};
   final Map<String, String> _remoteNames = {};
 
-  bool _isMuted = false;
-  bool _isVideoOff = false;
+  // 🔥 LƯU TRẠNG THÁI CAM/MIC CỦA NGƯỜI KHÁC ĐỂ HIỂN THỊ AVATAR
+  final Map<String, Map<String, bool>> _remoteStates = {};
+
+  // 🔥 MẶC ĐỊNH LÀ TẮT KHI VỪA VÀO PHÒNG
+  bool _isMuted = true;
+  bool _isVideoOff = true;
   bool _isChatOpen = false;
 
   final TextEditingController _chatController = TextEditingController();
@@ -61,13 +65,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   late List<bool> _personalTaskStatus;
   late DateTime _joinTime;
 
-  // Hàng đợi cho tín hiệu mạng đến quá sớm
   final Map<String, List<RTCIceCandidate>> _candidateQueue = {};
-
   StreamSubscription? _participantsSub;
   StreamSubscription? _signalingSub;
 
-  // Cấu hình máy chủ Google STUN miễn phí
   final Map<String, dynamic> _iceServers = {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
@@ -98,23 +99,39 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   }
 
   Future<void> _initRoom() async {
-    // 1. Xin quyền & Mở Camera/Mic
     await [Permission.camera, Permission.microphone].request();
     await _localRenderer.initialize();
     try {
       _localStream = await navigator.mediaDevices.getUserMedia({
-        'video': true,
+        'video': true, // Cứ lấy luồng Video để sẵn
         'audio': {'echoCancellation': true, 'noiseSuppression': true},
       });
+
+      if (_localStream != null) {
+        // 🔥 MẶC ĐỊNH TẮT NGAY KHI VỪA LẤY ĐƯỢC LUỒNG
+        _localStream!.getAudioTracks().forEach(
+          (track) => track.enabled = false,
+        );
+        _localStream!.getVideoTracks().forEach(
+          (track) => track.enabled = false,
+        );
+
+        // 🔥 BẬT LOA NGOÀI ĐỂ NGHE ĐƯỢC TIẾNG TRÊN ĐIỆN THOẠI
+        Helper.setSpeakerphoneOn(true);
+      }
+
       if (mounted) setState(() => _localRenderer.srcObject = _localStream);
     } catch (e) {
       debugPrint("Lỗi Camera: $e");
     }
 
-    // 2. Tham gia Firebase
     final roomRef = FirebaseFirestore.instance
         .collection('study_rooms')
         .doc(widget.roomId);
+
+    // Đồng bộ trạng thái tắt mic/cam của mình lên Firebase lúc mới vào
+    final myInitialState = {'micOff': true, 'camOff': true};
+
     if (widget.isHost) {
       await roomRef.set({
         'hostId': widget.userId,
@@ -126,39 +143,54 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'participants': [widget.userId],
         'participantNames': {widget.userId: widget.userName},
+        'participantStates': {
+          widget.userId: myInitialState,
+        }, // 🔥 Thêm trạng thái
       });
       if (widget.isPrivate && widget.roomCode != null) _showRoomCodeDialog();
     } else {
       await roomRef.update({
         'participants': FieldValue.arrayUnion([widget.userId]),
         'participantNames.${widget.userId}': widget.userName,
+        'participantStates.${widget.userId}':
+            myInitialState, // 🔥 Thêm trạng thái
       });
     }
     _sendSystemMessage("${widget.userName} đã vào phòng.");
 
-    // 3. Lắng nghe người mới vào (Participants List)
+    // Lắng nghe thay đổi người tham gia VÀ trạng thái Mic/Cam của họ
     _participantsSub = roomRef.snapshots().listen((snap) {
       if (!snap.exists) return;
       final data = snap.data()!;
       final names = Map<String, dynamic>.from(data['participantNames'] ?? {});
+      final states = Map<String, dynamic>.from(data['participantStates'] ?? {});
+
+      // Cập nhật trạng thái hiển thị Mic/Cam của người khác
+      states.forEach((pid, stateData) {
+        if (pid != widget.userId) {
+          _remoteStates[pid] = {
+            'micOff': stateData['micOff'] == true,
+            'camOff': stateData['camOff'] == true,
+          };
+        }
+      });
 
       names.forEach((pid, pname) {
         if (pid != widget.userId && !_peers.containsKey(pid)) {
-          // Người mới! Chuẩn bị Renderer và gọi họ
           _remoteNames[pid] = pname;
           _createPeerConnection(pid, isCaller: true);
         }
       });
 
-      // Dọn dẹp người đã thoát
       final currentIds = names.keys.toSet();
       final myPeers = _peers.keys.toSet();
       for (var id in myPeers) {
         if (!currentIds.contains(id)) _removePeer(id);
       }
+
+      if (mounted) setState(() {});
     });
 
-    // 4. Lắng nghe hộp thư Tín hiệu Signaling (Của riêng mình)
     _signalingSub = FirebaseFirestore.instance
         .collection('study_rooms')
         .doc(widget.roomId)
@@ -171,13 +203,11 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
             if (change.type == DocumentChangeType.added) {
               final data = change.doc.data()!;
               _handleSignalingMessage(data['from'], data);
-              change.doc.reference.delete(); // Đọc xong xóa luôn
+              change.doc.reference.delete();
             }
           }
         });
   }
-
-  // ================= WEBRTC SIGNALING CORE =================
 
   Future<void> _createPeerConnection(
     String peerId, {
@@ -191,20 +221,20 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     _remoteRenderers[peerId] = renderer;
     if (mounted) setState(() {});
 
-    // Nhét Camera & Mic của mình vào kết nối
     if (_localStream != null) {
       _localStream!.getTracks().forEach((track) {
         pc.addTrack(track, _localStream!);
       });
     }
 
-    // Bắt luồng dữ liệu (Audio + Video) của người kia
-    pc.onAddStream = (MediaStream stream) {
-      renderer.srcObject = stream;
-      if (mounted) setState(() {});
+    // 🔥 ĐÃ SỬA: Dùng onTrack bắt chính xác cả Video và Audio
+    pc.onTrack = (event) {
+      if (event.streams.isNotEmpty) {
+        renderer.srcObject = event.streams[0];
+        if (mounted) setState(() {});
+      }
     };
 
-    // Tìm được đường truyền mạng (ICE) -> Gửi cho bạn kia
     pc.onIceCandidate = (candidate) {
       _sendSignaling(peerId, {
         'type': 'candidate',
@@ -213,10 +243,18 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     };
 
     if (isCaller) {
-      // Mình là người gọi -> Tạo Offer
       final offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       _sendSignaling(peerId, {'type': 'offer', 'sdp': offer.sdp});
+    }
+  }
+
+  void _drainQueue(String peerId, RTCPeerConnection pc) async {
+    if (_candidateQueue.containsKey(peerId)) {
+      for (var c in _candidateQueue[peerId]!) {
+        await pc.addCandidate(c);
+      }
+      _candidateQueue.remove(peerId);
     }
   }
 
@@ -225,12 +263,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     Map<String, dynamic> data,
   ) async {
     final type = data['type'];
-
-    // Nếu chưa có kết nối với người này thì tạo (bị gọi)
     if (!_peers.containsKey(fromPeerId)) {
       await _createPeerConnection(fromPeerId, isCaller: false);
     }
-
     final pc = _peers[fromPeerId]!;
 
     if (type == 'offer') {
@@ -238,18 +273,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       final answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       _sendSignaling(fromPeerId, {'type': 'answer', 'sdp': answer.sdp});
-
-      // Thả các Tọa độ (Candidates) bị kẹt trong hàng đợi ra
-      if (_candidateQueue.containsKey(fromPeerId)) {
-        for (var c in _candidateQueue[fromPeerId]!) {
-          await pc.addCandidate(c);
-        }
-        _candidateQueue.remove(fromPeerId);
-      }
+      _drainQueue(fromPeerId, pc);
     } else if (type == 'answer') {
       await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], type));
-    } else if (type == 'answer') {
-      await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], type));
+      _drainQueue(fromPeerId, pc);
     } else if (type == 'candidate') {
       final candMap = data['candidate'];
       final candidate = RTCIceCandidate(
@@ -258,9 +285,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         candMap['sdpMLineIndex'],
       );
 
-      // 🔥 ĐÃ SỬA LỖI: Dùng signalingState thay vì remoteDescription
-      // Trạng thái 'have-remote-offer' hoặc 'stable' (sau khi setRemoteDescription)
-      // cho biết máy đã sẵn sàng nhận Candidate
       if (pc.signalingState == RTCSignalingState.RTCSignalingStateStable ||
           pc.signalingState ==
               RTCSignalingState.RTCSignalingStateHaveRemoteOffer ||
@@ -268,7 +292,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
               RTCSignalingState.RTCSignalingStateHaveRemotePrAnswer) {
         await pc.addCandidate(candidate);
       } else {
-        // Nếu chưa sẵn sàng, nhốt vào hàng đợi
         _candidateQueue.putIfAbsent(fromPeerId, () => []).add(candidate);
       }
     }
@@ -291,10 +314,40 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     _remoteRenderers[peerId]?.dispose();
     _remoteRenderers.remove(peerId);
     _remoteNames.remove(peerId);
+    _remoteStates.remove(peerId);
     if (mounted) setState(() {});
   }
 
-  // =========================================================
+  // 🔥 ĐỒNG BỘ TRẠNG THÁI NÚT LÊN FIREBASE KHI TẮT/BẬT
+  void _toggleMic() {
+    if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
+      final track = _localStream!.getAudioTracks()[0];
+      track.enabled = !track.enabled; // Lật trạng thái
+      setState(() => _isMuted = !track.enabled);
+
+      // Báo cho mọi người biết mình đã tắt/bật mic
+      FirebaseFirestore.instance
+          .collection('study_rooms')
+          .doc(widget.roomId)
+          .update({'participantStates.${widget.userId}.micOff': _isMuted});
+    }
+  }
+
+  void _toggleVideo() {
+    if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
+      final track = _localStream!.getVideoTracks()[0];
+      track.enabled = !track.enabled;
+      setState(() => _isVideoOff = !track.enabled);
+
+      // Báo cho mọi người biết mình đã tắt/bật cam
+      FirebaseFirestore.instance
+          .collection('study_rooms')
+          .doc(widget.roomId)
+          .update({'participantStates.${widget.userId}.camOff': _isVideoOff});
+    }
+  }
+
+  // ================= BẢNG THÔNG BÁO VÀ TIỆN ÍCH KHÁC =================
 
   void _showRoomCodeDialog() {
     if (!mounted) return;
@@ -380,22 +433,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       );
   }
 
-  void _toggleMic() {
-    if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
-      final track = _localStream!.getAudioTracks()[0];
-      track.enabled = !track.enabled;
-      setState(() => _isMuted = !_isMuted);
-    }
-  }
-
-  void _toggleVideo() {
-    if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
-      final track = _localStream!.getVideoTracks()[0];
-      track.enabled = !track.enabled;
-      setState(() => _isVideoOff = !_isVideoOff);
-    }
-  }
-
   Future<void> _leaveRoom({required bool isFinishedNatural}) async {
     if (!isFinishedNatural) {
       final confirm = await showDialog<bool>(
@@ -451,6 +488,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       await roomRef.update({
         'participants': FieldValue.arrayRemove([widget.userId]),
         'participantNames.${widget.userId}': FieldValue.delete(),
+        'participantStates.${widget.userId}': FieldValue.delete(),
       });
       await _sendSystemMessage("${widget.userName} đã rời phòng.");
       if (currentParticipants <= 1) await roomRef.delete();
@@ -461,7 +499,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       return;
     }
 
-    // Tính điểm dựa trên thời gian thực tế
     final int actualSeconds = DateTime.now().difference(_joinTime).inSeconds;
     final int actualMinutes = (actualSeconds / 60).ceil();
     int earnedPoints = actualMinutes * currentParticipants;
@@ -570,6 +607,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   @override
   Widget build(BuildContext context) {
     List<Widget> videoWidgets = [];
+
+    // Bản thân
     videoWidgets.add(
       _buildVideoView(
         _localRenderer,
@@ -578,13 +617,18 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         _isMuted,
       ),
     );
+
+    // Những người khác: Dùng _remoteStates để hiển thị cho chuẩn xác
     _remoteRenderers.forEach((peerId, renderer) {
+      bool isRemoteCamOff = _remoteStates[peerId]?['camOff'] ?? false;
+      bool isRemoteMicOff = _remoteStates[peerId]?['micOff'] ?? false;
+
       videoWidgets.add(
         _buildVideoView(
           renderer,
           _remoteNames[peerId] ?? "Người dùng",
-          false,
-          false,
+          isRemoteCamOff,
+          isRemoteMicOff,
         ),
       );
     });
@@ -932,6 +976,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       clipBehavior: Clip.hardEdge,
       child: Stack(
         children: [
+          // Nếu Cam Tắt -> Hiện Avatar tròn. Nếu Bật -> Hiện Video mượt mà
           if (!isCamOff)
             RTCVideoView(
               renderer,
@@ -961,6 +1006,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
               ),
             ),
           ),
+          // Hiện icon Cấm Mic màu đỏ khi Muted
           if (isMuted)
             const Positioned(
               top: 10,
