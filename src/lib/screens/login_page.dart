@@ -207,6 +207,8 @@ class _LoginPageState extends State<LoginPage> {
                   "ID người dùng",
                   Icons.alternate_email,
                   _idController,
+                  textInputAction: _isLogin ? TextInputAction.done : TextInputAction.next,
+                  onSubmitted: (_) => _isLogin ? _handleAuth() : null, // Nếu đang ở Đăng nhập thì Enter là Login luôn
                 ),
                 const SizedBox(height: 16),
 
@@ -228,6 +230,8 @@ class _LoginPageState extends State<LoginPage> {
                   child: TextField(
                     controller: _passwordController,
                     obscureText: _obscureText,
+                    textInputAction: _isLogin ? TextInputAction.done : TextInputAction.next,
+                    onSubmitted: (_) => _isLogin ? _handleAuth() : null,
                     decoration: InputDecoration(
                       labelText: 'Mật khẩu',
                       prefixIcon: const Icon(Icons.lock),
@@ -359,8 +363,10 @@ class _LoginPageState extends State<LoginPage> {
   Widget _buildTextField(
     String label,
     IconData icon,
-    TextEditingController? controller,
-  ) {
+    TextEditingController? controller, {
+    TextInputAction? textInputAction, // Thêm cái này
+    ValueChanged<String>? onSubmitted, // Thêm cái này
+  }) {
     return Container(
       decoration: BoxDecoration(
         boxShadow: [
@@ -373,6 +379,8 @@ class _LoginPageState extends State<LoginPage> {
       ),
       child: TextField(
         controller: controller,
+        textInputAction: textInputAction, // Gán vào đây
+        onSubmitted: onSubmitted,         // Gán vào đây
         decoration: InputDecoration(
           labelText: label,
           prefixIcon: Icon(icon),
