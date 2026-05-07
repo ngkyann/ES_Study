@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 class SettingsPage extends StatefulWidget {
   final String userName;
@@ -28,6 +29,10 @@ class _SettingsPageState extends State<SettingsPage> {
   // 🔥 ĐÃ THÊM: Biến State cục bộ để cập nhật giao diện ngay khi sửa xong
   late String _currentUserName;
   late String _currentClass;
+  // 1. Khai báo các biến trạng thái trong State của ông
+Color _selectedColor = const Color(0xFF87CEFA); // Màu đang dùng hiện tại
+Color _customColor = const Color(0xFF87CEFA);   // Màu người dùng tự chọn (mặc định xanh nhạt)
+bool _isCustomActive = false;                   // Kiểm tra xem có đang dùng màu custom không
 
   @override
   void initState() {
@@ -121,7 +126,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildActionTile(
                 Icons.info,
                 "Thông tin phiên bản",
-                "Beta 0.6.5",
+                "Beta 0.6.7",
                 onTap: () => _showVersionInfoDialog(context),
               ),
               const SizedBox(height: 30),
@@ -199,6 +204,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+
   Widget _buildActionTile(
     IconData icon,
     String title,
@@ -227,6 +233,157 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  void _showColorPickerDialog() {
+    // Tạo một biến tạm để lưu màu trong lúc đang kéo (không trigger setState toàn app)
+    Color tempColor = _customColor; 
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder( // Dùng StatefulBuilder để chỉ update nội dung trong Dialog
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), // Bo góc Dialog
+            title: const Text('Chọn màu sắc'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // --- KHUNG TEST MÀU (PREVIEW BOX) ---
+                Container(
+                  width: double.infinity,
+                  height: 50,
+                  margin: const EdgeInsets.only(bottom: 15),
+                  decoration: BoxDecoration(
+                    color: tempColor,
+                    borderRadius: BorderRadius.circular(12), // Bo góc khung test
+                    border: Border.all(color: Colors.grey.shade300),
+                    boxShadow: [
+                      BoxShadow(
+                        color: tempColor.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+                  ),
+                  child: const Center(
+                    child: Text(
+                      "Màu hiển thị thử",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        shadows: [Shadow(blurRadius: 2, color: Colors.black45)],
+                      ),
+                    ),
+                  ),
+                ),
+                
+                // --- BẢNG CHỌN MÀU ---
+                SizedBox(
+                  width: double.maxFinite,
+                  height: MediaQuery.of(context).size.height * 0.4,
+                  child: SingleChildScrollView(
+                    child: ColorPicker(
+                      pickerColor: tempColor,
+                      onColorChanged: (color) {
+                        // Chỉ cập nhật trạng thái bên trong Dialog, không gây lag App ngoài
+                        setDialogState(() => tempColor = color);
+                      },
+                      pickerAreaHeightPercent: 0.7,
+                      enableAlpha: false,
+                      displayThumbColor: true,
+                      // Bo góc cho vùng chọn màu (tùy thuộc vào phiên bản thư viện)
+                      pickerAreaBorderRadius: BorderRadius.circular(15), 
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: tempColor, // Nút "Xong" có màu đang chọn luôn
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () {
+                  // CHỈ ĐỒNG BỘ KHI CLICK "XONG"
+                  _applyNewColor(tempColor); 
+                  setState(() {
+                    _customColor = tempColor;
+                    _isCustomActive = true;
+                  });
+                  Navigator.pop(context);
+                },
+                child: const Text('Xong'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _applyNewColor(Color color) async {
+    setState(() {
+      _selectedColor = color;
+      primaryColor = color; // Biến global của ông
+      if (themeNotifier != null) {
+        themeNotifier.value = color; // Báo cho ValueListenableBuilder đổi màu toàn app
+      }
+    });
+    
+    // Lưu vào máy để lần sau mở app vẫn còn
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('theme_color', color.value);
+  }
+
+  Widget _buildColorOption(Color color, {bool isRainbow = false}) {
+    // Check xem màu này có đang được chọn không
+    bool isSelected = (_selectedColor.value == color.value) && !isRainbow;
+    if (isRainbow) isSelected = _isCustomActive;
+
+    return GestureDetector(
+      onTap: () {
+        if (isRainbow) {
+          _applyNewColor(_customColor);
+          setState(() => _isCustomActive = true);
+          _showColorPickerDialog();
+        } else {
+          _applyNewColor(color);
+          setState(() => _isCustomActive = false);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? primaryColor : Colors.transparent, // Dùng primaryColor làm viền
+            width: 2
+          ),
+        ),
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: isRainbow 
+              ? const SweepGradient(colors: [Colors.red, Colors.yellow, Colors.green, Colors.blue, Colors.red]) 
+              : null,
+            color: isRainbow ? null : color,
+          ),
+          child: isRainbow 
+            ? const Icon(Icons.add, size: 18, color: Colors.white) 
+            : (isSelected ? const Icon(Icons.check, size: 18, color: Colors.white) : null),
+        ),
+      ),
+    );
+  }
+
   Widget _buildThemeSelector() {
     return Container(
       color: Colors.white,
@@ -238,10 +395,10 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: const EdgeInsets.only(top: 8.0),
           child: Row(
             children: [
-              _buildColorCircle(const Color(0xFF87CEFA)),
-              _buildColorCircle(Colors.green),
-              _buildColorCircle(Colors.orange),
-              _buildColorCircle(Colors.purple),
+              _buildColorOption(const Color(0xFF87CEFA)), // Xanh dương nhạt
+              _buildColorOption(Colors.black),            // Đen
+              _buildColorOption(Colors.green),            // Xanh lá
+              _buildColorOption(_customColor, isRainbow: true), // Nút cầu vồng
             ],
           ),
         ),
@@ -249,34 +406,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildColorCircle(Color color) {
-    bool isSelected = primaryColor == color;
-    return GestureDetector(
-      onTap: () async {
-        setState(() {
-          primaryColor = color;
-          themeNotifier.value = color;
-        });
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt('theme_color', color.value);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: isSelected
-              ? Border.all(color: Colors.black45, width: 2)
-              : null,
-        ),
-        child: isSelected
-            ? const Icon(Icons.check, color: Colors.white, size: 18)
-            : null,
-      ),
-    );
-  }
 
   Widget _buildLogoutButton(BuildContext context) {
     return Padding(
