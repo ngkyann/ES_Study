@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:esstudy/constants/colors.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class OnlineRoomPage extends StatefulWidget {
   final bool isHost;
@@ -40,39 +42,55 @@ class OnlineRoomPage extends StatefulWidget {
 }
 
 class _OnlineRoomPageState extends State<OnlineRoomPage> {
-  // Bản thân
+  // WEBRTC
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   MediaStream? _localStream;
-
-  // Lưới người dùng khác
   final Map<String, RTCPeerConnection> _peers = {};
   final Map<String, RTCVideoRenderer> _remoteRenderers = {};
   final Map<String, String> _remoteNames = {};
-
-  // 🔥 LƯU TRẠNG THÁI CAM/MIC CỦA NGƯỜI KHÁC ĐỂ HIỂN THỊ AVATAR
   final Map<String, Map<String, bool>> _remoteStates = {};
 
-  // 🔥 MẶC ĐỊNH LÀ TẮT KHI VỪA VÀO PHÒNG
   bool _isMuted = true;
   bool _isVideoOff = true;
   bool _isChatOpen = false;
 
+  // CHAT & NOTIFICATIONS
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  int _unreadMessages = 0;
+  bool _isFirstMessageFetch =
+      true; // 🔥 FIX: Cờ chặn đếm tin nhắn cũ lúc mới vào phòng
 
+  // HỆ THỐNG
   int _remainingSeconds = 0;
   Timer? _timer;
   late List<bool> _personalTaskStatus;
-  late DateTime _joinTime;
+  final player = AudioPlayer();
+
+  // ANTI-AFK
+  final Random _random = Random();
+  int _maxAfkChecks = 0;
+  int _afkCheckCount = 0;
+  int _secondsSinceLastAfk = 0;
+  int _nextAfkTargetSeconds = 0;
+  bool _showAfkBubble = false;
+  int _afkTimeoutSeconds = 300;
+  double _bubbleX = 0.5;
+  double _bubbleY = 0.5;
+  bool _isAfkDialogOpen = false;
 
   final Map<String, List<RTCIceCandidate>> _candidateQueue = {};
   StreamSubscription? _participantsSub;
   StreamSubscription? _signalingSub;
+  StreamSubscription? _messageSub;
 
   final Map<String, dynamic> _iceServers = {
     'iceServers': [
       {'urls': 'stun:stun.l.google.com:19302'},
       {'urls': 'stun:stun1.l.google.com:19302'},
+      {'urls': 'stun:stun2.l.google.com:19302'},
+      {'urls': 'stun:stun3.l.google.com:19302'},
+      {'urls': 'stun:stun4.l.google.com:19302'},
     ],
   };
 
@@ -80,15 +98,38 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   void initState() {
     super.initState();
     _personalTaskStatus = List.generate(widget.goals.length, (_) => false);
-    _joinTime = DateTime.now();
-    _startTimer();
+
+    // _maxAfkChecks = widget.duration ~/ 15;
+    // if (_maxAfkChecks > 0) {
+    //   _nextAfkTargetSeconds = _random.nextInt(121) + 780;
+    // }
+    _maxAfkChecks = widget.duration ~/ 15;
+    if (_maxAfkChecks > 0) {
+      _nextAfkTargetSeconds = _random.nextInt(121) + 780;
+    }
     _initRoom();
+    _startTimer();
   }
 
   void _startTimer() {
     _remainingSeconds = widget.duration * 60;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
+
+      if (_showAfkBubble) {
+        setState(() => _afkTimeoutSeconds--);
+        if (_afkTimeoutSeconds <= 0) {
+          timer.cancel();
+          _failAfkCheck();
+          return;
+        }
+      } else if (_afkCheckCount < _maxAfkChecks) {
+        _secondsSinceLastAfk++;
+        if (_secondsSinceLastAfk >= _nextAfkTargetSeconds) {
+          _triggerAfkBubble();
+        }
+      }
+
       if (_remainingSeconds > 0) {
         setState(() => _remainingSeconds--);
       } else {
@@ -103,39 +144,48 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     await _localRenderer.initialize();
     try {
       _localStream = await navigator.mediaDevices.getUserMedia({
-        'video': true, // Cứ lấy luồng Video để sẵn
+        'video': true,
         'audio': {'echoCancellation': true, 'noiseSuppression': true},
       });
 
       if (_localStream != null) {
-        // 🔥 MẶC ĐỊNH TẮT NGAY KHI VỪA LẤY ĐƯỢC LUỒNG
         _localStream!.getAudioTracks().forEach(
           (track) => track.enabled = false,
         );
         _localStream!.getVideoTracks().forEach(
           (track) => track.enabled = false,
         );
-
-        // 🔥 BẬT LOA NGOÀI ĐỂ NGHE ĐƯỢC TIẾNG TRÊN ĐIỆN THOẠI
         Helper.setSpeakerphoneOn(true);
       }
-
       if (mounted) setState(() => _localRenderer.srcObject = _localStream);
     } catch (e) {
       debugPrint("Lỗi Camera: $e");
     }
 
+    String myClass = "Lớp ?";
+    int myPoints = 0;
+    if (widget.isHost) {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .get();
+      if (userDoc.exists) {
+        myClass = userDoc.data()?['class'] ?? "Lớp ?";
+        myPoints = userDoc.data()?['points'] ?? 0;
+      }
+    }
+
     final roomRef = FirebaseFirestore.instance
         .collection('study_rooms')
         .doc(widget.roomId);
-
-    // Đồng bộ trạng thái tắt mic/cam của mình lên Firebase lúc mới vào
     final myInitialState = {'micOff': true, 'camOff': true};
 
     if (widget.isHost) {
       await roomRef.set({
         'hostId': widget.userId,
         'hostName': widget.userName,
+        'hostClass': myClass,
+        'hostPoints': myPoints,
         'duration': widget.duration,
         'maxMembers': widget.maxMembers,
         'isPrivate': widget.isPrivate,
@@ -143,29 +193,54 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'participants': [widget.userId],
         'participantNames': {widget.userId: widget.userName},
-        'participantStates': {
-          widget.userId: myInitialState,
-        }, // 🔥 Thêm trạng thái
+        'participantStates': {widget.userId: myInitialState},
       });
       if (widget.isPrivate && widget.roomCode != null) _showRoomCodeDialog();
     } else {
       await roomRef.update({
         'participants': FieldValue.arrayUnion([widget.userId]),
         'participantNames.${widget.userId}': widget.userName,
-        'participantStates.${widget.userId}':
-            myInitialState, // 🔥 Thêm trạng thái
+        'participantStates.${widget.userId}': myInitialState,
       });
     }
     _sendSystemMessage("${widget.userName} đã vào phòng.");
 
-    // Lắng nghe thay đổi người tham gia VÀ trạng thái Mic/Cam của họ
+    _messageSub = FirebaseFirestore.instance
+        .collection('study_rooms')
+        .doc(widget.roomId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .limit(1)
+        .snapshots()
+        .listen((snap) {
+          if (snap.docChanges.isNotEmpty &&
+              snap.docChanges.first.type == DocumentChangeType.added) {
+            // 🔥 FIX: Bỏ qua tin nhắn load lần đầu tiên để không hiện chấm đỏ sai
+            if (_isFirstMessageFetch) {
+              _isFirstMessageFetch = false;
+              return;
+            }
+
+            final msg = snap.docChanges.first.doc.data();
+            if (msg != null &&
+                msg['senderId'] != widget.userId &&
+                msg['senderId'] != 'system') {
+              if (!_isChatOpen && mounted) {
+                setState(() => _unreadMessages++);
+                try {
+                  player.play(AssetSource('sounds/ting.mp3'));
+                } catch (_) {}
+              }
+            }
+          }
+        });
+
     _participantsSub = roomRef.snapshots().listen((snap) {
       if (!snap.exists) return;
       final data = snap.data()!;
       final names = Map<String, dynamic>.from(data['participantNames'] ?? {});
       final states = Map<String, dynamic>.from(data['participantStates'] ?? {});
 
-      // Cập nhật trạng thái hiển thị Mic/Cam của người khác
       states.forEach((pid, stateData) {
         if (pid != widget.userId) {
           _remoteStates[pid] = {
@@ -178,7 +253,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       names.forEach((pid, pname) {
         if (pid != widget.userId && !_peers.containsKey(pid)) {
           _remoteNames[pid] = pname;
-          _createPeerConnection(pid, isCaller: true);
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _createPeerConnection(pid, isCaller: true);
+          });
         }
       });
 
@@ -187,7 +264,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       for (var id in myPeers) {
         if (!currentIds.contains(id)) _removePeer(id);
       }
-
       if (mounted) setState(() {});
     });
 
@@ -209,6 +285,142 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         });
   }
 
+  void _triggerAfkBubble() {
+    setState(() {
+      _showAfkBubble = true;
+      _afkTimeoutSeconds = 300;
+      _bubbleX = _random.nextDouble();
+      _bubbleY = _random.nextDouble();
+      _afkCheckCount++;
+      _secondsSinceLastAfk = 0;
+      _nextAfkTargetSeconds = _random.nextInt(121) + 780;
+    });
+    try {
+      player.play(AssetSource('sounds/ting.mp3'));
+    } catch (_) {}
+  }
+
+  void _failAfkCheck() {
+    if (_isAfkDialogOpen) Navigator.pop(context);
+    _leaveRoomLogic(isFailedAFK: true, isFinishedNatural: false);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text("Phiên học bị hủy"),
+          ],
+        ),
+        content: const Text(
+          "Bạn đã treo máy quá 5 phút mà không phản hồi bong bóng điểm danh. Phiên học đã bị hủy và không được tính điểm.",
+        ),
+        actions: [
+          Center(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: const Text(
+                "Đã hiểu",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onBubbleTap() {
+    final TextEditingController afkController = TextEditingController();
+    _isAfkDialogOpen = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.mark_chat_unread, color: primaryColor),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                "Báo cáo tiến độ!",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Chào bạn! Bạn đang học gì thế? Ghi chú lại một chút nhé để chứng minh bạn vẫn đang tập trung!",
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: afkController,
+              autofocus: true,
+              maxLines: 2,
+              decoration: InputDecoration(
+                hintText: "Ví dụ: Đang giải toán...",
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: primaryColor, width: 2),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () {
+              if (afkController.text.trim().isNotEmpty) {
+                Navigator.pop(ctx);
+                setState(() => _showAfkBubble = false);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      "Ôi chúa ơi! Bạn lười quá, gõ ít nhất 1 chữ đi nào!",
+                    ),
+                  ),
+                );
+              }
+            },
+            child: const Text(
+              "Tiếp tục học",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    ).then((_) => _isAfkDialogOpen = false);
+  }
+
+  // 🔥 FIX: Dùng addStream và onAddStream chuẩn để hết lỗi kẹt Cam
   Future<void> _createPeerConnection(
     String peerId, {
     required bool isCaller,
@@ -222,17 +434,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     if (mounted) setState(() {});
 
     if (_localStream != null) {
-      _localStream!.getTracks().forEach((track) {
-        pc.addTrack(track, _localStream!);
-      });
+      pc.addStream(_localStream!);
     }
 
-    // 🔥 ĐÃ SỬA: Dùng onTrack bắt chính xác cả Video và Audio
-    pc.onTrack = (event) {
-      if (event.streams.isNotEmpty) {
-        renderer.srcObject = event.streams[0];
-        if (mounted) setState(() {});
-      }
+    pc.onAddStream = (MediaStream stream) {
+      renderer.srcObject = stream;
+      if (mounted) setState(() {});
     };
 
     pc.onIceCandidate = (candidate) {
@@ -263,9 +470,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     Map<String, dynamic> data,
   ) async {
     final type = data['type'];
-    if (!_peers.containsKey(fromPeerId)) {
+    if (!_peers.containsKey(fromPeerId))
       await _createPeerConnection(fromPeerId, isCaller: false);
-    }
     final pc = _peers[fromPeerId]!;
 
     if (type == 'offer') {
@@ -284,12 +490,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         candMap['sdpMid'],
         candMap['sdpMLineIndex'],
       );
-
-      if (pc.signalingState == RTCSignalingState.RTCSignalingStateStable ||
-          pc.signalingState ==
-              RTCSignalingState.RTCSignalingStateHaveRemoteOffer ||
-          pc.signalingState ==
-              RTCSignalingState.RTCSignalingStateHaveRemotePrAnswer) {
+      if (pc.signalingState == RTCSignalingState.RTCSignalingStateStable) {
         await pc.addCandidate(candidate);
       } else {
         _candidateQueue.putIfAbsent(fromPeerId, () => []).add(candidate);
@@ -318,14 +519,11 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     if (mounted) setState(() {});
   }
 
-  // 🔥 ĐỒNG BỘ TRẠNG THÁI NÚT LÊN FIREBASE KHI TẮT/BẬT
   void _toggleMic() {
     if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
       final track = _localStream!.getAudioTracks()[0];
-      track.enabled = !track.enabled; // Lật trạng thái
+      track.enabled = !track.enabled;
       setState(() => _isMuted = !track.enabled);
-
-      // Báo cho mọi người biết mình đã tắt/bật mic
       FirebaseFirestore.instance
           .collection('study_rooms')
           .doc(widget.roomId)
@@ -338,8 +536,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       final track = _localStream!.getVideoTracks()[0];
       track.enabled = !track.enabled;
       setState(() => _isVideoOff = !track.enabled);
-
-      // Báo cho mọi người biết mình đã tắt/bật cam
       FirebaseFirestore.instance
           .collection('study_rooms')
           .doc(widget.roomId)
@@ -347,7 +543,175 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     }
   }
 
-  // ================= BẢNG THÔNG BÁO VÀ TIỆN ÍCH KHÁC =================
+  Future<void> _leaveRoom({required bool isFinishedNatural}) async {
+    if (!isFinishedNatural) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red),
+              SizedBox(width: 8),
+              Text("Thoát giữa chừng?"),
+            ],
+          ),
+          content: const Text(
+            "Bạn có chắc muốn rời đi? Rời phòng lúc này sẽ KHÔNG được cộng điểm và tiến trình không được lưu.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                "Tiếp tục học",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                "Thoát luôn",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    await _leaveRoomLogic(
+      isFailedAFK: false,
+      isFinishedNatural: isFinishedNatural,
+    );
+  }
+
+  Future<void> _leaveRoomLogic({
+    required bool isFailedAFK,
+    required bool isFinishedNatural,
+  }) async {
+    _timer?.cancel();
+
+    for (var id in _peers.keys) {
+      _peers[id]?.close();
+    }
+
+    final roomRef = FirebaseFirestore.instance
+        .collection('study_rooms')
+        .doc(widget.roomId);
+    final roomSnap = await roomRef.get();
+    int currentParticipants = 1;
+
+    if (roomSnap.exists) {
+      final data = roomSnap.data() as Map<String, dynamic>;
+      currentParticipants = List.from(data['participants'] ?? []).length;
+      await roomRef.update({
+        'participants': FieldValue.arrayRemove([widget.userId]),
+        'participantNames.${widget.userId}': FieldValue.delete(),
+        'participantStates.${widget.userId}': FieldValue.delete(),
+      });
+      await _sendSystemMessage("${widget.userName} đã rời phòng.");
+      if (currentParticipants <= 1) await roomRef.delete();
+    }
+
+    if (isFailedAFK || !isFinishedNatural) {
+      if (mounted && !isFailedAFK) {
+        Navigator.pop(context);
+      }
+      return;
+    }
+
+    final int actualMinutes = widget.duration;
+    int earnedPoints = actualMinutes * currentParticipants;
+
+    List<String> finishedTasks = [];
+    for (int i = 0; i < widget.goals.length; i++) {
+      if (_personalTaskStatus[i]) finishedTasks.add(widget.goals[i]);
+    }
+
+    await FirebaseFirestore.instance.collection('study_history').add({
+      'userId': widget.userId,
+      'time': DateTime.now(),
+      'planTitle': "${widget.planTitle} (Học Online)",
+      'goals': widget.goals,
+      'completedGoalsList': finishedTasks,
+      'completed': finishedTasks.length,
+      'total': widget.goals.length,
+      'minutes': actualMinutes,
+    });
+
+    final userRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId);
+    final userDoc = await userRef.get();
+    int newStreak = 1;
+    DateTime now = DateTime.now();
+    DateTime today = DateTime(now.year, now.month, now.day);
+
+    if (userDoc.exists && userDoc.data() != null) {
+      final userData = userDoc.data()!;
+      int currentStreak = userData['streakCount'] ?? 0;
+      Timestamp? lastStudyTs = userData['lastStudyDate'];
+      if (lastStudyTs != null) {
+        DateTime lastStudy = lastStudyTs.toDate();
+        DateTime lastStudyDay = DateTime(
+          lastStudy.year,
+          lastStudy.month,
+          lastStudy.day,
+        );
+        int difference = today.difference(lastStudyDay).inDays;
+        if (difference == 0) {
+          newStreak = currentStreak;
+        } else if (difference == 1) {
+          newStreak = currentStreak + 1;
+        }
+      }
+    }
+
+    await userRef.set({
+      'points': FieldValue.increment(earnedPoints),
+      'streakCount': newStreak,
+      'lastStudyDate': Timestamp.fromDate(now),
+    }, SetOptions(merge: true));
+
+    if (mounted) {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text("Xuất sắc! 🎉", textAlign: TextAlign.center),
+          content: Text(
+            "Bạn đã kiên trì suốt $actualMinutes phút!\nSố người cùng học: $currentParticipants người\n\n🎁 Thưởng: +$earnedPoints điểm",
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16),
+          ),
+          actions: [
+            Center(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  "Nhận thưởng",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      Navigator.pop(context);
+    }
+  }
 
   void _showRoomCodeDialog() {
     if (!mounted) return;
@@ -433,166 +797,13 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       );
   }
 
-  Future<void> _leaveRoom({required bool isFinishedNatural}) async {
-    if (!isFinishedNatural) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-          title: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.red),
-              SizedBox(width: 8),
-              Text("Thoát giữa chừng?"),
-            ],
-          ),
-          content: const Text(
-            "Nếu rời đi bây giờ, bạn sẽ KHÔNG nhận được điểm thưởng và tiến độ của bạn sẽ bị hủy bỏ. Chắc chắn thoát?",
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text("Tiếp tục học"),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text(
-                "Vẫn thoát",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-    }
-
-    _timer?.cancel();
-
-    for (var id in _peers.keys) {
-      _peers[id]?.close();
-    }
-
-    final roomRef = FirebaseFirestore.instance
-        .collection('study_rooms')
-        .doc(widget.roomId);
-    final roomSnap = await roomRef.get();
-    int currentParticipants = 1;
-
-    if (roomSnap.exists) {
-      final data = roomSnap.data() as Map<String, dynamic>;
-      currentParticipants = List.from(data['participants'] ?? []).length;
-      await roomRef.update({
-        'participants': FieldValue.arrayRemove([widget.userId]),
-        'participantNames.${widget.userId}': FieldValue.delete(),
-        'participantStates.${widget.userId}': FieldValue.delete(),
-      });
-      await _sendSystemMessage("${widget.userName} đã rời phòng.");
-      if (currentParticipants <= 1) await roomRef.delete();
-    }
-
-    if (!isFinishedNatural) {
-      if (mounted) Navigator.pop(context);
-      return;
-    }
-
-    final int actualSeconds = DateTime.now().difference(_joinTime).inSeconds;
-    final int actualMinutes = (actualSeconds / 60).ceil();
-    int earnedPoints = actualMinutes * currentParticipants;
-
-    List<String> finishedTasks = [];
-    for (int i = 0; i < widget.goals.length; i++) {
-      if (_personalTaskStatus[i]) finishedTasks.add(widget.goals[i]);
-    }
-
-    await FirebaseFirestore.instance.collection('study_history').add({
-      'userId': widget.userId,
-      'time': DateTime.now(),
-      'planTitle': "${widget.planTitle} (Học Online)",
-      'goals': widget.goals,
-      'completedGoalsList': finishedTasks,
-      'completed': finishedTasks.length,
-      'total': widget.goals.length,
-      'minutes': actualMinutes,
-    });
-
-    final userRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.userId);
-    final userDoc = await userRef.get();
-    int newStreak = 1;
-    DateTime now = DateTime.now();
-    DateTime today = DateTime(now.year, now.month, now.day);
-
-    if (userDoc.exists && userDoc.data() != null) {
-      final userData = userDoc.data()!;
-      int currentStreak = userData['streakCount'] ?? 0;
-      Timestamp? lastStudyTs = userData['lastStudyDate'];
-      if (lastStudyTs != null) {
-        DateTime lastStudy = lastStudyTs.toDate();
-        DateTime lastStudyDay = DateTime(
-          lastStudy.year,
-          lastStudy.month,
-          lastStudy.day,
-        );
-        int difference = today.difference(lastStudyDay).inDays;
-        if (difference == 0)
-          newStreak = currentStreak;
-        else if (difference == 1)
-          newStreak = currentStreak + 1;
-      }
-    }
-    await userRef.set({
-      'points': FieldValue.increment(earnedPoints),
-      'streakCount': newStreak,
-      'lastStudyDate': Timestamp.fromDate(now),
-    }, SetOptions(merge: true));
-
-    if (mounted) {
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text("Xuất sắc! 🎉", textAlign: TextAlign.center),
-          content: Text(
-            "Thời gian học: $actualMinutes phút!\nSố người cùng cố gắng: $currentParticipants người\n\n🎁 Thưởng: +$earnedPoints điểm",
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16),
-          ),
-          actions: [
-            Center(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                ),
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  "Nhận thưởng",
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-      Navigator.pop(context);
-    }
-  }
-
   @override
   void dispose() {
     _timer?.cancel();
     _participantsSub?.cancel();
     _signalingSub?.cancel();
+    _messageSub?.cancel();
+    player.dispose();
     for (var id in _peers.keys) {
       _peers[id]?.close();
       _remoteRenderers[id]?.dispose();
@@ -607,8 +818,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   @override
   Widget build(BuildContext context) {
     List<Widget> videoWidgets = [];
-
-    // Bản thân
     videoWidgets.add(
       _buildVideoView(
         _localRenderer,
@@ -617,12 +826,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         _isMuted,
       ),
     );
-
-    // Những người khác: Dùng _remoteStates để hiển thị cho chuẩn xác
     _remoteRenderers.forEach((peerId, renderer) {
       bool isRemoteCamOff = _remoteStates[peerId]?['camOff'] ?? false;
       bool isRemoteMicOff = _remoteStates[peerId]?['micOff'] ?? false;
-
       videoWidgets.add(
         _buildVideoView(
           renderer,
@@ -632,6 +838,289 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         ),
       );
     });
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final double safeLeft = 20 + _bubbleX * (screenWidth - 100);
+    final double safeTop = 100 + _bubbleY * (screenHeight - 250);
+
+    Widget mainBody = Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: GridView.count(
+                    crossAxisCount: videoWidgets.length <= 2 ? 1 : 2,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childAspectRatio: videoWidgets.length <= 2 ? 1.5 : 1.0,
+                    children: videoWidgets,
+                  ),
+                ),
+              ),
+
+              if (_isChatOpen)
+                Expanded(
+                  flex: 1,
+                  child: Container(
+                    color: Colors.white,
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          color: primaryColor.withOpacity(0.1),
+                          width: double.infinity,
+                          child: const Text(
+                            "Khung Chat",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('study_rooms')
+                                .doc(widget.roomId)
+                                .collection('messages')
+                                .orderBy('timestamp', descending: true)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData)
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              final docs = snapshot.data!.docs;
+                              return ListView.builder(
+                                reverse: true,
+                                controller: _scrollController,
+                                padding: const EdgeInsets.all(8),
+                                itemCount: docs.length,
+                                itemBuilder: (context, index) {
+                                  final msg =
+                                      docs[index].data()
+                                          as Map<String, dynamic>;
+                                  final isMe = msg['senderId'] == widget.userId;
+                                  final isSystem = msg['isSystem'] ?? false;
+                                  if (isSystem)
+                                    return Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                        ),
+                                        child: Text(
+                                          msg['text'],
+                                          style: const TextStyle(
+                                            color: Colors.grey,
+                                            fontSize: 12,
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  return Align(
+                                    alignment: isMe
+                                        ? Alignment.centerRight
+                                        : Alignment.centerLeft,
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isMe
+                                            ? primaryColor.withOpacity(0.9)
+                                            : Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: isMe
+                                            ? CrossAxisAlignment.end
+                                            : CrossAxisAlignment.start,
+                                        children: [
+                                          if (!isMe)
+                                            Text(
+                                              msg['senderName'],
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 10,
+                                                color: Colors.black54,
+                                              ),
+                                            ),
+                                          Text(
+                                            msg['text'],
+                                            style: TextStyle(
+                                              color: isMe
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            border: Border(
+                              top: BorderSide(color: Colors.grey.shade300),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _chatController,
+                                  decoration: const InputDecoration(
+                                    hintText: "Nhập tin nhắn...",
+                                    border: InputBorder.none,
+                                  ),
+                                  onSubmitted: (_) => _sendMessage(),
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.send, color: primaryColor),
+                                onPressed: _sendMessage,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          color: Colors.black87,
+          child: SafeArea(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildControlButton(
+                  icon: _isMuted ? Icons.mic_off : Icons.mic,
+                  label: "Mic",
+                  color: _isMuted ? Colors.red : Colors.white,
+                  onTap: _toggleMic,
+                ),
+                _buildControlButton(
+                  icon: _isVideoOff ? Icons.videocam_off : Icons.videocam,
+                  label: "Cam",
+                  color: _isVideoOff ? Colors.red : Colors.white,
+                  onTap: _toggleVideo,
+                ),
+                _buildControlButton(
+                  icon: Icons.checklist,
+                  label: "Nhiệm vụ",
+                  color: Colors.white,
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      builder: (ctx) => Container(
+                        padding: const EdgeInsets.all(16),
+                        height: 300,
+                        child: Column(
+                          children: [
+                            const Text(
+                              "Nhiệm vụ của bạn",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Expanded(
+                              child: ListView.builder(
+                                itemCount: widget.goals.length,
+                                itemBuilder: (_, i) => StatefulBuilder(
+                                  builder: (ctx, setState) => CheckboxListTile(
+                                    title: Text(widget.goals[i]),
+                                    value: _personalTaskStatus[i],
+                                    onChanged: (val) {
+                                      setState(
+                                        () => _personalTaskStatus[i] = val!,
+                                      );
+                                      this.setState(() {});
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                _buildControlButton(
+                  icon: Icons.people,
+                  label: "Nhóm",
+                  color: Colors.white,
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      builder: (ctx) => Container(
+                        padding: const EdgeInsets.all(16),
+                        height: 300,
+                        child: Column(
+                          children: [
+                            const Text(
+                              "Người tham gia",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Expanded(
+                              child: ListView(
+                                children: [
+                                  ListTile(
+                                    title: Text("${widget.userName} (Bạn)"),
+                                  ),
+                                  ..._remoteNames.values.map(
+                                    (name) => ListTile(title: Text(name)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                _buildControlButton(
+                  icon: Icons.call_end,
+                  label: "Thoát",
+                  color: Colors.red,
+                  bgColor: Colors.red.withOpacity(0.2),
+                  onTap: () => _leaveRoom(isFinishedNatural: false),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
 
     return WillPopScope(
       onWillPop: () async {
@@ -667,295 +1156,112 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
           ),
           centerTitle: true,
           actions: [
-            IconButton(
-              icon: Icon(
-                _isChatOpen ? Icons.chat_bubble : Icons.chat_bubble_outline,
-                color: Colors.white,
-              ),
-              onPressed: () => setState(() => _isChatOpen = !_isChatOpen),
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            Expanded(
-              child: Row(
+            // 🔥 FIX: Dùng SizedBox bọc Stack để chấm đỏ không bị tràn viền
+            SizedBox(
+              width: 50,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
                 children: [
-                  Expanded(
-                    flex: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: GridView.count(
-                        crossAxisCount: videoWidgets.length <= 2 ? 1 : 2,
-                        mainAxisSpacing: 8,
-                        crossAxisSpacing: 8,
-                        childAspectRatio: videoWidgets.length <= 2 ? 1.5 : 1.0,
-                        children: videoWidgets,
-                      ),
+                  IconButton(
+                    icon: Icon(
+                      _isChatOpen
+                          ? Icons.chat_bubble
+                          : Icons.chat_bubble_outline,
+                      color: Colors.white,
                     ),
+                    onPressed: () {
+                      setState(() {
+                        _isChatOpen = !_isChatOpen;
+                        if (_isChatOpen) _unreadMessages = 0;
+                      });
+                    },
                   ),
-
-                  if (_isChatOpen)
-                    Expanded(
-                      flex: 1,
+                  if (_unreadMessages > 0 && !_isChatOpen)
+                    Positioned(
+                      right: 6,
+                      top: 8,
                       child: Container(
-                        color: Colors.white,
-                        child: Column(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              color: primaryColor.withOpacity(0.1),
-                              width: double.infinity,
-                              child: const Text(
-                                "Khung Chat",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: StreamBuilder<QuerySnapshot>(
-                                stream: FirebaseFirestore.instance
-                                    .collection('study_rooms')
-                                    .doc(widget.roomId)
-                                    .collection('messages')
-                                    .orderBy('timestamp', descending: true)
-                                    .snapshots(),
-                                builder: (context, snapshot) {
-                                  if (!snapshot.hasData)
-                                    return const Center(
-                                      child: CircularProgressIndicator(),
-                                    );
-                                  final docs = snapshot.data!.docs;
-                                  return ListView.builder(
-                                    reverse: true,
-                                    controller: _scrollController,
-                                    padding: const EdgeInsets.all(8),
-                                    itemCount: docs.length,
-                                    itemBuilder: (context, index) {
-                                      final msg =
-                                          docs[index].data()
-                                              as Map<String, dynamic>;
-                                      final isMe =
-                                          msg['senderId'] == widget.userId;
-                                      final isSystem = msg['isSystem'] ?? false;
-                                      if (isSystem)
-                                        return Center(
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 4,
-                                            ),
-                                            child: Text(
-                                              msg['text'],
-                                              style: const TextStyle(
-                                                color: Colors.grey,
-                                                fontSize: 12,
-                                                fontStyle: FontStyle.italic,
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      return Align(
-                                        alignment: isMe
-                                            ? Alignment.centerRight
-                                            : Alignment.centerLeft,
-                                        child: Container(
-                                          margin: const EdgeInsets.symmetric(
-                                            vertical: 4,
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 8,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isMe
-                                                ? primaryColor.withOpacity(0.9)
-                                                : Colors.grey.shade200,
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment: isMe
-                                                ? CrossAxisAlignment.end
-                                                : CrossAxisAlignment.start,
-                                            children: [
-                                              if (!isMe)
-                                                Text(
-                                                  msg['senderName'],
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 10,
-                                                    color: Colors.black54,
-                                                  ),
-                                                ),
-                                              Text(
-                                                msg['text'],
-                                                style: TextStyle(
-                                                  color: isMe
-                                                      ? Colors.white
-                                                      : Colors.black87,
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                border: Border(
-                                  top: BorderSide(color: Colors.grey.shade300),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _chatController,
-                                      decoration: const InputDecoration(
-                                        hintText: "Nhập tin nhắn...",
-                                        border: InputBorder.none,
-                                      ),
-                                      onSubmitted: (_) => _sendMessage(),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.send, color: primaryColor),
-                                    onPressed: _sendMessage,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                        padding: const EdgeInsets.all(5),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '$_unreadMessages',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 15),
-              color: Colors.black87,
-              child: SafeArea(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildControlButton(
-                      icon: _isMuted ? Icons.mic_off : Icons.mic,
-                      label: "Mic",
-                      color: _isMuted ? Colors.red : Colors.white,
-                      onTap: _toggleMic,
-                    ),
-                    _buildControlButton(
-                      icon: _isVideoOff ? Icons.videocam_off : Icons.videocam,
-                      label: "Cam",
-                      color: _isVideoOff ? Colors.red : Colors.white,
-                      onTap: _toggleVideo,
-                    ),
-                    _buildControlButton(
-                      icon: Icons.checklist,
-                      label: "Nhiệm vụ",
-                      color: Colors.white,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          builder: (ctx) => Container(
-                            padding: const EdgeInsets.all(16),
-                            height: 300,
-                            child: Column(
-                              children: [
-                                const Text(
-                                  "Nhiệm vụ của bạn",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: ListView.builder(
-                                    itemCount: widget.goals.length,
-                                    itemBuilder: (_, i) => StatefulBuilder(
-                                      builder: (ctx, setState) =>
-                                          CheckboxListTile(
-                                            title: Text(widget.goals[i]),
-                                            value: _personalTaskStatus[i],
-                                            onChanged: (val) {
-                                              setState(
-                                                () => _personalTaskStatus[i] =
-                                                    val!,
-                                              );
-                                              this.setState(() {});
-                                            },
-                                          ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+          ],
+        ),
+        body: Stack(
+          children: [
+            mainBody,
+            if (_showAfkBubble)
+              Positioned(
+                left: safeLeft,
+                top: safeTop,
+                child: GestureDetector(
+                  onTap: _onBubbleTap,
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.4),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
                             ),
+                          ],
+                        ),
+                        child: Text(
+                          "${_afkTimeoutSeconds ~/ 60}:${(_afkTimeoutSeconds % 60).toString().padLeft(2, '0')}",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
-                        );
-                      },
-                    ),
-                    _buildControlButton(
-                      icon: Icons.people,
-                      label: "Nhóm",
-                      color: Colors.white,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          builder: (ctx) => Container(
-                            padding: const EdgeInsets.all(16),
-                            height: 300,
-                            child: Column(
-                              children: [
-                                const Text(
-                                  "Người tham gia",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: ListView(
-                                    children: [
-                                      ListTile(
-                                        title: Text("${widget.userName} (Bạn)"),
-                                      ),
-                                      ..._remoteNames.values.map(
-                                        (name) => ListTile(title: Text(name)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: primaryColor,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryColor.withOpacity(0.5),
+                              blurRadius: 15,
+                              spreadRadius: 4,
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                    _buildControlButton(
-                      icon: Icons.call_end,
-                      label: "Thoát",
-                      color: Colors.red,
-                      bgColor: Colors.red.withOpacity(0.2),
-                      onTap: () => _leaveRoom(isFinishedNatural: false),
-                    ),
-                  ],
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.mark_chat_unread,
+                          color: Colors.white,
+                          size: 35,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -976,7 +1282,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       clipBehavior: Clip.hardEdge,
       child: Stack(
         children: [
-          // Nếu Cam Tắt -> Hiện Avatar tròn. Nếu Bật -> Hiện Video mượt mà
           if (!isCamOff)
             RTCVideoView(
               renderer,
@@ -1006,7 +1311,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
               ),
             ),
           ),
-          // Hiện icon Cấm Mic màu đỏ khi Muted
           if (isMuted)
             const Positioned(
               top: 10,

@@ -74,6 +74,7 @@ class LeaderboardPage extends StatelessWidget {
                   return _buildLeaderboardItem(
                     rank,
                     userData['name'] ?? 'Ẩn danh',
+                    userId, // 🔥 TRUYỀN THÊM USER ID VÀO ĐÂY
                     userData['class'] ?? 'Lớp ?',
                     userData['points'] ?? 0,
                     isMe,
@@ -119,11 +120,11 @@ class LeaderboardPage extends StatelessWidget {
               topLeft: Radius.circular(30),
               topRight: Radius.circular(30),
             ),
-            boxShadow: [
+            boxShadow: const [
               BoxShadow(
                 color: Colors.black26,
                 blurRadius: 10,
-                offset: const Offset(0, -2),
+                offset: Offset(0, -2),
               ),
             ],
           ),
@@ -151,6 +152,16 @@ class LeaderboardPage extends StatelessWidget {
                           fontSize: 16,
                         ),
                       ),
+                      // 🔥 HIỂN THỊ ID Ở THANH CÁ NHÂN
+                      Text(
+                        "@$currentUserId",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -174,6 +185,7 @@ class LeaderboardPage extends StatelessWidget {
   Widget _buildLeaderboardItem(
     int rank,
     String name,
+    String userId, // 🔥 THÊM THAM SỐ USER ID
     String className,
     int points,
     bool isMe,
@@ -215,8 +227,12 @@ class LeaderboardPage extends StatelessWidget {
                       color: Colors.black87,
                     ),
                   ),
+                  const SizedBox(height: 2),
+                  // 🔥 HIỂN THỊ ID (@userid) VÀ LỚP HỌC TRÊN 1 DÒNG
                   Text(
-                    className,
+                    "@$userId • $className",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                   ),
                 ],

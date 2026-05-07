@@ -30,9 +30,11 @@ class _SettingsPageState extends State<SettingsPage> {
   late String _currentUserName;
   late String _currentClass;
   // 1. Khai báo các biến trạng thái trong State của ông
-Color _selectedColor = const Color(0xFF87CEFA); // Màu đang dùng hiện tại
-Color _customColor = const Color(0xFF87CEFA);   // Màu người dùng tự chọn (mặc định xanh nhạt)
-bool _isCustomActive = false;                   // Kiểm tra xem có đang dùng màu custom không
+  Color _selectedColor = const Color(0xFF87CEFA); // Màu đang dùng hiện tại
+  Color _customColor = const Color(
+    0xFF87CEFA,
+  ); // Màu người dùng tự chọn (mặc định xanh nhạt)
+  bool _isCustomActive = false; // Kiểm tra xem có đang dùng màu custom không
 
   @override
   void initState() {
@@ -126,7 +128,7 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
               _buildActionTile(
                 Icons.info,
                 "Thông tin phiên bản",
-                "Beta 0.6.7",
+                "Beta 0.8.0",
                 onTap: () => _showVersionInfoDialog(context),
               ),
               const SizedBox(height: 30),
@@ -204,7 +206,6 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
     );
   }
 
-
   Widget _buildActionTile(
     IconData icon,
     String title,
@@ -235,14 +236,17 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
 
   void _showColorPickerDialog() {
     // Tạo một biến tạm để lưu màu trong lúc đang kéo (không trigger setState toàn app)
-    Color tempColor = _customColor; 
+    Color tempColor = _customColor;
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder( // Dùng StatefulBuilder để chỉ update nội dung trong Dialog
+      builder: (context) => StatefulBuilder(
+        // Dùng StatefulBuilder để chỉ update nội dung trong Dialog
         builder: (context, setDialogState) {
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), // Bo góc Dialog
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ), // Bo góc Dialog
             title: const Text('Chọn màu sắc'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -254,14 +258,16 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
                   margin: const EdgeInsets.only(bottom: 15),
                   decoration: BoxDecoration(
                     color: tempColor,
-                    borderRadius: BorderRadius.circular(12), // Bo góc khung test
+                    borderRadius: BorderRadius.circular(
+                      12,
+                    ), // Bo góc khung test
                     border: Border.all(color: Colors.grey.shade300),
                     boxShadow: [
                       BoxShadow(
                         color: tempColor.withOpacity(0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
-                      )
+                      ),
                     ],
                   ),
                   child: const Center(
@@ -275,7 +281,7 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
                     ),
                   ),
                 ),
-                
+
                 // --- BẢNG CHỌN MÀU ---
                 SizedBox(
                   width: double.maxFinite,
@@ -291,7 +297,7 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
                       enableAlpha: false,
                       displayThumbColor: true,
                       // Bo góc cho vùng chọn màu (tùy thuộc vào phiên bản thư viện)
-                      pickerAreaBorderRadius: BorderRadius.circular(15), 
+                      pickerAreaBorderRadius: BorderRadius.circular(15),
                     ),
                   ),
                 ),
@@ -304,13 +310,16 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: tempColor, // Nút "Xong" có màu đang chọn luôn
+                  backgroundColor:
+                      tempColor, // Nút "Xong" có màu đang chọn luôn
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 onPressed: () {
                   // CHỈ ĐỒNG BỘ KHI CLICK "XONG"
-                  _applyNewColor(tempColor); 
+                  _applyNewColor(tempColor);
                   setState(() {
                     _customColor = tempColor;
                     _isCustomActive = true;
@@ -330,11 +339,12 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
     setState(() {
       _selectedColor = color;
       primaryColor = color; // Biến global của ông
-      if (themeNotifier != null) {
-        themeNotifier.value = color; // Báo cho ValueListenableBuilder đổi màu toàn app
-      }
+
+      // Đã bỏ dòng if (themeNotifier != null) đi vì nó luôn đúng
+      themeNotifier.value =
+          color; // Báo cho ValueListenableBuilder đổi màu toàn app
     });
-    
+
     // Lưu vào máy để lần sau mở app vẫn còn
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('theme_color', color.value);
@@ -362,8 +372,10 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(
-            color: isSelected ? primaryColor : Colors.transparent, // Dùng primaryColor làm viền
-            width: 2
+            color: isSelected
+                ? primaryColor
+                : Colors.transparent, // Dùng primaryColor làm viền
+            width: 2,
           ),
         ),
         child: Container(
@@ -371,14 +383,24 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
           height: 30,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            gradient: isRainbow 
-              ? const SweepGradient(colors: [Colors.red, Colors.yellow, Colors.green, Colors.blue, Colors.red]) 
-              : null,
+            gradient: isRainbow
+                ? const SweepGradient(
+                    colors: [
+                      Colors.red,
+                      Colors.yellow,
+                      Colors.green,
+                      Colors.blue,
+                      Colors.red,
+                    ],
+                  )
+                : null,
             color: isRainbow ? null : color,
           ),
-          child: isRainbow 
-            ? const Icon(Icons.add, size: 18, color: Colors.white) 
-            : (isSelected ? const Icon(Icons.check, size: 18, color: Colors.white) : null),
+          child: isRainbow
+              ? const Icon(Icons.add, size: 18, color: Colors.white)
+              : (isSelected
+                    ? const Icon(Icons.check, size: 18, color: Colors.white)
+                    : null),
         ),
       ),
     );
@@ -396,8 +418,8 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
           child: Row(
             children: [
               _buildColorOption(const Color(0xFF87CEFA)), // Xanh dương nhạt
-              _buildColorOption(Colors.black),            // Đen
-              _buildColorOption(Colors.green),            // Xanh lá
+              _buildColorOption(Colors.black), // Đen
+              _buildColorOption(Colors.green), // Xanh lá
               _buildColorOption(_customColor, isRainbow: true), // Nút cầu vồng
             ],
           ),
@@ -405,7 +427,6 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
       ),
     );
   }
-
 
   Widget _buildLogoutButton(BuildContext context) {
     return Padding(
@@ -686,7 +707,7 @@ bool _isCustomActive = false;                   // Kiểm tra xem có đang dùn
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Phiên bản: Beta 0.6.5",
+                "Phiên bản: Beta 0.8.0",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,

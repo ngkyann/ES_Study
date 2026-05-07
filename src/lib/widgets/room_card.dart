@@ -82,14 +82,14 @@ class RoomCard extends StatelessWidget {
                         "${room.grade} • ${room.points} điểm",
                         style: const TextStyle(fontSize: 13),
                       ),
-                      Text(
-                        "Hạng: ${room.rank}",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: Colors.blueGrey,
-                        ),
-                      ),
+                      // Text(
+                      //   "Hạng: ${room.rank}",
+                      //   style: const TextStyle(
+                      //     fontWeight: FontWeight.bold,
+                      //     fontSize: 13,
+                      //     color: Colors.blueGrey,
+                      //   ),
+                      // ),
                     ],
                   ),
                   Column(
@@ -100,7 +100,7 @@ class RoomCard extends StatelessWidget {
                         style: TextStyle(fontSize: 11, color: Colors.grey),
                       ),
                       Text(
-                        "${room.startTime}/${room.endTime}",
+                        "${room.startTime} - ${room.endTime}",
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,

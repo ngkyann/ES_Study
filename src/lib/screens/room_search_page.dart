@@ -28,7 +28,14 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
     ...List.generate(12, (index) => 'Lớp ${index + 1}'),
   ];
 
-  // 🔥 Tính năng Nhập Mã tham gia phòng Private
+  // String _getRank(int points) {
+  //   if (points < 500) return "Tân binh";
+  //   if (points < 1500) return "Đồng";
+  //   if (points < 3000) return "Bạc";
+  //   if (points < 5000) return "Vàng";
+  //   return "Kim cương";
+  // }
+
   void _showJoinByCodeDialog(BuildContext context) {
     final TextEditingController codeController = TextEditingController();
 
@@ -64,7 +71,6 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                 return;
               }
 
-              // Tìm phòng có mã code này
               final snap = await FirebaseFirestore.instance
                   .collection('study_rooms')
                   .where('roomCode', isEqualTo: code)
@@ -80,12 +86,8 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
 
               final roomDoc = snap.docs.first;
               final data = roomDoc.data();
-              Navigator.pop(ctx); // Đóng bảng nhập mã
-              _showJoinRoomDialog(
-                context,
-                data,
-                roomDoc.id,
-              ); // Chuyển sang bảng chọn kế hoạch cá nhân
+              Navigator.pop(ctx);
+              _showJoinRoomDialog(context, data, roomDoc.id);
             },
             child: const Text(
               "Tìm kiếm",
@@ -145,8 +147,9 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                         .where('userId', isEqualTo: widget.currentUserId)
                         .snapshots(),
                     builder: (context, snapshot) {
-                      if (!snapshot.hasData)
+                      if (!snapshot.hasData) {
                         return const CircularProgressIndicator();
+                      }
 
                       final now = DateTime.now();
                       final validDocs = snapshot.data!.docs.where((doc) {
@@ -200,8 +203,9 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                                     ),
                               );
                               for (int i = 0; i < allTasks.length; i++) {
-                                if (!allStatus[i])
+                                if (!allStatus[i]) {
                                   goalsForRoom.add(allTasks[i]);
+                                }
                               }
                             } else {
                               selectedPlanTitle = "Học tự do";
@@ -266,7 +270,6 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
         foregroundColor: Colors.white,
         centerTitle: true,
       ),
-      // 🔥 NÚT NHẬP MÃ PHÒNG GÓC PHẢI
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: Colors.orangeAccent,
         icon: const Icon(Icons.vpn_key, color: Colors.white),
@@ -296,7 +299,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                   onChanged: (value) =>
                       setState(() => _searchId = value.trim()),
                   decoration: InputDecoration(
-                    hintText: "Tìm kiếm theo Host ID...",
+                    hintText: "Tìm kiếm theo @ID Host...",
                     prefixIcon: const Icon(Icons.search),
                     filled: true,
                     fillColor: Colors.grey.shade100,
@@ -342,67 +345,107 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting)
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(
                     child: CircularProgressIndicator(color: primaryColor),
                   );
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
-                  return _buildEmptyState("Chưa có phòng học nào đang mở.");
+                }
+
+                // 🔥 ĐÃ THÊM: Bọc state trống bằng RefreshIndicator
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return RefreshIndicator(
+                    color: primaryColor,
+                    backgroundColor: Colors.white,
+                    onRefresh: () async {
+                      await Future.delayed(const Duration(seconds: 1));
+                      setState(() {});
+                    },
+                    child: _buildEmptyState("Chưa có phòng học nào đang mở."),
+                  );
+                }
 
                 final docs = snapshot.data!.docs;
                 final List<DocumentSnapshot> filteredDocs = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
 
-                  // 🔥 ĐÃ THÊM LỌC: Bỏ qua các phòng Riêng tư (isPrivate == true)
                   if (data['isPrivate'] == true) return false;
 
                   final roomGrade = data['hostClass'] ?? "";
                   final hostId = data['hostId'] ?? "";
+
                   bool matchesGrade =
                       _selectedFilterGrade == "Tất cả" ||
                       roomGrade == _selectedFilterGrade;
+
+                  final cleanSearchId = _searchId
+                      .replaceAll('@', '')
+                      .toLowerCase();
                   bool matchesId =
-                      _searchId.isEmpty ||
-                      hostId.toLowerCase().contains(_searchId.toLowerCase());
+                      cleanSearchId.isEmpty ||
+                      hostId.toLowerCase().contains(cleanSearchId);
+
                   return matchesGrade && matchesId;
                 }).toList();
 
-                if (filteredDocs.isEmpty)
-                  return _buildEmptyState(
-                    "Không tìm thấy phòng công khai phù hợp.",
+                // 🔥 ĐÃ THÊM: Bọc state trống (sau khi lọc) bằng RefreshIndicator
+                if (filteredDocs.isEmpty) {
+                  return RefreshIndicator(
+                    color: primaryColor,
+                    backgroundColor: Colors.white,
+                    onRefresh: () async {
+                      await Future.delayed(const Duration(seconds: 1));
+                      setState(() {});
+                    },
+                    child: _buildEmptyState(
+                      "Không tìm thấy phòng công khai phù hợp.",
+                    ),
                   );
+                }
 
-                return ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  itemCount: filteredDocs.length,
-                  itemBuilder: (context, index) {
-                    final data =
-                        filteredDocs[index].data() as Map<String, dynamic>;
-
-                    StudyRoom room = StudyRoom(
-                      hostName: data['hostName'] ?? "Ẩn danh",
-                      hostId: data['hostId'] ?? "unknown",
-                      points: data['hostPoints'] ?? 0,
-                      rank: "Học sinh",
-                      currentMembers: List.from(
-                        data['participants'] ?? [],
-                      ).length,
-                      maxMembers: data['maxMembers'] ?? 4,
-                      startTime: "Đang diễn ra",
-                      endTime: "${data['duration'] ?? 30} phút",
-                      grade: data['hostClass'] ?? "Lớp ?",
-                    );
-
-                    return RoomCard(
-                      room: room,
-                      onJoin: () => _showJoinRoomDialog(
-                        context,
-                        data,
-                        filteredDocs[index].id,
-                      ),
-                    );
+                // 🔥 ĐÃ THÊM: Bọc ListView bằng RefreshIndicator
+                return RefreshIndicator(
+                  color: primaryColor,
+                  backgroundColor: Colors.white,
+                  onRefresh: () async {
+                    // Cố tình delay 1 giây để hiệu ứng load xoay xoay nhìn rõ ràng, mượt mà
+                    await Future.delayed(const Duration(seconds: 1));
+                    setState(() {});
                   },
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    itemCount: filteredDocs.length,
+                    itemBuilder: (context, index) {
+                      final data =
+                          filteredDocs[index].data() as Map<String, dynamic>;
+
+                      int hostPoints = data['hostPoints'] ?? 0;
+                      String rawHostId = data['hostId'] ?? "unknown";
+
+                      StudyRoom room = StudyRoom(
+                        hostName: data['hostName'] ?? "Ẩn danh",
+                        hostId: "@$rawHostId",
+                        points: hostPoints,
+                        // rank: _getRank(hostPoints),
+                        currentMembers: List.from(
+                          data['participants'] ?? [],
+                        ).length,
+                        maxMembers: data['maxMembers'] ?? 4,
+                        startTime: "Đang diễn ra",
+                        endTime: "${data['duration'] ?? 30} phút",
+                        grade: data['hostClass'] ?? "Lớp ?",
+                      );
+
+                      return RoomCard(
+                        room: room,
+                        onJoin: () => _showJoinRoomDialog(
+                          context,
+                          data,
+                          filteredDocs[index].id,
+                        ),
+                      );
+                    },
+                  ),
                 );
               },
             ),
@@ -414,6 +457,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
 
   Widget _buildEmptyState(String message) {
     return ListView(
+      // Bắt buộc phải có physics này thì ListView dù trống vẫn có thể vuốt pull-to-refresh
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(top: 80),
       children: [

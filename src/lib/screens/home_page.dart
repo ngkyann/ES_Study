@@ -427,7 +427,7 @@ class _HomePageState extends State<HomePage> {
                 MenuData(Icons.leaderboard, "Xếp hạng", Colors.redAccent),
                 MenuData(Icons.people, "Bạn bè", Colors.teal),
                 MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
-                MenuData(Icons.bar_chart, "Thống kê", Colors.indigo),
+                MenuData(Icons.emoji_events, "Thành tích", Colors.indigo),
                 MenuData(Icons.smart_toy, "Trợ lý ảo", Colors.blueAccent),
               ]),
               const SizedBox(height: 20),
@@ -520,7 +520,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
               if (mounted) setState(() {});
-            } else if (item.title == "Thống kê") {
+            } else if (item.title == "Thành tích") {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
