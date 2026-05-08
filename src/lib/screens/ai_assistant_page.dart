@@ -33,7 +33,6 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   void initState() {
     super.initState();
     _initModel();
-    // Tự động chào hỏi khi vừa vào trang
     _messages.add({
       'role': 'model',
       'text':
