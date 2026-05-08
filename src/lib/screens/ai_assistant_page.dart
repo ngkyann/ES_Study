@@ -33,7 +33,6 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   void initState() {
     super.initState();
     _initModel();
-    // Tự động chào hỏi khi vừa vào trang
     _messages.add({
       'role': 'model',
       'text':
@@ -97,6 +96,12 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
 
     while (!success && attempt < _modelPool.length) {
       try {
+        // 1. Phải khởi tạo lại model với Index mới trước khi chat
+        _model = GenerativeModel(
+          model: _modelPool[_currentModelIndex],
+          apiKey: _apiKey,
+        );
+
         final chat = _model.startChat(history: _history);
         final response = await chat.sendMessage(Content.text(prompt));
 
@@ -104,25 +109,34 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
           setState(() {
             final aiText = response.text ?? '...';
             _messages.add({'role': 'model', 'text': aiText});
+
+            // Lưu history (Giữ tối đa 10 tin nhắn gần nhất để tránh quá tải dung lượng)
             _history.add(Content.text(prompt));
             _history.add(Content.model([TextPart(aiText)]));
+            if (_history.length > 20) _history.removeRange(0, 2);
+
             _isLoading = false;
           });
           _scrollToBottom();
         }
         success = true;
       } catch (e) {
+        debugPrint("Lỗi tại model ${_modelPool[_currentModelIndex]}: $e");
         attempt++;
+
         if (attempt < _modelPool.length) {
+          // 2. Chờ 1 giây trước khi đổi model để tránh bị Google chặn IP
+          await Future.delayed(const Duration(seconds: 1));
           _currentModelIndex = (_currentModelIndex + 1) % _modelPool.length;
-          _initModel();
           continue;
         }
+
         if (mounted) {
           setState(() {
             _messages.add({
               'role': 'model',
-              'text': 'Hệ thống đang quá tải, thử lại sau nhé!',
+              'text':
+                  '⚠️ Hiện tại tất cả máy chủ AI đều bận. Ông đợi khoảng 30 giây rồi hỏi lại tôi nhé!',
             });
             _isLoading = false;
           });
