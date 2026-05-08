@@ -128,7 +128,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildActionTile(
                 Icons.info,
                 "Thông tin phiên bản",
-                "Beta 0.8.0",
+                "Beta 0.8.5",
                 onTap: () => _showVersionInfoDialog(context),
               ),
               const SizedBox(height: 30),
@@ -571,12 +571,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // --- CÁC HỘP THOẠI KHÁC ---
   void _showLanguageDialog(BuildContext context) {
-    final List<String> options = [
-      "Tiếng Việt",
-      "Tiếng Kinh",
-      "Tiếng mẹ đẻ",
-      "Vietnamese",
-    ];
+    final List<String> options = ["Tiếng Việt", "Tiếng Anh"];
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -684,9 +679,9 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showVersionInfoDialog(BuildContext context) {
-    final DateTime now = DateTime.now();
-    final String todayStr =
-        "${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}";
+    // final DateTime now = DateTime.now();
+    // final String todayStr =
+    //     "${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}";
 
     showDialog(
       context: context,
@@ -707,7 +702,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Phiên bản: Beta 0.8.0",
+                "Phiên bản: Beta 0.8.5",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -716,7 +711,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                "Cập nhật lần cuối: $todayStr",
+                "Cập nhật lần cuối: 09/05/2026",
                 style: TextStyle(color: Colors.grey.shade700, fontSize: 15),
               ),
               const SizedBox(height: 15),

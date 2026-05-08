@@ -6,7 +6,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'dart:io';
-// import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ChatPage extends StatefulWidget {
   final String chatId;
@@ -27,20 +26,19 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _msgController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
-  XFile? _selectedImage; // Lưu trữ ảnh đang chờ gửi
-  bool _isUploading = false; // Trạng thái đang tải lên
+  XFile? _selectedImage;
+  bool _isUploading = false;
 
   Future<void> _pickImage() async {
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 70, // Nén ảnh xuống 70% để giảm dung lượng khi upload
+        imageQuality: 70,
       );
 
       if (image != null) {
         setState(() {
-          _selectedImage =
-              image; // Gán vào biến tạm để hiển thị preview trên UI
+          _selectedImage = image;
         });
       }
     } catch (e) {
@@ -56,10 +54,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
 
-    // Nếu không có cả chữ lẫn ảnh thì không làm gì
     if (text.isEmpty && _selectedImage == null) return;
-
-    // Tránh việc nhấn gửi liên tục khi đang upload
     if (_isUploading) return;
 
     setState(() => _isUploading = true);
@@ -69,7 +64,8 @@ class _ChatPageState extends State<ChatPage> {
 
       if (_selectedImage != null) {
         Uint8List imageData = await _selectedImage!.readAsBytes();
-        String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+        // 🔥 FIX: Thêm đuôi .jpg để Storage và trình duyệt nhận diện chuẩn định dạng
+        String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
 
         Reference ref = FirebaseStorage.instance.ref().child(
           'chat_images/${widget.chatId}/$fileName',
@@ -99,7 +95,6 @@ class _ChatPageState extends State<ChatPage> {
             'deletedBy': [],
           });
 
-      // 3. RESET TRẠNG THÁI SAU KHI GỬI THÀNH CÔNG
       setState(() {
         _selectedImage = null;
         _isUploading = false;
@@ -110,7 +105,9 @@ class _ChatPageState extends State<ChatPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Không thể gửi tin nhắn. Vui lòng thử lại!")),
+          const SnackBar(
+            content: Text("Không thể gửi tin nhắn. Vui lòng thử lại!"),
+          ),
         );
       }
     }
@@ -244,7 +241,9 @@ class _ChatPageState extends State<ChatPage> {
                         visibleMessages[index].data() as Map<String, dynamic>;
                     bool isMe = data['senderId'] == widget.currentUserId;
                     bool isImage =
-                        data['type'] == 'image'; // Kiểm tra loại tin nhắn
+                        data['type'] == 'image' &&
+                        data['imageUrl'] != null &&
+                        data['imageUrl'].toString().isNotEmpty;
 
                     return Align(
                       alignment: isMe
@@ -252,8 +251,11 @@ class _ChatPageState extends State<ChatPage> {
                           : Alignment.centerLeft,
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
-                        padding: isImage
-                            ? const EdgeInsets.all(5) // Padding nhỏ cho ảnh
+                        padding:
+                            isImage &&
+                                (data['text'] == null ||
+                                    data['text'].toString().trim().isEmpty)
+                            ? const EdgeInsets.all(5)
                             : const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 12,
@@ -284,10 +286,23 @@ class _ChatPageState extends State<ChatPage> {
                               ),
                           ],
                         ),
-                        // 🔥 ĐÃ THAY ĐỔI: Hiển thị Text hoặc Image
-                        child: isImage
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(15),
+                        // 🔥 FIX: Hỗ trợ hiển thị cả ảnh và chữ trong cùng một tin nhắn
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isImage)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  isImage &&
+                                          (data['text'] == null ||
+                                              data['text']
+                                                  .toString()
+                                                  .trim()
+                                                  .isEmpty)
+                                      ? 15
+                                      : 8,
+                                ),
                                 child: Image.network(
                                   data['imageUrl'],
                                   fit: BoxFit.cover,
@@ -301,14 +316,23 @@ class _ChatPageState extends State<ChatPage> {
                                         );
                                       },
                                 ),
-                              )
-                            : Text(
-                                data['text'] ?? '',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: isMe ? Colors.black87 : Colors.black,
+                              ),
+                            if (data['text'] != null &&
+                                data['text'].toString().trim().isNotEmpty)
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  top: isImage ? 8.0 : 0,
+                                ),
+                                child: Text(
+                                  data['text'],
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: isMe ? Colors.black87 : Colors.black,
+                                  ),
                                 ),
                               ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -317,7 +341,6 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ),
 
-          // KHU VỰC NHẬP TIN NHẮN
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -331,11 +354,8 @@ class _ChatPageState extends State<ChatPage> {
               ],
             ),
             child: Column(
-              // Sử dụng Column để chứa thêm phần Preview ảnh
-              mainAxisSize:
-                  MainAxisSize.min, // Giúp Container co giãn theo nội dung
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // --- HIỂN THỊ ẢNH XEM TRƯỚC (CHỈ HIỆN KHI CÓ ẢNH) ---
                 if (_selectedImage != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8.0),
@@ -343,15 +363,19 @@ class _ChatPageState extends State<ChatPage> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
+                          // 🔥 FIX: Thay đổi cách render ảnh local để tránh tràn RAM gây crash
                           child: kIsWeb
-                              ? Image.network(_selectedImage!.path, height: 80)
-                              : Image.memory(
-                                  Uint8List.fromList(
-                                    File(
-                                      _selectedImage!.path,
-                                    ).readAsBytesSync(),
-                                  ),
+                              ? Image.network(
+                                  _selectedImage!.path,
                                   height: 80,
+                                  width: 80,
+                                  fit: BoxFit.cover,
+                                )
+                              : Image.file(
+                                  File(_selectedImage!.path),
+                                  height: 80,
+                                  width: 80,
+                                  fit: BoxFit.cover,
                                 ),
                         ),
                         Positioned(
@@ -376,7 +400,6 @@ class _ChatPageState extends State<ChatPage> {
                     ),
                   ),
 
-                // --- DÒNG NHẬP TIN NHẮN (GIỮ NGUYÊN LAYOUT CŨ) ---
                 Row(
                   children: [
                     IconButton(

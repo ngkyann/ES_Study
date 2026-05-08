@@ -58,8 +58,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   int _unreadMessages = 0;
-  bool _isFirstMessageFetch =
-      true; // 🔥 FIX: Cờ chặn đếm tin nhắn cũ lúc mới vào phòng
+  bool _isFirstMessageFetch = true;
 
   // HỆ THỐNG
   int _remainingSeconds = 0;
@@ -99,10 +98,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     super.initState();
     _personalTaskStatus = List.generate(widget.goals.length, (_) => false);
 
-    // _maxAfkChecks = widget.duration ~/ 15;
-    // if (_maxAfkChecks > 0) {
-    //   _nextAfkTargetSeconds = _random.nextInt(121) + 780;
-    // }
     _maxAfkChecks = widget.duration ~/ 15;
     if (_maxAfkChecks > 0) {
       _nextAfkTargetSeconds = _random.nextInt(121) + 780;
@@ -215,7 +210,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         .listen((snap) {
           if (snap.docChanges.isNotEmpty &&
               snap.docChanges.first.type == DocumentChangeType.added) {
-            // 🔥 FIX: Bỏ qua tin nhắn load lần đầu tiên để không hiện chấm đỏ sai
             if (_isFirstMessageFetch) {
               _isFirstMessageFetch = false;
               return;
@@ -236,7 +230,13 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         });
 
     _participantsSub = roomRef.snapshots().listen((snap) {
-      if (!snap.exists) return;
+      if (!snap.exists) {
+        if (!widget.isHost && mounted) {
+          _showHostLeftDialogAndExit();
+        }
+        return;
+      }
+
       final data = snap.data()!;
       final names = Map<String, dynamic>.from(data['participantNames'] ?? {});
       final states = Map<String, dynamic>.from(data['participantStates'] ?? {});
@@ -283,6 +283,51 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
             }
           }
         });
+  }
+
+  void _showHostLeftDialogAndExit() {
+    _timer?.cancel();
+    for (var id in _peers.keys) {
+      _peers[id]?.close();
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue),
+            SizedBox(width: 8),
+            Text("Phòng đã đóng"),
+          ],
+        ),
+        content: const Text(
+          "Chủ phòng (Host) đã rời đi. Phòng học đã bị giải tán, hẹn gặp lại bạn lần sau nhé!",
+        ),
+        actions: [
+          Center(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: const Text(
+                "Đã hiểu",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _triggerAfkBubble() {
@@ -420,7 +465,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     ).then((_) => _isAfkDialogOpen = false);
   }
 
-  // 🔥 FIX: Dùng addStream và onAddStream chuẩn để hết lỗi kẹt Cam
   Future<void> _createPeerConnection(
     String peerId, {
     required bool isCaller,
@@ -521,9 +565,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
 
   void _toggleMic() {
     if (_localStream != null && _localStream!.getAudioTracks().isNotEmpty) {
-      final track = _localStream!.getAudioTracks()[0];
-      track.enabled = !track.enabled;
-      setState(() => _isMuted = !track.enabled);
+      bool newMuteState = !_isMuted;
+      _localStream!.getAudioTracks()[0].enabled = !newMuteState;
+      setState(() => _isMuted = newMuteState);
+
       FirebaseFirestore.instance
           .collection('study_rooms')
           .doc(widget.roomId)
@@ -533,9 +578,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
 
   void _toggleVideo() {
     if (_localStream != null && _localStream!.getVideoTracks().isNotEmpty) {
-      final track = _localStream!.getVideoTracks()[0];
-      track.enabled = !track.enabled;
-      setState(() => _isVideoOff = !track.enabled);
+      bool newVideoState = !_isVideoOff;
+      _localStream!.getVideoTracks()[0].enabled = !newVideoState;
+      setState(() => _isVideoOff = newVideoState);
+
       FirebaseFirestore.instance
           .collection('study_rooms')
           .doc(widget.roomId)
@@ -607,13 +653,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     if (roomSnap.exists) {
       final data = roomSnap.data() as Map<String, dynamic>;
       currentParticipants = List.from(data['participants'] ?? []).length;
-      await roomRef.update({
-        'participants': FieldValue.arrayRemove([widget.userId]),
-        'participantNames.${widget.userId}': FieldValue.delete(),
-        'participantStates.${widget.userId}': FieldValue.delete(),
-      });
-      await _sendSystemMessage("${widget.userName} đã rời phòng.");
-      if (currentParticipants <= 1) await roomRef.delete();
+
+      if (widget.isHost) {
+        await roomRef.delete();
+      } else {
+        await roomRef.update({
+          'participants': FieldValue.arrayRemove([widget.userId]),
+          'participantNames.${widget.userId}': FieldValue.delete(),
+          'participantStates.${widget.userId}': FieldValue.delete(),
+        });
+        await _sendSystemMessage("${widget.userName} đã rời phòng.");
+      }
     }
 
     if (isFailedAFK || !isFinishedNatural) {
@@ -789,12 +839,13 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
           'timestamp': FieldValue.serverTimestamp(),
           'isSystem': false,
         });
-    if (_scrollController.hasClients)
+    if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
+    }
   }
 
   @override
@@ -849,8 +900,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         Expanded(
           child: Row(
             children: [
+              // CHIẾM 3 PHẦN NẾU CHAT ĐANG MỞ
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: GridView.count(
@@ -863,9 +915,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                 ),
               ),
 
+              // CHIẾM 2 PHẦN NẾU MỞ (MỞ RỘNG SO VỚI BẢN CŨ LÀ 1 PHẦN)
               if (_isChatOpen)
                 Expanded(
-                  flex: 1,
+                  flex: 2,
                   child: Container(
                     color: Colors.white,
                     child: Column(
@@ -907,7 +960,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                                           as Map<String, dynamic>;
                                   final isMe = msg['senderId'] == widget.userId;
                                   final isSystem = msg['isSystem'] ?? false;
-                                  if (isSystem)
+                                  if (isSystem) {
                                     return Center(
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(
@@ -923,6 +976,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                                         ),
                                       ),
                                     );
+                                  }
                                   return Align(
                                     alignment: isMe
                                         ? Alignment.centerRight
@@ -1014,108 +1068,181 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
           padding: const EdgeInsets.symmetric(vertical: 15),
           color: Colors.black87,
           child: SafeArea(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildControlButton(
-                  icon: _isMuted ? Icons.mic_off : Icons.mic,
-                  label: "Mic",
-                  color: _isMuted ? Colors.red : Colors.white,
-                  onTap: _toggleMic,
-                ),
-                _buildControlButton(
-                  icon: _isVideoOff ? Icons.videocam_off : Icons.videocam,
-                  label: "Cam",
-                  color: _isVideoOff ? Colors.red : Colors.white,
-                  onTap: _toggleVideo,
-                ),
-                _buildControlButton(
-                  icon: Icons.checklist,
-                  label: "Nhiệm vụ",
-                  color: Colors.white,
-                  onTap: () {
-                    showModalBottomSheet(
-                      context: context,
-                      builder: (ctx) => Container(
-                        padding: const EdgeInsets.all(16),
-                        height: 300,
-                        child: Column(
-                          children: [
-                            const Text(
-                              "Nhiệm vụ của bạn",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Expanded(
-                              child: ListView.builder(
-                                itemCount: widget.goals.length,
-                                itemBuilder: (_, i) => StatefulBuilder(
-                                  builder: (ctx, setState) => CheckboxListTile(
-                                    title: Text(widget.goals[i]),
-                                    value: _personalTaskStatus[i],
-                                    onChanged: (val) {
-                                      setState(
-                                        () => _personalTaskStatus[i] = val!,
-                                      );
-                                      this.setState(() {});
-                                    },
+            // DÙNG SINGLECHILDSCROLLVIEW ĐỂ TRÁNH TRÀN NẾU MÀN HÌNH NHỎ
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Container(
+                width: MediaQuery.of(
+                  context,
+                ).size.width, // Cố gắng dàn đều toàn màn hình
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildControlButton(
+                      icon: _isMuted ? Icons.mic_off : Icons.mic,
+                      label: "Mic",
+                      color: _isMuted ? Colors.red : Colors.white,
+                      onTap: _toggleMic,
+                    ),
+                    _buildControlButton(
+                      icon: _isVideoOff ? Icons.videocam_off : Icons.videocam,
+                      label: "Cam",
+                      color: _isVideoOff ? Colors.red : Colors.white,
+                      onTap: _toggleVideo,
+                    ),
+                    _buildControlButton(
+                      icon: Icons.checklist,
+                      label: "Nhiệm vụ",
+                      color: Colors.white,
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          builder: (ctx) => Container(
+                            padding: const EdgeInsets.all(16),
+                            height: 300,
+                            child: Column(
+                              children: [
+                                const Text(
+                                  "Nhiệm vụ của bạn",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                _buildControlButton(
-                  icon: Icons.people,
-                  label: "Nhóm",
-                  color: Colors.white,
-                  onTap: () {
-                    showModalBottomSheet(
-                      context: context,
-                      builder: (ctx) => Container(
-                        padding: const EdgeInsets.all(16),
-                        height: 300,
-                        child: Column(
-                          children: [
-                            const Text(
-                              "Người tham gia",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Expanded(
-                              child: ListView(
-                                children: [
-                                  ListTile(
-                                    title: Text("${widget.userName} (Bạn)"),
+                                Expanded(
+                                  child: ListView.builder(
+                                    itemCount: widget.goals.length,
+                                    itemBuilder: (_, i) => StatefulBuilder(
+                                      builder: (ctx, setState) =>
+                                          CheckboxListTile(
+                                            title: Text(widget.goals[i]),
+                                            value: _personalTaskStatus[i],
+                                            onChanged: (val) {
+                                              setState(
+                                                () => _personalTaskStatus[i] =
+                                                    val!,
+                                              );
+                                              this.setState(() {});
+                                            },
+                                          ),
+                                    ),
                                   ),
-                                  ..._remoteNames.values.map(
-                                    (name) => ListTile(title: Text(name)),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildControlButton(
+                      icon: Icons.people,
+                      label: "Nhóm",
+                      color: Colors.white,
+                      onTap: () {
+                        showModalBottomSheet(
+                          context: context,
+                          builder: (ctx) => Container(
+                            padding: const EdgeInsets.all(16),
+                            height: 300,
+                            child: Column(
+                              children: [
+                                const Text(
+                                  "Người tham gia",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: ListView(
+                                    children: [
+                                      ListTile(
+                                        title: Text("${widget.userName} (Bạn)"),
+                                      ),
+                                      ..._remoteNames.values.map(
+                                        (name) => ListTile(title: Text(name)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    // NÚT CHAT MỚI ĐƯỢC CHUYỂN XUỐNG ĐÂY
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isChatOpen = !_isChatOpen;
+                          if (_isChatOpen) _unreadMessages = 0;
+                        });
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _isChatOpen
+                                      ? Colors.white24
+                                      : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _isChatOpen
+                                      ? Icons.chat_bubble
+                                      : Icons.chat_bubble_outline,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                              ),
+                              if (_unreadMessages > 0 && !_isChatOpen)
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Text(
+                                      '$_unreadMessages',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            "Chat",
+                            style: TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                        ],
                       ),
-                    );
-                  },
+                    ),
+
+                    _buildControlButton(
+                      icon: Icons.call_end,
+                      label: "Thoát",
+                      color: Colors.red,
+                      bgColor: Colors.red.withOpacity(0.2),
+                      onTap: () => _leaveRoom(isFinishedNatural: false),
+                    ),
+                  ],
                 ),
-                _buildControlButton(
-                  icon: Icons.call_end,
-                  label: "Thoát",
-                  color: Colors.red,
-                  bgColor: Colors.red.withOpacity(0.2),
-                  onTap: () => _leaveRoom(isFinishedNatural: false),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -1129,6 +1256,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       },
       child: Scaffold(
         backgroundColor: Colors.black,
+        // NÚT CHAT Ở APPBAR ĐÃ ĐƯỢC LƯỢC BỎ BỚT NHƯNG GIỮ NGUYÊN CODE Ở GIỮA
         appBar: AppBar(
           backgroundColor: Colors.black87,
           elevation: 0,
@@ -1155,52 +1283,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
             ],
           ),
           centerTitle: true,
-          actions: [
-            // 🔥 FIX: Dùng SizedBox bọc Stack để chấm đỏ không bị tràn viền
-            SizedBox(
-              width: 50,
-              child: Stack(
-                alignment: Alignment.center,
-                clipBehavior: Clip.none,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      _isChatOpen
-                          ? Icons.chat_bubble
-                          : Icons.chat_bubble_outline,
-                      color: Colors.white,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _isChatOpen = !_isChatOpen;
-                        if (_isChatOpen) _unreadMessages = 0;
-                      });
-                    },
-                  ),
-                  if (_unreadMessages > 0 && !_isChatOpen)
-                    Positioned(
-                      right: 6,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '$_unreadMessages',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
         ),
         body: Stack(
           children: [

@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // Mới thêm
-import 'package:image_picker/image_picker.dart'; // Mới thêm
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/screens/settings_page.dart';
-import 'package:dio/dio.dart'; // Thêm để dùng cho chức năng tải ảnh, nếu chưa có hãy chạy: flutter pub add dio path_provider gallery_saver
-import 'package:path_provider/path_provider.dart';// Thư viện để lưu ảnh vào bộ sưu tập
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:gal/gal.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:universal_html/html.dart' as html;
-
 
 class ProfilePage extends StatefulWidget {
   final String userName;
@@ -35,7 +33,7 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final ImagePicker _picker = ImagePicker();
-  bool _isUploading = false; // Trạng thái loading khi upload ảnh
+  bool _isUploading = false;
 
   // --- HÀM 1: CHỌN VÀ UPLOAD ẢNH ---
   Future<void> _pickAndUploadImage() async {
@@ -55,29 +53,40 @@ class _ProfilePageState extends State<ProfilePage> {
           .child('avatars')
           .child('${widget.userId}.jpg');
 
-      // Upload dùng Bytes để chạy được cả Web và Android
       final bytes = await image.readAsBytes();
-      await storageRef.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+      await storageRef.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
 
-      // Lấy URL sau khi upload thành công
       String downloadUrl = await storageRef.getDownloadURL();
 
-      // Lưu URL vào Firestore
+      // 🔥 FIX LỖI CACHE: Thêm timestamp vào cuối URL để ép Flutter tải lại ảnh mới thay vì dùng ảnh cũ trong bộ nhớ đệm
+      String finalUrl = downloadUrl.contains('?')
+          ? '$downloadUrl&v=${DateTime.now().millisecondsSinceEpoch}'
+          : '$downloadUrl?v=${DateTime.now().millisecondsSinceEpoch}';
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
-          .update({'avatarUrl': downloadUrl});
+          .update({'avatarUrl': finalUrl});
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Đã đổi ảnh đại diện thành công!")),
+          const SnackBar(
+            content: Text("Đã đổi ảnh đại diện thành công!"),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
       debugPrint("Lỗi upload: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Lỗi upload: $e")),
+          SnackBar(
+            content: Text("Lỗi upload: $e"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -85,13 +94,12 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // --- HÀM 2: DOWNLOAD (CHỈ CHẠY KHI CÓ URL) ---
+  // --- HÀM 2: DOWNLOAD VÀ LƯU ẢNH ---
   Future<void> _saveImageUrlToGallery(String? url) async {
-    // 1. Kiểm tra xem user đã có ảnh trên server chưa
     if (url == null || url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Bạn chưa có ảnh đại diện để tải về. Hãy đổi ảnh trước nhé!"),
+          content: Text("Bạn chưa có ảnh đại diện để tải về!"),
           backgroundColor: Colors.orange,
         ),
       );
@@ -99,38 +107,43 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Đang chuẩn bị tải ảnh...")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Đang chuẩn bị tải ảnh...")));
 
       if (kIsWeb) {
-        // --- XỬ LÝ CHO WEB (LAPTOP) ---
-        // Sử dụng universal_html để tạo lệnh tải xuống của trình duyệt
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute("download", "avatar_${widget.userId}.jpg")
-          ..click();
-          
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Ảnh đang được tải xuống trình duyệt!")),
+          const SnackBar(
+            content: Text(
+              "Tính năng tải ảnh về thư viện hiện chỉ hỗ trợ trên điện thoại.",
+            ),
+          ),
         );
       } else {
-        // --- XỬ LÝ CHO MOBILE (ANDROID/IOS) ---
-        // 1. Lấy đường dẫn thư mục tạm
-        final tempDir = await getTemporaryDirectory();
-        final path = '${tempDir.path}/avatar_download.jpg';
-
-        // 2. Dùng Dio tải ảnh từ URL về file tạm đó
-        await Dio().download(url, path);
-
-        // 3. Kiểm tra quyền truy cập thư viện ảnh
+        // 🔥 FIX LỖI QUYỀN: Xử lý an toàn khi người dùng từ chối cấp quyền
         final hasAccess = await Gal.hasAccess();
         if (!hasAccess) {
-          await Gal.requestAccess();
+          final isGranted = await Gal.requestAccess();
+          if (!isGranted) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Bạn cần cấp quyền thư viện để lưu ảnh!"),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            return;
+          }
         }
 
-        // 4. Lưu file đó vào Bộ sưu tập (Gallery)
+        final tempDir = await getTemporaryDirectory();
+        final path =
+            '${tempDir.path}/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+        await Dio().download(url, path);
         await Gal.putImage(path);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -144,15 +157,16 @@ class _ProfilePageState extends State<ProfilePage> {
       debugPrint("Lỗi tải ảnh: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Không thể tải ảnh: $e")),
+          SnackBar(
+            content: Text("Không thể tải ảnh: $e"),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
   }
 
-
-
-  // --- HÀM 3: HIỂN THỊ MENU OPTION KHI CLICK VÀO AVA ---
+  // --- HÀM 3: MENU OPTION ---
   void _showAvatarOptionsMenu(BuildContext context, String? currentAvatarUrl) {
     showModalBottomSheet(
       context: context,
@@ -174,48 +188,44 @@ class _ProfilePageState extends State<ProfilePage> {
                 leading: const Icon(Icons.download, color: Colors.blue),
                 title: const Text('Lưu ảnh về máy'),
                 onTap: () {
-                  Navigator.of(context).pop(); // Đóng menu
-                  _saveImageUrlToGallery(currentAvatarUrl); // Gọi hàm lưu ảnh
+                  Navigator.of(context).pop();
+                  _saveImageUrlToGallery(currentAvatarUrl);
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library, color: Colors.orange),
                 title: const Text('Đổi ảnh đại diện mới'),
                 onTap: () {
-                  Navigator.of(context).pop(); // Đóng menu
-                  _pickAndUploadImage(); // Gọi hàm đổi ảnh
+                  Navigator.of(context).pop();
+                  _pickAndUploadImage();
                 },
               ),
-              // Thêm option xóa ảnh nếu cần
               if (currentAvatarUrl != null && currentAvatarUrl.isNotEmpty)
                 ListTile(
                   leading: const Icon(Icons.delete_forever, color: Colors.red),
-                  title: const Text('Xóa ảnh hiện tại (về mặc định)'),
+                  title: const Text('Xóa ảnh hiện tại'),
                   onTap: () async {
                     Navigator.of(context).pop();
                     try {
                       setState(() => _isUploading = true);
-                      // Xóa file trên Storage
                       await FirebaseStorage.instance
                           .ref()
                           .child('avatars')
                           .child('${widget.userId}.jpg')
                           .delete();
-                      
-                      // Cập nhật Firestore về null
+
                       await FirebaseFirestore.instance
                           .collection('users')
                           .doc(widget.userId)
                           .update({'avatarUrl': null});
-                      
+
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text("Đã xóa ảnh đại diện.")),
                         );
                       }
                     } catch (e) {
-                       // Nếu file không tồn tại trên storage thì chỉ cần cập nhật firestore
-                       await FirebaseFirestore.instance
+                      await FirebaseFirestore.instance
                           .collection('users')
                           .doc(widget.userId)
                           .update({'avatarUrl': null});
@@ -299,56 +309,59 @@ class _ProfilePageState extends State<ProfilePage> {
                     String? avatarUrl;
 
                     if (snapshot.hasData && snapshot.data!.exists) {
-                      final data = snapshot.data!.data() as Map<String, dynamic>;
+                      final data =
+                          snapshot.data!.data() as Map<String, dynamic>;
                       currentName = data['name'] ?? widget.userName;
-                      avatarUrl = data['avatarUrl']; // Lấy URL ảnh từ Firestore
+                      avatarUrl = data['avatarUrl'];
                     }
 
                     return Column(
                       children: [
-                        // --- PHẦN CẬP NHẬT CHÍNH: HIỂN THỊ AVATAR VÀ XỬ LÝ CLICK ---
                         GestureDetector(
-                          onTap: () => _showAvatarOptionsMenu(context, avatarUrl), // Click mở menu
+                          onTap: () =>
+                              _showAvatarOptionsMenu(context, avatarUrl),
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              // Vòng tròn chứa ảnh
                               Container(
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 3),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 3,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withOpacity(0.2),
                                       blurRadius: 10,
                                       offset: const Offset(0, 5),
-                                    )
+                                    ),
                                   ],
                                 ),
                                 child: CircleAvatar(
                                   radius: 50,
                                   backgroundColor: Colors.white,
-                                  // Kiểm tra và hiển thị ảnh mạng hoặc ảnh mặc định
-                                  backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                                      ? NetworkImage(avatarUrl) // Dùng ảnh từ Firebase
-                                      : null, 
-                                  child: (avatarUrl == null || avatarUrl.isEmpty)
+                                  backgroundImage:
+                                      (avatarUrl != null &&
+                                          avatarUrl.isNotEmpty)
+                                      ? NetworkImage(avatarUrl)
+                                      : null,
+                                  child:
+                                      (avatarUrl == null || avatarUrl.isEmpty)
                                       ? Icon(
                                           Icons.person,
                                           color: primaryColor,
                                           size: 50,
-                                        ) // Hiển thị icon mặc định nếu không có ảnh
+                                        )
                                       : null,
                                 ),
                               ),
-                              // Hiển thị vòng loading khi đang upload
                               if (_isUploading)
                                 const Positioned.fill(
                                   child: CircularProgressIndicator(
                                     color: Colors.white,
                                   ),
                                 ),
-                              // Icon nhỏ báo hiệu có thể đổi ảnh
                               Positioned(
                                 bottom: 0,
                                 right: 0,
@@ -357,9 +370,16 @@ class _ProfilePageState extends State<ProfilePage> {
                                   decoration: BoxDecoration(
                                     color: Colors.orangeAccent,
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
                                   ),
-                                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
                                 ),
                               ),
                             ],
@@ -418,7 +438,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   },
                 ),
               ),
-              // ... Giữ nguyên phần body bên dưới (các thẻ infoCard) ...
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -428,7 +447,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       "ID người dùng",
                       "@${widget.userId}",
                     ),
-
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
@@ -446,17 +464,16 @@ class _ProfilePageState extends State<ProfilePage> {
                             }
                           }
 
-                          if (myRank == 1) {
+                          if (myRank == 1)
                             rankText = "🥇 Hạng 1 (Quán quân)";
-                          } else if (myRank >= 2 && myRank <= 10) {
+                          else if (myRank >= 2 && myRank <= 10)
                             rankText = "🥈 Hạng $myRank (Top 10)";
-                          } else if (myRank >= 11 && myRank <= 50) {
+                          else if (myRank >= 11 && myRank <= 50)
                             rankText = "🥉 Hạng $myRank (Top 50)";
-                          } else if (myRank > 50) {
+                          else if (myRank > 50)
                             rankText = "Hạng $myRank";
-                          } else {
+                          else
                             rankText = "Chưa xếp hạng";
-                          }
                         }
                         return _infoCard(
                           Icons.military_tech,
@@ -465,13 +482,11 @@ class _ProfilePageState extends State<ProfilePage> {
                         );
                       },
                     ),
-
                     _infoCard(
                       Icons.workspace_premium,
                       "Tổng điểm",
                       "${widget.userPoints}",
                     ),
-
                     StreamBuilder<DocumentSnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
@@ -496,7 +511,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         );
                       },
                     ),
-
                     StreamBuilder<DocumentSnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
@@ -506,12 +520,12 @@ class _ProfilePageState extends State<ProfilePage> {
                         String currentClass = widget.selectedClass;
                         if (snapshot.hasData && snapshot.data!.exists) {
                           currentClass =
-                              snapshot.data!.get('class') ?? widget.selectedClass;
+                              snapshot.data!.get('class') ??
+                              widget.selectedClass;
                         }
                         return _infoCard(Icons.school, "Lớp", currentClass);
                       },
                     ),
-
                     const SizedBox(height: 30),
                   ],
                 ),
