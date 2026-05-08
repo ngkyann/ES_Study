@@ -22,8 +22,6 @@ class _AIAssistantFABState extends State<AIAssistantFAB> {
   bool _isLoading = false;
 
   final List<String> _modelPool = [
-    'gemma-3-1b-it',
-    'gemma-3-2b-it',
     'gemma-3-4b-it',
     'gemma-3-8b-it',
     'gemma-3-27b-it',
