@@ -701,7 +701,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Phiên bản: Beta 0.8.6",
+                "Phiên bản: Beta 0.8.8",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
