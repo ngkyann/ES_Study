@@ -1,11 +1,11 @@
 {
-    "name": "esstudy",
-    "short_name": "esstudy",
+    "name": "ES Study",
+    "short_name": "ES Study",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Không gian học tập trực tuyến dành cho học sinh",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
