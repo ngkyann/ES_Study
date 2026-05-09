@@ -30,8 +30,8 @@ class _FriendsPageState extends State<FriendsPage> {
         .collection('users')
         .doc(targetUserId)
         .update({
-          'friendRequests': FieldValue.arrayUnion([widget.currentUserId]),
-        });
+      'friendRequests': FieldValue.arrayUnion([widget.currentUserId]),
+    });
     if (mounted) {
       ScaffoldMessenger.of(
         context,
@@ -44,9 +44,8 @@ class _FriendsPageState extends State<FriendsPage> {
     final myRef = FirebaseFirestore.instance
         .collection('users')
         .doc(widget.currentUserId);
-    final targetRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(targetUserId);
+    final targetRef =
+        FirebaseFirestore.instance.collection('users').doc(targetUserId);
 
     batch.update(myRef, {
       'friendRequests': FieldValue.arrayRemove([targetUserId]),
@@ -63,8 +62,8 @@ class _FriendsPageState extends State<FriendsPage> {
         .collection('users')
         .doc(widget.currentUserId)
         .update({
-          'friendRequests': FieldValue.arrayRemove([targetUserId]),
-        });
+      'friendRequests': FieldValue.arrayRemove([targetUserId]),
+    });
   }
 
   Future<void> _unfriend(String targetUserId) async {
@@ -72,9 +71,8 @@ class _FriendsPageState extends State<FriendsPage> {
     final myRef = FirebaseFirestore.instance
         .collection('users')
         .doc(widget.currentUserId);
-    final targetRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(targetUserId);
+    final targetRef =
+        FirebaseFirestore.instance.collection('users').doc(targetUserId);
 
     batch.update(myRef, {
       'friends': FieldValue.arrayRemove([targetUserId]),
@@ -259,9 +257,8 @@ class _FriendsPageState extends State<FriendsPage> {
                     : ListView.builder(
                         itemCount: requestsList.length,
                         itemBuilder: (context, index) {
-                          var reqData =
-                              requestsList[index].data()
-                                  as Map<String, dynamic>;
+                          var reqData = requestsList[index].data()
+                              as Map<String, dynamic>;
                           String targetId = requestsList[index].id;
                           String targetName = reqData['name'] ?? 'Ẩn danh';
 
@@ -364,9 +361,9 @@ class _FriendsPageState extends State<FriendsPage> {
                         onChanged: (val) {
                           setState(() {
                             _searchQuery = val.trim().replaceAll(
-                              '@',
-                              '',
-                            ); // Tự động xóa @ nếu user nhập thừa
+                                  '@',
+                                  '',
+                                ); // Tự động xóa @ nếu user nhập thừa
                           });
                         },
                       ),
@@ -380,77 +377,82 @@ class _FriendsPageState extends State<FriendsPage> {
                               ),
                             )
                           : searchList.isEmpty
-                          ? const Center(
-                              child: Text(
-                                "Không tìm thấy người dùng với ID này",
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: searchList.length,
-                              itemBuilder: (context, index) {
-                                var targetDoc = searchList[index];
-                                var searchData =
-                                    targetDoc.data() as Map<String, dynamic>;
-                                String targetId = targetDoc.id;
-                                String targetName =
-                                    searchData['name'] ?? 'Ẩn danh';
-
-                                bool isFriend = myFriends.contains(targetId);
-                                List<String> theirRequests = List<String>.from(
-                                  searchData['friendRequests'] ?? [],
-                                );
-                                bool requestSent = theirRequests.contains(
-                                  widget.currentUserId,
-                                );
-
-                                return ListTile(
-                                  onTap: () => _openUserProfile(
-                                    targetId,
-                                    targetName,
-                                  ), // 🔥 Bấm để xem thông tin
-                                  leading: const CircleAvatar(
-                                    child: Icon(Icons.person),
+                              ? const Center(
+                                  child: Text(
+                                    "Không tìm thấy người dùng với ID này",
+                                    style: TextStyle(color: Colors.grey),
                                   ),
-                                  title: Text(
-                                    targetName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  subtitle: Text("ID: @$targetId"),
-                                  trailing: isFriend
-                                      ? const Text(
-                                          "Bạn bè",
-                                          style: TextStyle(
-                                            color: Colors.green,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        )
-                                      : requestSent
-                                      ? const Text(
-                                          "Đã gửi lời mời",
-                                          style: TextStyle(
-                                            color: Colors.orange,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        )
-                                      : ElevatedButton(
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: primaryColor,
-                                          ),
-                                          onPressed: () =>
-                                              _sendFriendRequest(targetId),
-                                          child: const Text(
-                                            "Kết bạn",
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                            ),
-                                          ),
+                                )
+                              : ListView.builder(
+                                  itemCount: searchList.length,
+                                  itemBuilder: (context, index) {
+                                    var targetDoc = searchList[index];
+                                    var searchData = targetDoc.data()
+                                        as Map<String, dynamic>;
+                                    String targetId = targetDoc.id;
+                                    String targetName =
+                                        searchData['name'] ?? 'Ẩn danh';
+
+                                    bool isFriend =
+                                        myFriends.contains(targetId);
+                                    List<String> theirRequests =
+                                        List<String>.from(
+                                      searchData['friendRequests'] ?? [],
+                                    );
+                                    bool requestSent = theirRequests.contains(
+                                      widget.currentUserId,
+                                    );
+
+                                    return ListTile(
+                                      onTap: () => _openUserProfile(
+                                        targetId,
+                                        targetName,
+                                      ), // 🔥 Bấm để xem thông tin
+                                      leading: const CircleAvatar(
+                                        child: Icon(Icons.person),
+                                      ),
+                                      title: Text(
+                                        targetName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
                                         ),
-                                );
-                              },
-                            ),
+                                      ),
+                                      subtitle: Text("ID: @$targetId"),
+                                      trailing: isFriend
+                                          ? const Text(
+                                              "Bạn bè",
+                                              style: TextStyle(
+                                                color: Colors.green,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            )
+                                          : requestSent
+                                              ? const Text(
+                                                  "Đã gửi lời mời",
+                                                  style: TextStyle(
+                                                    color: Colors.orange,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                )
+                                              : ElevatedButton(
+                                                  style:
+                                                      ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        primaryColor,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _sendFriendRequest(
+                                                          targetId),
+                                                  child: const Text(
+                                                    "Kết bạn",
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                ),
+                                    );
+                                  },
+                                ),
                     ),
                   ],
                 ),
@@ -478,10 +480,8 @@ class OtherUserProfilePage extends StatelessWidget {
 
   Future<Map<String, dynamic>> _fetchUserInfo() async {
     // Tải dữ liệu người dùng
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .get();
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(userId).get();
 
     // Tải toàn bộ user để tính hạng
     final usersSnap = await FirebaseFirestore.instance
@@ -664,7 +664,6 @@ class OtherUserProfilePage extends StatelessWidget {
                         "Ngày gia nhập",
                         joinDateText,
                       ),
-
                       const SizedBox(height: 25),
                       const Text(
                         "Huy chương mùa giải",

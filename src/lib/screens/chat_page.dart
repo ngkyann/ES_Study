@@ -68,8 +68,8 @@ class _ChatPageState extends State<ChatPage> {
         String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
 
         Reference ref = FirebaseStorage.instance.ref().child(
-          'chat_images/${widget.chatId}/$fileName',
-        );
+              'chat_images/${widget.chatId}/$fileName',
+            );
 
         UploadTask uploadTask = ref.putData(
           imageData,
@@ -87,13 +87,13 @@ class _ChatPageState extends State<ChatPage> {
           .doc(widget.chatId)
           .collection('messages')
           .add({
-            'senderId': widget.currentUserId,
-            'text': text,
-            'imageUrl': imageUrl ?? '',
-            'type': imageUrl != null ? 'image' : 'text',
-            'timestamp': FieldValue.serverTimestamp(),
-            'deletedBy': [],
-          });
+        'senderId': widget.currentUserId,
+        'text': text,
+        'imageUrl': imageUrl ?? '',
+        'type': imageUrl != null ? 'image' : 'text',
+        'timestamp': FieldValue.serverTimestamp(),
+        'deletedBy': [],
+      });
 
       setState(() {
         _selectedImage = null;
@@ -240,19 +240,16 @@ class _ChatPageState extends State<ChatPage> {
                     final data =
                         visibleMessages[index].data() as Map<String, dynamic>;
                     bool isMe = data['senderId'] == widget.currentUserId;
-                    bool isImage =
-                        data['type'] == 'image' &&
+                    bool isImage = data['type'] == 'image' &&
                         data['imageUrl'] != null &&
                         data['imageUrl'].toString().isNotEmpty;
 
                     return Align(
-                      alignment: isMe
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
+                      alignment:
+                          isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
-                        padding:
-                            isImage &&
+                        padding: isImage &&
                                 (data['text'] == null ||
                                     data['text'].toString().trim().isEmpty)
                             ? const EdgeInsets.all(5)
@@ -308,13 +305,12 @@ class _ChatPageState extends State<ChatPage> {
                                   fit: BoxFit.cover,
                                   loadingBuilder:
                                       (context, child, loadingProgress) {
-                                        if (loadingProgress == null)
-                                          return child;
-                                        return const Padding(
-                                          padding: EdgeInsets.all(20),
-                                          child: CircularProgressIndicator(),
-                                        );
-                                      },
+                                    if (loadingProgress == null) return child;
+                                    return const Padding(
+                                      padding: EdgeInsets.all(20),
+                                      child: CircularProgressIndicator(),
+                                    );
+                                  },
                                 ),
                               ),
                             if (data['text'] != null &&
@@ -340,7 +336,6 @@ class _ChatPageState extends State<ChatPage> {
               },
             ),
           ),
-
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -399,7 +394,6 @@ class _ChatPageState extends State<ChatPage> {
                       ],
                     ),
                   ),
-
                 Row(
                   children: [
                     IconButton(

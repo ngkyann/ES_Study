@@ -22,7 +22,8 @@ class CreateRoomPage extends StatefulWidget {
 }
 
 class _CreateRoomPageState extends State<CreateRoomPage> {
-  final TextEditingController _roomNameController = TextEditingController(text: "Phòng học tập trung");
+  final TextEditingController _roomNameController =
+      TextEditingController(text: "Phòng học");
   int _selectedMinutes = 30;
   int _maxMembers = 4;
   final List<int> _timeOptions = [15, 30, 45, 60, 90, 120];
@@ -43,8 +44,6 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
   }
 
   void _createAndJoinRoom() async {
-
-    
     setState(() => _isLoading = true);
 
     if (_roomNameController.text.trim().isEmpty) {

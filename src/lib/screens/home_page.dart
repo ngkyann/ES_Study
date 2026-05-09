@@ -13,7 +13,6 @@ import 'package:esstudy/screens/ai_assistant_page.dart';
 import 'package:esstudy/screens/friends_page.dart';
 import 'package:esstudy/screens/statistics_page.dart';
 import 'package:esstudy/screens/create_room_page.dart';
-import 'package:esstudy/screens/anti_afk_manager.dart';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -44,9 +43,6 @@ class _HomePageState extends State<HomePage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkTodayPlansAndShowPopup();
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      AntiAFKManager().start(context);
     });
   }
 
@@ -190,9 +186,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _updateStudyProgress(int additionalPoints) async {
     try {
-      final userRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId);
+      final userRef =
+          FirebaseFirestore.instance.collection('users').doc(widget.userId);
       final doc = await userRef.get();
 
       int newStreak = 1;
