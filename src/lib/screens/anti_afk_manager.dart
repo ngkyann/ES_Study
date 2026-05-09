@@ -1,11 +1,8 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:io'; // Bây giờ có thể dùng thoải mái vì bỏ Web rồi
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:html' as html;
-import 'dart:io' show exit;
 
 class AntiAFKManager {
   static final AntiAFKManager _instance = AntiAFKManager._internal();
@@ -17,10 +14,10 @@ class AntiAFKManager {
   Timer? _afkTimeoutTimer;
   bool _isShowing = false;
 
-  // Cấu hình thời gian
-  final int _minInterval = 1; // Xuất hiện sau ít nhất 10 phút
-  final int _maxInterval = 2; // Xuất hiện tối đa sau 25 phút
-  final int _secondsToClick = 30; // 15 giây để "vuốt ve" Capybara
+  // Cấu hình thời gian (Điều chỉnh theo nhu cầu)
+  final int _minInterval = 5; 
+  final int _maxInterval = 30; 
+  final int _secondsToClick = 30; 
 
   void start(BuildContext context) {
     _stopTimers();
@@ -28,6 +25,7 @@ class AntiAFKManager {
   }
 
   void _scheduleNextSpawn(BuildContext context) {
+    _spawnTimer?.cancel(); // Đảm bảo không có timer cũ chạy đè
     final nextIn = Random().nextInt(_maxInterval - _minInterval + 1) + _minInterval;
     _spawnTimer = Timer(Duration(minutes: nextIn), () {
       if (context.mounted) _showCapybara(context);
@@ -41,7 +39,6 @@ class AntiAFKManager {
     final overlay = Overlay.of(context);
     final size = MediaQuery.of(context).size;
 
-    // Tọa độ ngẫu nhiên
     final double posX = Random().nextDouble() * (size.width - 120);
     final double posY = 100 + Random().nextDouble() * (size.height - 250);
 
@@ -56,31 +53,21 @@ class AntiAFKManager {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Hiệu ứng bập bênh cho Capybara pixel
-                TweenAnimationBuilder(
-                  tween: Tween<double>(begin: 0, end: 1),
-                  duration: const Duration(seconds: 1),
-                  builder: (context, double val, child) {
-                    return Transform.translate(
-                      offset: Offset(0, sin(val * pi * 2) * 5),
-                      child: child,
-                    );
-                  },
-                  child: Image.asset(
-                    'assets/capybara.gif',
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.contain,
-                  ),
+                // Hiệu ứng nhảy nhẹ cho Capybara
+                Image.asset(
+                  'assets/capybara.gif',
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.contain,
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.8),
+                    color: Colors.orange.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Text(
-                    "Click me!",
+                    "Chill check! Tap me!",
                     style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -93,26 +80,20 @@ class AntiAFKManager {
 
     overlay.insert(_overlayEntry!);
 
-    // Hình phạt thoát app
     _afkTimeoutTimer = Timer(Duration(seconds: _secondsToClick), () {
       if (_isShowing) _punishUser();
     });
   }
 
   void _dismissCapybara(BuildContext context) {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-    _isShowing = false;
-    _afkTimeoutTimer?.cancel();
+    _stopTimers();
     _scheduleNextSpawn(context);
   }
 
   void _punishUser() {
-    if (kIsWeb) {
-      html.window.location.href = "https://www.google.com";
-    } else if (Platform.isAndroid || Platform.isIOS) {
-      SystemNavigator.pop();
-    } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    if (Platform.isAndroid) {
+      SystemNavigator.pop(); 
+    } else {
       exit(0);
     }
   }
@@ -120,8 +101,10 @@ class AntiAFKManager {
   void _stopTimers() {
     _spawnTimer?.cancel();
     _afkTimeoutTimer?.cancel();
-    _overlayEntry?.remove();
-    _overlayEntry = null;
+    if (_overlayEntry != null) {
+      _overlayEntry!.remove();
+      _overlayEntry = null;
+    }
     _isShowing = false;
   }
 }
