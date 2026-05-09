@@ -1092,174 +1092,184 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           padding: const EdgeInsets.symmetric(vertical: 15),
           color: Colors.black87,
           child: SafeArea(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: MediaQuery.of(context).size.width,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildControlButton(
-                      icon: _isMuted ? Icons.mic_off : Icons.mic,
-                      label: "Mic",
-                      color: _isMuted ? Colors.red : Colors.white,
-                      onTap: _toggleMic,
-                    ),
-                    _buildControlButton(
-                      icon: _isVideoOff ? Icons.videocam_off : Icons.videocam,
-                      label: "Cam",
-                      color: _isVideoOff ? Colors.red : Colors.white,
-                      onTap: _toggleVideo,
-                    ),
-                    _buildControlButton(
-                      icon: Icons.checklist,
-                      label: "Nhiệm vụ",
-                      color: Colors.white,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          builder: (ctx) => Container(
-                            padding: const EdgeInsets.all(16),
-                            height: 300,
-                            child: Column(
-                              children: [
-                                const Text(
-                                  "Nhiệm vụ của bạn",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: ListView.builder(
-                                    itemCount: widget.goals.length,
-                                    itemBuilder: (_, i) => StatefulBuilder(
-                                      builder: (ctx, setState) =>
-                                          CheckboxListTile(
-                                        title: Text(widget.goals[i]),
-                                        value: _personalTaskStatus[i],
-                                        onChanged: (val) {
-                                          setState(
-                                            () => _personalTaskStatus[i] = val!,
-                                          );
-                                          this.setState(() {});
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    _buildControlButton(
-                      icon: Icons.people,
-                      label: "Nhóm",
-                      color: Colors.white,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          builder: (ctx) => Container(
-                            padding: const EdgeInsets.all(16),
-                            height: 300,
-                            child: Column(
-                              children: [
-                                const Text(
-                                  "Người tham gia",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: ListView(
-                                    children: [
-                                      ListTile(
-                                        title: Text("${widget.userName} (Bạn)"),
-                                      ),
-                                      ..._remoteNames.values.map(
-                                        (name) => ListTile(title: Text(name)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isChatOpen = !_isChatOpen;
-                          if (_isChatOpen) _unreadMessages = 0;
-                        });
-                      },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: _isChatOpen
-                                      ? Colors.white24
-                                      : Colors.transparent,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  _isChatOpen
-                                      ? Icons.chat_bubble
-                                      : Icons.chat_bubble_outline,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
-                              ),
-                              if (_unreadMessages > 0 && !_isChatOpen)
-                                Positioned(
-                                  right: 0,
-                                  top: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      '$_unreadMessages',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
+            // 🔥 FIX: Dùng LayoutBuilder để lấy chính xác chiều rộng của khung 500px thay vì toàn bộ màn hình
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildControlButton(
+                          icon: _isMuted ? Icons.mic_off : Icons.mic,
+                          label: "Mic",
+                          color: _isMuted ? Colors.red : Colors.white,
+                          onTap: _toggleMic,
+                        ),
+                        _buildControlButton(
+                          icon:
+                              _isVideoOff ? Icons.videocam_off : Icons.videocam,
+                          label: "Cam",
+                          color: _isVideoOff ? Colors.red : Colors.white,
+                          onTap: _toggleVideo,
+                        ),
+                        _buildControlButton(
+                          icon: Icons.checklist,
+                          label: "Nhiệm vụ",
+                          color: Colors.white,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              builder: (ctx) => Container(
+                                padding: const EdgeInsets.all(16),
+                                height: 300,
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      "Nhiệm vụ của bạn",
+                                      style: TextStyle(
+                                        fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                  ),
+                                    Expanded(
+                                      child: ListView.builder(
+                                        itemCount: widget.goals.length,
+                                        itemBuilder: (_, i) => StatefulBuilder(
+                                          builder: (ctx, setState) =>
+                                              CheckboxListTile(
+                                            title: Text(widget.goals[i]),
+                                            value: _personalTaskStatus[i],
+                                            onChanged: (val) {
+                                              setState(
+                                                () => _personalTaskStatus[i] =
+                                                    val!,
+                                              );
+                                              this.setState(() {});
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildControlButton(
+                          icon: Icons.people,
+                          label: "Nhóm",
+                          color: Colors.white,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              builder: (ctx) => Container(
+                                padding: const EdgeInsets.all(16),
+                                height: 300,
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      "Người tham gia",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: ListView(
+                                        children: [
+                                          ListTile(
+                                            title: Text(
+                                                "${widget.userName} (Bạn)"),
+                                          ),
+                                          ..._remoteNames.values.map(
+                                            (name) =>
+                                                ListTile(title: Text(name)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _isChatOpen = !_isChatOpen;
+                              if (_isChatOpen) _unreadMessages = 0;
+                            });
+                          },
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: _isChatOpen
+                                          ? Colors.white24
+                                          : Colors.transparent,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      _isChatOpen
+                                          ? Icons.chat_bubble
+                                          : Icons.chat_bubble_outline,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  if (_unreadMessages > 0 && !_isChatOpen)
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Text(
+                                          '$_unreadMessages',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                "Chat",
+                                style: TextStyle(
+                                    color: Colors.white, fontSize: 12),
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            "Chat",
-                            style: TextStyle(color: Colors.white, fontSize: 12),
-                          ),
-                        ],
-                      ),
+                        ),
+                        _buildControlButton(
+                          icon: Icons.call_end,
+                          label: "Thoát",
+                          color: Colors.red,
+                          bgColor: Colors.red.withOpacity(0.2),
+                          onTap: () => _leaveRoom(isFinishedNatural: false),
+                        ),
+                      ],
                     ),
-                    _buildControlButton(
-                      icon: Icons.call_end,
-                      label: "Thoát",
-                      color: Colors.red,
-                      bgColor: Colors.red.withOpacity(0.2),
-                      onTap: () => _leaveRoom(isFinishedNatural: false),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ),

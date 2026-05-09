@@ -39,6 +39,15 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           title: 'ES Study',
           theme: ThemeData(primaryColor: currentPrimaryColor),
+          builder: (context, child) {
+            return Center(
+              child: ConstrainedBox(
+                // Giới hạn chiều rộng tối đa là 500 pixel (chuẩn kích thước điện thoại to)
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: child,
+              ),
+            );
+          },
           // --- ĐÃ DỌN DẸP builder: Không còn Stack và FAB ở đây nữa ---
           home: StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
