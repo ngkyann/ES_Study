@@ -43,7 +43,8 @@ class OnlineRoomPage extends StatefulWidget {
   State<OnlineRoomPage> createState() => _OnlineRoomPageState();
 }
 
-class _OnlineRoomPageState extends State<OnlineRoomPage> {
+class _OnlineRoomPageState extends State<OnlineRoomPage>
+    with WidgetsBindingObserver {
   // WEBRTC
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   MediaStream? _localStream;
@@ -98,6 +99,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _personalTaskStatus = List.generate(widget.goals.length, (_) => false);
 
     _maxAfkChecks = widget.duration ~/ 15;
@@ -147,11 +149,11 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
 
       if (_localStream != null) {
         _localStream!.getAudioTracks().forEach(
-          (track) => track.enabled = false,
-        );
+              (track) => track.enabled = false, // Khởi tạo ban đầu bị Muted
+            );
         _localStream!.getVideoTracks().forEach(
-          (track) => track.enabled = false,
-        );
+              (track) => track.enabled = false, // Khởi tạo ban đầu tắt Cam
+            );
         Helper.setSpeakerphoneOn(true);
       }
       if (mounted) setState(() => _localRenderer.srcObject = _localStream);
@@ -172,9 +174,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       }
     }
 
-    final roomRef = FirebaseFirestore.instance
-        .collection('study_rooms')
-        .doc(widget.roomId);
+    final roomRef =
+        FirebaseFirestore.instance.collection('study_rooms').doc(widget.roomId);
     final myInitialState = {'micOff': true, 'camOff': true};
 
     if (widget.isHost) {
@@ -203,6 +204,24 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     }
     _sendSystemMessage("${widget.userName} đã vào phòng.");
 
+    // Lắng nghe tín hiệu Signaling NGAY TỪ ĐẦU (Để không lỡ Offer)
+    _signalingSub = FirebaseFirestore.instance
+        .collection('study_rooms')
+        .doc(widget.roomId)
+        .collection('signaling')
+        .doc(widget.userId)
+        .collection('messages')
+        .snapshots()
+        .listen((snap) {
+      for (var change in snap.docChanges) {
+        if (change.type == DocumentChangeType.added) {
+          final data = change.doc.data()!;
+          _handleSignalingMessage(data['from'], data);
+          change.doc.reference.delete();
+        }
+      }
+    });
+
     _messageSub = FirebaseFirestore.instance
         .collection('study_rooms')
         .doc(widget.roomId)
@@ -211,26 +230,26 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         .limit(1)
         .snapshots()
         .listen((snap) {
-          if (snap.docChanges.isNotEmpty &&
-              snap.docChanges.first.type == DocumentChangeType.added) {
-            if (_isFirstMessageFetch) {
-              _isFirstMessageFetch = false;
-              return;
-            }
+      if (snap.docChanges.isNotEmpty &&
+          snap.docChanges.first.type == DocumentChangeType.added) {
+        if (_isFirstMessageFetch) {
+          _isFirstMessageFetch = false;
+          return;
+        }
 
-            final msg = snap.docChanges.first.doc.data();
-            if (msg != null &&
-                msg['senderId'] != widget.userId &&
-                msg['senderId'] != 'system') {
-              if (!_isChatOpen && mounted) {
-                setState(() => _unreadMessages++);
-                try {
-                  player.play(AssetSource('sounds/ting.mp3'));
-                } catch (_) {}
-              }
-            }
+        final msg = snap.docChanges.first.doc.data();
+        if (msg != null &&
+            msg['senderId'] != widget.userId &&
+            msg['senderId'] != 'system') {
+          if (!_isChatOpen && mounted) {
+            setState(() => _unreadMessages++);
+            try {
+              player.play(AssetSource('sounds/ting.mp3'));
+            } catch (_) {}
           }
-        });
+        }
+      }
+    });
 
     _participantsSub = roomRef.snapshots().listen((snap) {
       if (!snap.exists) {
@@ -257,7 +276,11 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         if (pid != widget.userId && !_peers.containsKey(pid)) {
           _remoteNames[pid] = pname;
           Future.delayed(const Duration(milliseconds: 500), () {
-            _createPeerConnection(pid, isCaller: true);
+            if (!mounted || _peers.containsKey(pid)) return; // Tránh gọi 2 lần
+            // 🔥 BUG FIX 1: Xác định Caller rạch ròi bằng so sánh ID
+            // Điều này tránh trường hợp 2 máy cùng tạo Offer đè lên nhau.
+            bool amICaller = widget.userId.compareTo(pid) > 0;
+            _createPeerConnection(pid, isCaller: amICaller);
           });
         }
       });
@@ -269,23 +292,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       }
       if (mounted) setState(() {});
     });
-
-    _signalingSub = FirebaseFirestore.instance
-        .collection('study_rooms')
-        .doc(widget.roomId)
-        .collection('signaling')
-        .doc(widget.userId)
-        .collection('messages')
-        .snapshots()
-        .listen((snap) {
-          for (var change in snap.docChanges) {
-            if (change.type == DocumentChangeType.added) {
-              final data = change.doc.data()!;
-              _handleSignalingMessage(data['from'], data);
-              change.doc.reference.delete();
-            }
-          }
-        });
   }
 
   void _showHostLeftDialogAndExit() {
@@ -480,13 +486,19 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     _remoteRenderers[peerId] = renderer;
     if (mounted) setState(() {});
 
+    // 🔥 BUG FIX 2: Thay `addStream` bằng `addTrack` để WebRTC thế hệ mới chạy mượt
     if (_localStream != null) {
-      pc.addStream(_localStream!);
+      _localStream!.getTracks().forEach((track) {
+        pc.addTrack(track, _localStream!);
+      });
     }
 
-    pc.onAddStream = (MediaStream stream) {
-      renderer.srcObject = stream;
-      if (mounted) setState(() {});
+    // 🔥 Sửa `onAddStream` sang `onTrack`
+    pc.onTrack = (RTCTrackEvent event) {
+      if (event.streams.isNotEmpty) {
+        renderer.srcObject = event.streams[0];
+        if (mounted) setState(() {});
+      }
     };
 
     pc.onIceCandidate = (candidate) {
@@ -517,8 +529,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
     Map<String, dynamic> data,
   ) async {
     final type = data['type'];
-    if (!_peers.containsKey(fromPeerId))
+
+    // Nếu chưa có connection, tạo mới dưới quyền Callee (Người nghe)
+    if (!_peers.containsKey(fromPeerId)) {
       await _createPeerConnection(fromPeerId, isCaller: false);
+    }
+
     final pc = _peers[fromPeerId]!;
 
     if (type == 'offer') {
@@ -526,7 +542,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       final answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       _sendSignaling(fromPeerId, {'type': 'answer', 'sdp': answer.sdp});
-      _drainQueue(fromPeerId, pc);
+      _drainQueue(fromPeerId, pc); // Xả hàng đợi ICE
     } else if (type == 'answer') {
       await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], type));
       _drainQueue(fromPeerId, pc);
@@ -537,7 +553,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         candMap['sdpMid'],
         candMap['sdpMLineIndex'],
       );
-      if (pc.signalingState == RTCSignalingState.RTCSignalingStateStable) {
+
+      // 🔥 BUG FIX 3: Chỉ cho add ICE Candidate sau khi đã SetRemoteDescription
+      var remoteDesc = await pc.getRemoteDescription();
+      if (remoteDesc != null) {
         await pc.addCandidate(candidate);
       } else {
         _candidateQueue.putIfAbsent(fromPeerId, () => []).add(candidate);
@@ -647,9 +666,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       _peers[id]?.close();
     }
 
-    final roomRef = FirebaseFirestore.instance
-        .collection('study_rooms')
-        .doc(widget.roomId);
+    final roomRef =
+        FirebaseFirestore.instance.collection('study_rooms').doc(widget.roomId);
     final roomSnap = await roomRef.get();
     int currentParticipants = 1;
 
@@ -695,9 +713,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       'minutes': actualMinutes,
     });
 
-    final userRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.userId);
+    final userRef =
+        FirebaseFirestore.instance.collection('users').doc(widget.userId);
     final userDoc = await userRef.get();
     int newStreak = 1;
     DateTime now = DateTime.now();
@@ -819,12 +836,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         .doc(widget.roomId)
         .collection('messages')
         .add({
-          'senderId': 'system',
-          'senderName': 'Hệ thống',
-          'text': text,
-          'timestamp': FieldValue.serverTimestamp(),
-          'isSystem': true,
-        });
+      'senderId': 'system',
+      'senderName': 'Hệ thống',
+      'text': text,
+      'timestamp': FieldValue.serverTimestamp(),
+      'isSystem': true,
+    });
   }
 
   Future<void> _sendMessage() async {
@@ -836,12 +853,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         .doc(widget.roomId)
         .collection('messages')
         .add({
-          'senderId': widget.userId,
-          'senderName': widget.userName,
-          'text': text,
-          'timestamp': FieldValue.serverTimestamp(),
-          'isSystem': false,
-        });
+      'senderId': widget.userId,
+      'senderName': widget.userName,
+      'text': text,
+      'timestamp': FieldValue.serverTimestamp(),
+      'isSystem': false,
+    });
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0,
@@ -852,7 +869,15 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      _leaveRoomLogic(isFailedAFK: true, isFinishedNatural: false);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _participantsSub?.cancel();
     _signalingSub?.cancel();
@@ -903,7 +928,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
         Expanded(
           child: Row(
             children: [
-              // CHIẾM 3 PHẦN NẾU CHAT ĐANG MỞ
               Expanded(
                 flex: 3,
                 child: Padding(
@@ -917,8 +941,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                   ),
                 ),
               ),
-
-              // CHIẾM 2 PHẦN NẾU MỞ (MỞ RỘNG SO VỚI BẢN CŨ LÀ 1 PHẦN)
               if (_isChatOpen)
                 Expanded(
                   flex: 2,
@@ -958,9 +980,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                                 padding: const EdgeInsets.all(8),
                                 itemCount: docs.length,
                                 itemBuilder: (context, index) {
-                                  final msg =
-                                      docs[index].data()
-                                          as Map<String, dynamic>;
+                                  final msg = docs[index].data()
+                                      as Map<String, dynamic>;
                                   final isMe = msg['senderId'] == widget.userId;
                                   final isSystem = msg['isSystem'] ?? false;
                                   if (isSystem) {
@@ -1071,13 +1092,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
           padding: const EdgeInsets.symmetric(vertical: 15),
           color: Colors.black87,
           child: SafeArea(
-            // DÙNG SINGLECHILDSCROLLVIEW ĐỂ TRÁNH TRÀN NẾU MÀN HÌNH NHỎ
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: Container(
-                width: MediaQuery.of(
-                  context,
-                ).size.width, // Cố gắng dàn đều toàn màn hình
+              child: SizedBox(
+                width: MediaQuery.of(context).size.width,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -1118,16 +1136,15 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                                     itemBuilder: (_, i) => StatefulBuilder(
                                       builder: (ctx, setState) =>
                                           CheckboxListTile(
-                                            title: Text(widget.goals[i]),
-                                            value: _personalTaskStatus[i],
-                                            onChanged: (val) {
-                                              setState(
-                                                () => _personalTaskStatus[i] =
-                                                    val!,
-                                              );
-                                              this.setState(() {});
-                                            },
-                                          ),
+                                        title: Text(widget.goals[i]),
+                                        value: _personalTaskStatus[i],
+                                        onChanged: (val) {
+                                          setState(
+                                            () => _personalTaskStatus[i] = val!,
+                                          );
+                                          this.setState(() {});
+                                        },
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1174,8 +1191,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                         );
                       },
                     ),
-
-                    // NÚT CHAT MỚI ĐƯỢC CHUYỂN XUỐNG ĐÂY
                     GestureDetector(
                       onTap: () {
                         setState(() {
@@ -1235,7 +1250,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
                         ],
                       ),
                     ),
-
                     _buildControlButton(
                       icon: Icons.call_end,
                       label: "Thoát",
@@ -1269,14 +1283,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
           title: Column(
             children: [
               Text(
-                widget.roomName, // 🔥 HIỂN THỊ TÊN PHÒNG Ở ĐÂY
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                widget.roomName,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold),
               ),
               Text(
                 "${(_remainingSeconds ~/ 60).toString().padLeft(2, '0')}:${(_remainingSeconds % 60).toString().padLeft(2, '0')}",
                 style: const TextStyle(
                   color: Colors.greenAccent,
-                  fontSize: 14, // Thu nhỏ timer lại một chút để cân đối
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                 ),
               ),
