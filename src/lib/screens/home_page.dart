@@ -39,22 +39,10 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _fetchUserData();
 
-    // 🔥 FIX LỖI CRASH WINDOWS:
-    // Đợi giao diện Main Thread sẵn sàng (100 mili-giây) rồi mới gọi Firestore
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        _fetchUserData();
-      }
-    });
-
-    // Tương tự với hàm kiểm tra Popup kế hoạch, cho lùi lại một chút
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        if (mounted) {
-          _checkTodayPlansAndShowPopup();
-        }
-      });
+      _checkTodayPlansAndShowPopup();
     });
   }
 
