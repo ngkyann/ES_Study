@@ -11,6 +11,7 @@ import 'package:audioplayers/audioplayers.dart';
 class OnlineRoomPage extends StatefulWidget {
   final bool isHost;
   final String roomId;
+  final String roomName;
   final String userId;
   final String userName;
   final int duration;
@@ -26,6 +27,7 @@ class OnlineRoomPage extends StatefulWidget {
     super.key,
     required this.isHost,
     required this.roomId,
+    required this.roomName,
     required this.userId,
     required this.userName,
     required this.duration,
@@ -177,6 +179,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
 
     if (widget.isHost) {
       await roomRef.set({
+        'roomName': widget.roomName,
         'hostId': widget.userId,
         'hostName': widget.userName,
         'hostClass': myClass,
@@ -1256,7 +1259,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        // NÚT CHAT Ở APPBAR ĐÃ ĐƯỢC LƯỢC BỎ BỚT NHƯNG GIỮ NGUYÊN CODE Ở GIỮA
         appBar: AppBar(
           backgroundColor: Colors.black87,
           elevation: 0,
@@ -1267,19 +1269,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage> {
           title: Column(
             children: [
               Text(
+                widget.roomName, // 🔥 HIỂN THỊ TÊN PHÒNG Ở ĐÂY
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Text(
                 "${(_remainingSeconds ~/ 60).toString().padLeft(2, '0')}:${(_remainingSeconds % 60).toString().padLeft(2, '0')}",
                 style: const TextStyle(
                   color: Colors.greenAccent,
-                  fontSize: 22,
+                  fontSize: 14, // Thu nhỏ timer lại một chút để cân đối
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 2,
                 ),
               ),
-              if (widget.isPrivate)
-                Text(
-                  "Mã phòng: ${widget.roomCode}",
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
-                ),
             ],
           ),
           centerTitle: true,

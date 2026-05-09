@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz;
+import 'package:flutter/foundation.dart';
+
 
 class PlanPage extends StatefulWidget {
   final String userId;
-
   const PlanPage({super.key, required this.userId});
 
   @override
@@ -15,8 +16,7 @@ class PlanPage extends StatefulWidget {
 }
 
 class _PlanPageState extends State<PlanPage> {
-  final FlutterLocalNotificationsPlugin notificationsPlugin =
-      FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin notificationsPlugin = FlutterLocalNotificationsPlugin();
 
   List<QueryDocumentSnapshot>? _cachedDocs;
 
@@ -35,37 +35,51 @@ class _PlanPageState extends State<PlanPage> {
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-    const settings = InitializationSettings(android: android, iOS: ios);
 
-    await notificationsPlugin.initialize(settings);
+    await notificationsPlugin.initialize(
+      settings: InitializationSettings(
+        android: android, 
+        iOS: ios,
+      ), 
+      
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        debugPrint("Notification clicked: ${response.payload}");
+      },
+    );
+
     final androidPlugin = notificationsPlugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+        
     if (androidPlugin != null) {
       await androidPlugin.requestNotificationsPermission();
     }
   }
 
   Future<void> _scheduleNotification(String title, DateTime dateTime) async {
-    await notificationsPlugin.zonedSchedule(
-      dateTime.millisecondsSinceEpoch ~/ 1000,
-      "📚 Đến giờ học!",
-      title,
-      tz.TZDateTime.from(dateTime, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'study_channel',
-          'Study Reminder',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
+  await notificationsPlugin.zonedSchedule(
+    // 1. Phải có tên tham số 'id:'
+    id: dateTime.millisecondsSinceEpoch ~/ 1000, 
+    
+    // 2. Tên tham số 'title:' và 'body:'
+    title: "📚 Đến giờ học!",
+    body: title,
+    
+    // 3. Tên tham số 'scheduledDate:'
+    scheduledDate: tz.TZDateTime.from(dateTime, tz.local),
+    
+    // 4. Tên tham số 'notificationDetails:'
+    notificationDetails: const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'study_channel',
+        'Study Reminder',
+        importance: Importance.max,
+        priority: Priority.high,
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
-  }
+    ),
+
+    androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+  );
+}
 
   Future<void> _addPlan() async {
     TextEditingController titleController = TextEditingController();

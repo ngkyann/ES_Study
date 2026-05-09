@@ -106,6 +106,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
   ) {
     int maxMembers = roomData['maxMembers'] ?? 4;
     int currentMembers = List.from(roomData['participants'] ?? []).length;
+    String roomName = roomData['roomName'] ?? "Phòng học Online";
 
     if (currentMembers >= maxMembers) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -232,6 +233,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                           builder: (_) => OnlineRoomPage(
                             isHost: false,
                             roomId: roomId,
+                            roomName: roomName,
                             userId: widget.currentUserId,
                             userName: widget.currentUserName,
                             duration: roomData['duration'] ?? 30,
@@ -420,11 +422,10 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                           filteredDocs[index].data() as Map<String, dynamic>;
 
                       int hostPoints = data['hostPoints'] ?? 0;
-                      String rawHostId = data['hostId'] ?? "unknown";
 
                       StudyRoom room = StudyRoom(
-                        hostName: data['hostName'] ?? "Ẩn danh",
-                        hostId: "@$rawHostId",
+                        hostName: data['roomName'] ?? data['hostName'] ?? "Ẩn danh",
+                        hostId: "@${data['hostId']}",
                         points: hostPoints,
                         // rank: _getRank(hostPoints),
                         currentMembers: List.from(

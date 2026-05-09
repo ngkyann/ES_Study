@@ -26,7 +26,6 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   String _selectedLanguage = "Tiếng Việt";
 
-  // 🔥 ĐÃ THÊM: Biến State cục bộ để cập nhật giao diện ngay khi sửa xong
   late String _currentUserName;
   late String _currentClass;
   // 1. Khai báo các biến trạng thái trong State của ông
@@ -702,7 +701,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Phiên bản: Beta 0.8.5",
+                "Phiên bản: Beta 0.8.6",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,

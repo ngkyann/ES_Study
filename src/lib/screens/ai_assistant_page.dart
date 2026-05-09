@@ -18,16 +18,15 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   bool _isLoading = false;
 
   final List<String> _modelPool = [
-    'gemma-3-1b-it',
-    'gemma-3-2b-it',
-    'gemma-3-4b-it',
-    'gemma-3-8b-it',
-    'gemma-3-27b-it',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-3.1-flash',
   ];
   int _currentModelIndex = 0;
 
   late GenerativeModel _model;
-  final String _apiKey = 'AIzaSyConvnHnodpl11TI9kb-P_kFTF34Q78JDo';
+  final String _apiKey = 'AIzaSyDEvXt5krUQ059RVimI7U6BluQtamVy_Hs';
 
   @override
   void initState() {
@@ -51,7 +50,7 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
     _model = GenerativeModel(
       model: _modelPool[_currentModelIndex],
       apiKey: _apiKey,
-      requestOptions: const RequestOptions(apiVersion: 'v1beta'),
+      requestOptions: const RequestOptions(apiVersion: 'v1'),
     );
   }
 
@@ -96,10 +95,10 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
 
     while (!success && attempt < _modelPool.length) {
       try {
-        // 1. Phải khởi tạo lại model với Index mới trước khi chat
         _model = GenerativeModel(
           model: _modelPool[_currentModelIndex],
           apiKey: _apiKey,
+          requestOptions: const RequestOptions(apiVersion: 'v1'),
         );
 
         final chat = _model.startChat(history: _history);

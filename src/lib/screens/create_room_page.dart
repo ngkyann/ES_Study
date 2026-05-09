@@ -22,6 +22,7 @@ class CreateRoomPage extends StatefulWidget {
 }
 
 class _CreateRoomPageState extends State<CreateRoomPage> {
+  final TextEditingController _roomNameController = TextEditingController(text: "Phòng học tập trung");
   int _selectedMinutes = 30;
   int _maxMembers = 4;
   final List<int> _timeOptions = [15, 30, 45, 60, 90, 120];
@@ -30,16 +31,31 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
   String? _selectedPlanId;
   String _selectedPlanTitle = "Học tự do";
   List<String> _goalsForRoom = [];
-
-  // 🔥 ĐÃ THÊM: Biến lưu trạng thái Riêng tư và Mã phòng
   bool _isPrivate = false;
   String _roomCode = "";
 
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _roomNameController.dispose();
+    super.dispose();
+  }
+
   void _createAndJoinRoom() async {
+
+    
     setState(() => _isLoading = true);
 
+    if (_roomNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Vui lòng đặt tên cho phòng học nhé!")),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final String roomName = _roomNameController.text.trim();
     final String newRoomId = const Uuid().v4();
 
     // Tạo mã phòng 6 chữ số nếu là phòng riêng tư
@@ -56,6 +72,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
         builder: (_) => OnlineRoomPage(
           isHost: true,
           roomId: newRoomId,
+          roomName: roomName,
           userId: widget.userId,
           userName: widget.userName,
           duration: _selectedMinutes,
@@ -63,7 +80,6 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
           planId: _selectedPlanId,
           planTitle: _selectedPlanTitle,
           goals: _goalsForRoom,
-          // 🔥 Truyền thêm thông tin phòng
           isPrivate: _isPrivate,
           roomCode: _isPrivate ? _roomCode : null,
         ),
@@ -89,6 +105,23 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildConfigCard(
+              title: "Tên phòng học",
+              icon: Icons.edit_note,
+              child: TextField(
+                controller: _roomNameController,
+                decoration: InputDecoration(
+                  hintText: "Nhập tên phòng...",
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
