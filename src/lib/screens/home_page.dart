@@ -10,9 +10,10 @@ import 'package:esstudy/screens/plan_page.dart';
 import 'package:esstudy/screens/history_page.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:esstudy/screens/ai_assistant_page.dart';
-import 'package:esstudy/screens/friends_page.dart'; // 🔥 ĐÃ THÊM IMPORT NÀY
-import 'package:esstudy/screens/statistics_page.dart'; // Đổi đường dẫn theo dự án của bạn
+import 'package:esstudy/screens/friends_page.dart';
+import 'package:esstudy/screens/statistics_page.dart';
 import 'package:esstudy/screens/create_room_page.dart';
+import 'package:esstudy/screens/anti_afk_manager.dart';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -43,6 +44,9 @@ class _HomePageState extends State<HomePage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkTodayPlansAndShowPopup();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AntiAFKManager().start(context);
     });
   }
 
