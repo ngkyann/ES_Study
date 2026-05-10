@@ -127,7 +127,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildActionTile(
                 Icons.info,
                 "Thông tin phiên bản",
-                "Beta 0.8.5",
+                "Beta 0.9.2",
                 onTap: () => _showVersionInfoDialog(context),
               ),
               const SizedBox(height: 30),
@@ -398,8 +398,8 @@ class _SettingsPageState extends State<SettingsPage> {
           child: isRainbow
               ? const Icon(Icons.add, size: 18, color: Colors.white)
               : (isSelected
-                    ? const Icon(Icons.check, size: 18, color: Colors.white)
-                    : null),
+                  ? const Icon(Icons.check, size: 18, color: Colors.white)
+                  : null),
         ),
       ),
     );
@@ -701,7 +701,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Phiên bản: Beta 0.8.8",
+                "Phiên bản: Beta 0.9.2",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -862,8 +862,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       : () async {
                           String oldP = oldPasswordController.text.trim();
                           String newP = newPasswordController.text.trim();
-                          String confirmP = confirmPasswordController.text
-                              .trim();
+                          String confirmP =
+                              confirmPasswordController.text.trim();
 
                           if (oldP.isEmpty ||
                               newP.isEmpty ||
@@ -888,9 +888,9 @@ class _SettingsPageState extends State<SettingsPage> {
                             if (user != null && user.email != null) {
                               AuthCredential credential =
                                   EmailAuthProvider.credential(
-                                    email: user.email!,
-                                    password: oldP,
-                                  );
+                                email: user.email!,
+                                password: oldP,
+                              );
                               await user.reauthenticateWithCredential(
                                 credential,
                               );

@@ -51,3 +51,4 @@ Thumbs.db
 # File quan trọng CẦN ẩn (nếu ông có file chứa API Key riêng)
 # .env
 # .api_keys
+lib/constants/var.dart

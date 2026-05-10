@@ -7,6 +7,7 @@ import 'package:flutter_markdown_latex/flutter_markdown_latex.dart'; // Để hi
 import 'package:markdown/markdown.dart' as md; // Để cấu hình Markdown
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:esstudy/constants/var.dart';
 
 class AIAssistantPage extends StatefulWidget {
   const AIAssistantPage({super.key});
@@ -33,7 +34,6 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   int _currentModelIndex = 0;
 
   late GenerativeModel _model;
-  final String _apiKey = 'AIzaSyDEvXt5krUQ059RVimI7U6BluQtamVy_Hs';
 
   @override
   void initState() {
@@ -52,7 +52,7 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   void _initModel() {
     _model = GenerativeModel(
       model: _modelPool[_currentModelIndex],
-      apiKey: _apiKey,
+      apiKey: geminiApiKey,
       requestOptions: const RequestOptions(apiVersion: 'v1'),
     );
   }
@@ -198,7 +198,7 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
       try {
         _model = GenerativeModel(
           model: _modelPool[_currentModelIndex],
-          apiKey: _apiKey,
+          apiKey: geminiApiKey,
           requestOptions: const RequestOptions(apiVersion: 'v1'),
         );
 
