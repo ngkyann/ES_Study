@@ -120,7 +120,7 @@ class _FriendsPageState extends State<FriendsPage> {
 
         if (myDoc == null) {
           return const Scaffold(
-            body: Center(child: Text("Lỗi dữ liệu người dùng")),
+            body: Center(child: Text("Lỗi dữ liệu của người dùng")),
           );
         }
 

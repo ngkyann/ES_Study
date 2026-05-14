@@ -138,7 +138,7 @@ class _ProfilePageState extends State<ProfilePage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text("Đã lưu ảnh thành công vào Bộ sưu tập!"),
+              content: Text("Đã lưu ảnh thành công vào bộ sưu tập!"),
               backgroundColor: Colors.green,
             ),
           );

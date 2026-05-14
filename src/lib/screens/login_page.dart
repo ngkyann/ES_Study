@@ -42,7 +42,6 @@ class _LoginPageState extends State<LoginPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  // --- LOGIC XỬ LÝ FIREBASE ĐÃ SỬA LỖI ĐỨNG MÁY ---
   // --- LOGIC XỬ LÝ FIREBASE ĐÃ THÊM THÔNG BÁO LỖI CHI TIẾT ---
   Future<void> _handleAuth() async {
     final String id = _idController.text.trim();
@@ -76,14 +75,23 @@ class _LoginPageState extends State<LoginPage> {
         // ================= ĐĂNG KÝ =================
         if (_nameController.text.isEmpty || _selectedClass == null) {
           setState(() => _isLoading = false);
-          _showMessage("Vui lòng điền đầy đủ thông tin (Họ tên, Lớp)!");
+          _showMessage("Vui lòng điền đầy đủ thông tin!");
           return;
         }
 
         // Bắt lỗi mật khẩu ngắn trước khi gọi lên Firebase cho mượt
-        if (password.length < 6) {
+        if (password.length < 6 && password.isNotEmpty) {
           setState(() => _isLoading = false);
           _showMessage("Mật khẩu phải có ít nhất 6 ký tự!");
+          bool number = false, letter = false;
+          for (var char in password.runes) {
+            if (char >= 48 && char <= 57) number = true; // 0-9
+            else if ((char >= 65 && char <= 90) ||
+                (char >= 97 && char <= 122)) letter = true; // A-Z hoặc a-z
+          }
+          if (!number || !letter) {
+            _showMessage("Mật khẩu phải gồm số và chữ!");
+          }
           return;
         }
 
@@ -108,7 +116,7 @@ class _LoginPageState extends State<LoginPage> {
         await FirebaseFirestore.instance.collection('users').doc(id).set({
           'name': _nameController.text.trim(),
           'id': id,
-          'email': email, // Email thật (nếu có)
+          'email': email,
           'class': _selectedClass,
           'points': 100,
           'createdAt': FieldValue.serverTimestamp(),

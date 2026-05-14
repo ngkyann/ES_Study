@@ -106,7 +106,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
   ) {
     int maxMembers = roomData['maxMembers'] ?? 4;
     int currentMembers = List.from(roomData['participants'] ?? []).length;
-    String roomName = roomData['roomName'] ?? "Phòng học Online";
+    String roomName = roomData['roomName'] ?? "Phòng học online";
 
     if (currentMembers >= maxMembers) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -139,7 +139,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    "Hãy chọn Kế hoạch cá nhân bạn muốn thực hiện trong phòng này:",
+                    "Hãy chọn kế hoạch cá nhân bạn muốn thực hiện trong phòng này:",
                   ),
                   const SizedBox(height: 15),
                   StreamBuilder<QuerySnapshot>(
@@ -301,7 +301,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                   onChanged: (value) =>
                       setState(() => _searchId = value.trim()),
                   decoration: InputDecoration(
-                    hintText: "Tìm kiếm theo @ID Host...",
+                    hintText: "Tìm kiếm theo @ID...(@tên_phòng)",
                     prefixIcon: const Icon(Icons.search),
                     filled: true,
                     fillColor: Colors.grey.shade100,

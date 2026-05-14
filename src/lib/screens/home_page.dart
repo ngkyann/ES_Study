@@ -405,11 +405,11 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               _buildGridMenu(context, [
-                MenuData(Icons.add_home, "Tạo phòng", Colors.orange),
-                MenuData(Icons.menu_book, "Học Offline", Colors.green),
+                MenuData(Icons.add_home, "Tạo phòng học", Colors.orange),
+                MenuData(Icons.menu_book, "Học offline", Colors.green),
                 MenuData(
                   Icons.search,
-                  "Tìm phòng",
+                  "Tìm phòng học",
                   primaryColor,
                   isSearch: true,
                 ),
@@ -422,12 +422,12 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               _buildGridMenu(context, [
-                MenuData(Icons.event_note, "Kế hoạch", Colors.purple),
-                MenuData(Icons.leaderboard, "Xếp hạng", Colors.redAccent),
+                MenuData(Icons.event_note, "Kế hoạch học tập", Colors.purple),
+                MenuData(Icons.leaderboard, "Bảng xếp hạng", Colors.redAccent),
                 MenuData(Icons.people, "Bạn bè", Colors.teal),
                 MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
-                MenuData(Icons.emoji_events, "Thành tích", Colors.indigo),
-                MenuData(Icons.smart_toy, "Trợ lý ảo", Colors.blueAccent),
+                MenuData(Icons.emoji_events, "Thành tích học tập", Colors.indigo),
+                MenuData(Icons.smart_toy, "Trợ lý học tập", Colors.blueAccent),
               ]),
               const SizedBox(height: 20),
             ],
@@ -456,7 +456,7 @@ class _HomePageState extends State<HomePage> {
             await Future.delayed(const Duration(milliseconds: 50));
             if (!context.mounted) return;
 
-            if (item.title == "Tạo phòng") {
+            if (item.title == "Tạo phòng học") {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -468,7 +468,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
               if (mounted) setState(() {});
-            } else if (item.title == "Học Offline") {
+            } else if (item.title == "Học offline") {
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -477,7 +477,7 @@ class _HomePageState extends State<HomePage> {
               );
               if (result is int) await _updateStudyProgress(result);
               if (mounted) setState(() {});
-            } else if (item.title == "Trợ lý ảo") {
+            } else if (item.title == "Trợ lý học tập") {
               await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AIAssistantPage()),
@@ -495,7 +495,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
               if (mounted) setState(() {});
-            } else if (item.title == "Kế hoạch") {
+            } else if (item.title == "Kế hoạch học tập") {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -503,7 +503,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
               if (mounted) setState(() {});
-            } else if (item.title == "Xếp hạng") {
+            } else if (item.title == "Bảng xếp hạng") {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -519,7 +519,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
               if (mounted) setState(() {});
-            } else if (item.title == "Thành tích") {
+            } else if (item.title == "Thành tích học tập") {
               await Navigator.push(
                 context,
                 MaterialPageRoute(

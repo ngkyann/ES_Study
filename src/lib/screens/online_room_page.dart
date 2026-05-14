@@ -158,7 +158,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       }
       if (mounted) setState(() => _localRenderer.srcObject = _localStream);
     } catch (e) {
-      debugPrint("Lỗi Camera: $e");
+      debugPrint("Lỗi camera: $e");
     }
 
     String myClass = "Lớp ?";
@@ -641,7 +641,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () => Navigator.pop(context, true),
               child: const Text(
-                "Thoát luôn",
+                "Thoát ra",
                 style: TextStyle(color: Colors.white),
               ),
             ),

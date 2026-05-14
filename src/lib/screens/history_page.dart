@@ -55,7 +55,7 @@ class HistoryPage extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("Chưa có lịch sử học tập"));
+            return const Center(child: Text("Chưa có lịch sử học tập, hãy cố gắng thêm!"));
           }
 
           final docs = snapshot.data!.docs;

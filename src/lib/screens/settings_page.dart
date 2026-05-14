@@ -127,7 +127,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildActionTile(
                 Icons.info,
                 "Thông tin phiên bản",
-                "Beta 0.9.2",
+                "Beta 0.9.3",
                 onTap: () => _showVersionInfoDialog(context),
               ),
               const SizedBox(height: 30),
@@ -419,6 +419,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildColorOption(const Color(0xFF87CEFA)), // Xanh dương nhạt
               _buildColorOption(Colors.black), // Đen
               _buildColorOption(Colors.green), // Xanh lá
+              _buildColorOption(const Color.fromARGB(255, 255, 125, 165)), // Hồng
               _buildColorOption(_customColor, isRainbow: true), // Nút cầu vồng
             ],
           ),
@@ -633,14 +634,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  "Ứng dụng chỉ lưu trữ các thông tin cơ bản như Họ tên, Email, Lớp và Lịch sử học tập của bạn để phục vụ việc đồng bộ tiến trình.\n",
+                  "Ứng dụng chỉ lưu trữ các thông tin cơ bản như họ tên, email, lớp và lịch sử học tập của bạn để phục vụ việc đồng bộ tiến trình.\n",
                 ),
                 Text(
                   "2. Sử dụng thông tin",
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  "Dữ liệu của bạn được sử dụng để xếp hạng trên Leaderboard, cập nhật Thống kê và cá nhân hóa trải nghiệm Trợ lý ảo AI.\n",
+                  "Dữ liệu của bạn được sử dụng để xếp hạng trên leaderboard, cập nhật thống kê và cá nhân hóa trải nghiệm trợ lý ảo AI.\n",
                 ),
                 Text(
                   "3. Chia sẻ dữ liệu",
@@ -701,7 +702,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Phiên bản: Beta 0.9.2",
+                "Phiên bản: Beta 0.9.3",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,

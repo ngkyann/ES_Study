@@ -33,9 +33,11 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
       [30, 5, 25],
     ],
     90: [
+      [45, 5, 40],
       [30, 5, 30, 5, 20],
     ],
     120: [
+      [30, 10, 40, 10, 30],
       [45, 10, 45, 10, 10],
       [60, 10, 50],
     ],
@@ -60,7 +62,7 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          "Học Offline",
+          "Học offline",
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
         backgroundColor: primaryColor,
@@ -101,7 +103,7 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                       ),
                       const SizedBox(height: 10),
                       const Text(
-                        "Chế độ nghỉ giải lao",
+                        "Chế độ học tập",
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       DropdownButton<int>(
@@ -126,7 +128,7 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        "Chọn Kế hoạch",
+                        "Chọn kế hoạch",
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 10),

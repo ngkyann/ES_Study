@@ -27,7 +27,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
   int _selectedMinutes = 30;
   int _maxMembers = 4;
   final List<int> _timeOptions = [15, 30, 45, 60, 90, 120];
-  final List<int> _memberOptions = [2, 4, 6, 8, 10];
+  final List<int> _memberOptions = [2, 4, 6, 8, 10, 15];
 
   String? _selectedPlanId;
   String _selectedPlanTitle = "Học tự do";
@@ -59,7 +59,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
 
     // Tạo mã phòng 6 chữ số nếu là phòng riêng tư
     if (_isPrivate) {
-      _roomCode = (100000 + Random().nextInt(900000)).toString();
+      _roomCode = (100000 + Random().nextInt(899999)).toString();
     }
 
     if (!mounted) return;
@@ -92,7 +92,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
       backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         title: const Text(
-          "Tạo phòng Online",
+          "Tạo phòng học",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: primaryColor,
@@ -153,7 +153,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: _buildConfigCard(
-                    title: "Giới hạn",
+                    title: "Số lượng người học",
                     icon: Icons.people_alt,
                     child: DropdownButtonFormField<int>(
                       value: _maxMembers,
@@ -183,16 +183,16 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
 
             // 🔥 ĐÃ THÊM: Tuỳ chọn Phòng Riêng tư
             _buildConfigCard(
-              title: "Quyền riêng tư",
+              title: "Chế độ riêng tư",
               icon: Icons.security,
               child: SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text(
-                  "Phòng học Riêng tư",
+                  "Phòng học riêng tư",
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 subtitle: const Text(
-                  "Yêu cầu mã 6 số để tham gia. Phòng sẽ bị ẩn trên danh sách tìm kiếm chung.",
+                  "Yêu cầu nhập mã 6 số để tham gia. Phòng học sẽ bị ẩn trên danh sách tìm kiếm chung.",
                   style: TextStyle(fontSize: 12),
                 ),
                 value: _isPrivate,
@@ -286,7 +286,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
               child: _isLoading
                   ? const CircularProgressIndicator(color: Colors.white)
                   : const Text(
-                      "Khởi tạo Phòng học",
+                      "Tạo phòng học",
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,

@@ -93,7 +93,7 @@ class _PlanPageState extends State<PlanPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text("Tạo Kế Hoạch"),
+              title: const Text("Tạo kế hoạch"),
               content: SizedBox(
                 width: double.maxFinite,
                 child: SingleChildScrollView(
@@ -103,7 +103,7 @@ class _PlanPageState extends State<PlanPage> {
                       TextField(
                         controller: titleController,
                         decoration: const InputDecoration(
-                          labelText: "Tên kế hoạch (VD: Toán 15 phút)",
+                          labelText: "Tên kế hoạch (VD: Học toán 15 phút)",
                         ),
                       ),
                       const SizedBox(height: 15),
@@ -248,7 +248,7 @@ class _PlanPageState extends State<PlanPage> {
                     if (mounted) Navigator.pop(context);
                   },
                   child: const Text(
-                    "Lưu",
+                    "Tạo",
                     style: TextStyle(color: Colors.white),
                   ),
                 ),
@@ -265,7 +265,7 @@ class _PlanPageState extends State<PlanPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          "Kế hoạch",
+          "Kế hoạch học tập",
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: primaryColor,

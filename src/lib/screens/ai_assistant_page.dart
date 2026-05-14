@@ -26,9 +26,9 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   bool _isFetchingHistory = true;
 
   final List<String> _modelPool = [
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
     'gemini-3.1-flash-lite',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-flash',
     'gemini-3.1-flash',
   ];
   int _currentModelIndex = 0;
@@ -236,7 +236,7 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
             _messages.add({
               'role': 'model',
               'text':
-                  '⚠️ Hiện tại tất cả máy chủ AI đều bận. Bạn đợi khoảng 30 giây rồi hỏi lại nhé!',
+                  '⚠️ Hiện tại tất cả mô hình AI đều đang bận. Bạn đợi khoảng 30 giây rồi hỏi lại nhé!',
             });
             _isLoading = false;
           });
@@ -276,7 +276,7 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
               showDialog(
                   context: context,
                   builder: (ctx) => AlertDialog(
-                        title: const Text("Xóa đoạn chat?"),
+                        title: const Text("Xóa đoạn chat này?"),
                         content: const Text(
                             "Lịch sử trò chuyện này sẽ bị xóa vĩnh viễn và không thể khôi phục."),
                         actions: [
@@ -412,7 +412,7 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
                                           .showSnackBar(
                                         SnackBar(
                                           content: const Text(
-                                              "Đã sao chép câu trả lời!"),
+                                              "Đã sao chép tin nhắn này!"),
                                           backgroundColor: primaryColor,
                                           duration: const Duration(seconds: 2),
                                         ),

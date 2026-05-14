@@ -210,7 +210,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
                     const SizedBox(height: 25),
                     const Text(
-                      "Kỷ lục & Tổng quan",
+                      "Kỷ lục & Tổng quát",
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -224,7 +224,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
                     const SizedBox(height: 25),
                     const Text(
-                      "Chỉ số trung bình",
+                      "Chỉ số học tập",
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

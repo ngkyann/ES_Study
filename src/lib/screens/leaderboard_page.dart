@@ -23,7 +23,7 @@ class LeaderboardPage extends StatelessWidget {
       // Thanh hiển thị thứ hạng của bạn cố định ở dưới cùng
       bottomNavigationBar: _buildMyRankSection(),
       body: Container(
-        color: Colors.white, // Ép nền trắng để không bị lỗi Dark Mode
+        color: Colors.white,
         child: StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')

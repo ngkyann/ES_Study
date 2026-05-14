@@ -126,7 +126,7 @@ class _ChatPageState extends State<ChatPage> {
           ],
         ),
         content: const Text(
-          "Lịch sử trò chuyện sẽ bị xoá ở phía bạn, nhưng người kia vẫn sẽ nhìn thấy. Bạn có chắc chắn không?",
+          "Lịch sử trò chuyện chỉ bị xoá ở phía bạn, người kia vẫn sẽ nhìn thấy. Bạn có chắc chắn không?",
         ),
         actions: [
           TextButton(
