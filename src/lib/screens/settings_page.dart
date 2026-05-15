@@ -127,7 +127,7 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildActionTile(
                 Icons.info,
                 "Thông tin phiên bản",
-                "V 1.0.0",
+                "V 1.0.0 Beta",
                 onTap: () => _showVersionInfoDialog(context),
               ),
               const SizedBox(height: 30),
