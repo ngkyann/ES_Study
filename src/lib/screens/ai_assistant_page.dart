@@ -58,59 +58,63 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   }
 
   Future<void> _loadChatHistory() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
 
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('ai_chats')
-          .orderBy('timestamp', descending: false)
-          .get();
+  try {
+    // 1. Chỉ lấy tối đa 20-30 tin nhắn gần nhất để tiết kiệm và nhanh
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('ai_chats')
+        .orderBy('timestamp', descending: true) // Lấy từ mới nhất
+        .limit(25) // Giới hạn số lượng tin nạp lại
+        .get();
 
-      if (snapshot.docs.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _messages.add({
-              'role': 'model',
-              'text':
-                  'Chào bạn! Mình là ES Assistant. Mình có thể giúp gì cho việc học của bạn hôm nay?',
-            });
-            _isFetchingHistory = false;
+    if (mounted) {
+      setState(() {
+        _messages.clear();
+        _history.clear();
+
+        if (snapshot.docs.isEmpty) {
+          _messages.add({
+            'role': 'model',
+            'text': 'Chào bạn! Mình là ES Assistant. Mình có thể giúp gì cho bạn hôm nay?',
           });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            for (var doc in snapshot.docs) {
-              final data = doc.data();
-              final role = data['role'] as String;
-              final text = data['text'] as String;
+        } else {
+          // 2. Đảo ngược lại danh sách vì mình lấy descending: true
+          final docs = snapshot.docs.reversed.toList();
+          
+          for (var doc in docs) {
+            final data = doc.data();
+            final role = data['role'] as String;
+            final text = data['text'] as String;
 
-              _messages.add({'role': role, 'text': text});
+            _messages.add({'role': role, 'text': text});
 
-              if (role == 'user') {
-                _history.add(Content.text(text));
-              } else {
-                _history.add(Content.model([TextPart(text)]));
-              }
+            // Nạp vào history cho AI
+            if (role == 'user') {
+              _history.add(Content.text(text));
+            } else {
+              _history.add(Content.model([TextPart(text)]));
             }
-
-            if (_history.length > 20) {
-              _history.removeRange(0, _history.length - 20);
-            }
-
-            _isFetchingHistory = false;
-          });
-          _scrollToBottom();
+          }
+          
+          while (_history.isNotEmpty && _history.first.role == 'model') {
+            _history.removeAt(0);
+          }
         }
-      }
-    } catch (e) {
-      debugPrint("Lỗi khi tải lịch sử: $e");
-      if (mounted) setState(() => _isFetchingHistory = false);
+        _isFetchingHistory = false;
+      });
+      
+      // Đợi UI render xong rồi mới scroll
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
+  } catch (e) {
+    debugPrint("Lỗi khi tải lịch sử: $e");
+    if (mounted) setState(() => _isFetchingHistory = false);
   }
+}
 
   Future<void> _saveMessageToFirestore(String role, String text) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -133,35 +137,50 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
 
   Future<void> _startNewChat() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      setState(() => _isLoading = true);
-      try {
-        final snapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('ai_chats')
-            .get();
+    if (user == null) return;
 
-        final batch = FirebaseFirestore.instance.batch();
-        for (var doc in snapshot.docs) {
-          batch.delete(doc.reference);
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Lấy tất cả tin nhắn
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('ai_chats')
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        // 2. Chia nhỏ batch nếu số lượng tin > 500 (Phòng xa cho chắc)
+        final writeBatchSize = 500;
+        for (var i = 0; i < snapshot.docs.length; i += writeBatchSize) {
+          final batch = FirebaseFirestore.instance.batch();
+          final chunk = snapshot.docs.sublist(
+            i, 
+            i + writeBatchSize > snapshot.docs.length ? snapshot.docs.length : i + writeBatchSize
+          );
+          
+          for (var doc in chunk) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
         }
-        await batch.commit();
-      } catch (e) {
-        debugPrint("Lỗi khi xóa chat: $e");
       }
-    }
-
-    if (mounted) {
-      setState(() {
-        _messages.clear();
-        _history.clear();
-        _messages.add({
-          'role': 'model',
-          'text': 'Đã xóa lịch sử trò chuyện. Chúng ta bắt đầu chủ đề mới nhé!',
+    } catch (e) {
+      debugPrint("Lỗi khi xóa chat trên Firestore: $e");
+      // Có thể hiện một SnackBar thông báo lỗi mạng ở đây
+    } finally {
+      // 3. Luôn đảm bảo tắt loading dù có lỗi hay không
+      if (mounted) {
+        setState(() {
+          _messages.clear();
+          _history.clear();
+          _messages.add({
+            'role': 'model',
+            'text': 'Đã xóa lịch sử trò chuyện. Chúng ta bắt đầu chủ đề mới nhé!',
+          });
+          _isLoading = false;
         });
-        _isLoading = false;
-      });
+      }
     }
   }
 
@@ -178,16 +197,61 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   }
 
   Future<void> _sendMessage() async {
-    final prompt = _textController.text.trim();
-    if (prompt.isEmpty) return;
+    if (_textController.text.trim().isEmpty || _isLoading) return;
 
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final now = DateTime.now();
+    final userLimitDoc = FirebaseFirestore.instance.collection('user_limits').doc(user.uid);
+    
+    // 1. CHỈ KIỂM TRA (CHECK), CHƯA TRỪ LƯỢT
+    int rpmCount = 0;
+    int rpdCount = 0;
+    DateTime dayStart = DateTime(now.year, now.month, now.day);
+
+    try {
+      final doc = await userLimitDoc.get();
+      if (doc.exists) {
+        Map<String, dynamic> data = doc.data()!;
+        DateTime lastRequest = (data['lastRequest'] as Timestamp).toDate();
+        DateTime lastDayStart = (data['dayStart'] as Timestamp).toDate();
+        rpmCount = data['rpmCount'] ?? 0;
+        rpdCount = data['rpdCount'] ?? 0;
+
+        // Reset theo ngày
+        if (now.difference(lastDayStart).inDays >= 1) {
+          rpdCount = 0;
+        } else {
+          dayStart = lastDayStart;
+        }
+
+        // Reset theo phút
+        if (now.difference(lastRequest).inMinutes >= 1) {
+          rpmCount = 0;
+        }
+      }
+
+      if (rpdCount >= 100) {
+        _showLimitDialog("Bạn đã dùng hết 100 lượt hỏi hôm nay.");
+        return;
+      }
+      if (rpmCount >= 6) {
+        _showLimitDialog("Hỏi nhanh quá! Đợi xíu nhé.");
+        return;
+      }
+    } catch (e) {
+      debugPrint("Lỗi Rate Limit: $e");
+    }
+
+    // 2. CHUẨN BỊ GỬI TIN NHẮN
+    final prompt = _textController.text.trim();
     _textController.clear();
 
     setState(() {
       _messages.add({'role': 'user', 'text': prompt});
       _isLoading = true;
     });
-
     _scrollToBottom();
     await _saveMessageToFirestore('user', prompt);
 
@@ -207,14 +271,20 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
 
         if (mounted) {
           final aiText = response.text ?? '...';
+          
+          // 3. AI TRẢ LỜI THÀNH CÔNG -> MỚI THỰC HIỆN TRỪ LƯỢT (SET DATA)
+          await userLimitDoc.set({
+            'rpmCount': rpmCount + 1,
+            'rpdCount': rpdCount + 1,
+            'lastRequest': FieldValue.serverTimestamp(),
+            'dayStart': dayStart,
+          }, SetOptions(merge: true));
 
           setState(() {
             _messages.add({'role': 'model', 'text': aiText});
-
             _history.add(Content.text(prompt));
             _history.add(Content.model([TextPart(aiText)]));
             if (_history.length > 20) _history.removeRange(0, 2);
-
             _isLoading = false;
           });
           _scrollToBottom();
@@ -223,28 +293,51 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
         success = true;
       } catch (e) {
         debugPrint("Lỗi tại model ${_modelPool[_currentModelIndex]}: $e");
-        attempt++;
+          attempt++;
 
-        if (attempt < _modelPool.length) {
-          await Future.delayed(const Duration(seconds: 1));
-          _currentModelIndex = (_currentModelIndex + 1) % _modelPool.length;
-          continue;
-        }
+          if (attempt < _modelPool.length) {
+            await Future.delayed(const Duration(seconds: 1));
+            _currentModelIndex = (_currentModelIndex + 1) % _modelPool.length;
+            continue;
+          }
 
-        if (mounted) {
-          setState(() {
-            _messages.add({
-              'role': 'model',
-              'text':
-                  '⚠️ Hiện tại tất cả mô hình AI đều đang bận. Bạn đợi khoảng 30 giây rồi hỏi lại nhé!',
+          if (mounted) {
+            setState(() {
+              _messages.add({
+                'role': 'model',
+                'text':
+                    '⚠️ Hiện tại tất cả mô hình AI đều đang bận. Bạn đợi khoảng 30 giây rồi hỏi lại nhé!',
+              });
+              _isLoading = false;
             });
-            _isLoading = false;
-          });
-          _scrollToBottom();
-        }
-        break;
+            _scrollToBottom();
+          }
+          break;
       }
     }
+  }
+
+  void _showLimitDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 10),
+            Text("Giới hạn câu hỏi"),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Đã hiểu"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
