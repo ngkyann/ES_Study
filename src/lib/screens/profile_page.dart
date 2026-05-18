@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart'; // Mới thêm
 import 'package:image_picker/image_picker.dart'; // Mới thêm
 import 'package:esstudy/constants/colors.dart';
-import 'package:esstudy/screens/settings_page.dart';
+// import 'package:esstudy/screens/settings_page.dart';
 import 'package:dio/dio.dart'; // Thêm để dùng cho chức năng tải ảnh, nếu chưa có hãy chạy: flutter pub add dio path_provider gallery_saver
 import 'package:path_provider/path_provider.dart'; // Thư viện để lưu ảnh vào bộ sưu tập
 import 'package:gal/gal.dart';
@@ -245,27 +245,27 @@ class _ProfilePageState extends State<ProfilePage> {
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         centerTitle: true,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: IconButton(
-              icon: const Icon(Icons.settings),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SettingsPage(
-                      userName: widget.userName,
-                      selectedClass: widget.selectedClass,
-                      userId: widget.userId,
-                      email: widget.email,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+        // actions: [
+        //   Padding(
+        //     padding: const EdgeInsets.only(right: 12),
+        //     child: IconButton(
+        //       icon: const Icon(Icons.settings),
+        //       onPressed: () {
+        //         Navigator.push(
+        //           context,
+        //           MaterialPageRoute(
+        //             builder: (context) => SettingsPage(
+        //               userName: widget.userName,
+        //               selectedClass: widget.selectedClass,
+        //               userId: widget.userId,
+        //               email: widget.email,
+        //             ),
+        //           ),
+        //         );
+        //       },
+        //     ),
+        //   ),
+        // ],
       ),
       body: RefreshIndicator(
         color: primaryColor,
@@ -338,15 +338,14 @@ class _ProfilePageState extends State<ProfilePage> {
                                   radius: 50,
                                   backgroundColor: Colors.white,
                                   // Kiểm tra và hiển thị ảnh mạng hoặc ảnh mặc định
-                                  backgroundImage:
-                                      (avatarUrl != null &&
+                                  backgroundImage: (avatarUrl != null &&
                                           avatarUrl.isNotEmpty)
                                       ? NetworkImage(
                                           avatarUrl,
                                         ) // Dùng ảnh từ Firebase
                                       : null,
-                                  child:
-                                      (avatarUrl == null || avatarUrl.isEmpty)
+                                  child: (avatarUrl == null ||
+                                          avatarUrl.isEmpty)
                                       ? Icon(
                                           Icons.person,
                                           color: primaryColor,
@@ -449,7 +448,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       "ID người dùng",
                       "@${widget.userId}",
                     ),
-
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
@@ -486,13 +484,11 @@ class _ProfilePageState extends State<ProfilePage> {
                         );
                       },
                     ),
-
                     _infoCard(
                       Icons.workspace_premium,
                       "Tổng điểm",
                       "${widget.userPoints}",
                     ),
-
                     StreamBuilder<DocumentSnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
@@ -504,8 +500,8 @@ class _ProfilePageState extends State<ProfilePage> {
                           final data =
                               snapshot.data!.data() as Map<String, dynamic>;
                           if (data['createdAt'] != null) {
-                            DateTime date = (data['createdAt'] as Timestamp)
-                                .toDate();
+                            DateTime date =
+                                (data['createdAt'] as Timestamp).toDate();
                             joinDateText =
                                 "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
                           }
@@ -517,7 +513,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         );
                       },
                     ),
-
                     StreamBuilder<DocumentSnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
@@ -526,14 +521,12 @@ class _ProfilePageState extends State<ProfilePage> {
                       builder: (context, snapshot) {
                         String currentClass = widget.selectedClass;
                         if (snapshot.hasData && snapshot.data!.exists) {
-                          currentClass =
-                              snapshot.data!.get('class') ??
+                          currentClass = snapshot.data!.get('class') ??
                               widget.selectedClass;
                         }
                         return _infoCard(Icons.school, "Lớp", currentClass);
                       },
                     ),
-
                     const SizedBox(height: 30),
                   ],
                 ),

@@ -40,6 +40,31 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _currentUserName = widget.userName;
     _currentClass = widget.selectedClass;
+
+    // --- THÊM PHẦN KIỂM TRA MÀU HIỆN TẠI ---
+
+    // Gán màu đang chọn bằng màu hiện tại của app
+    _selectedColor = primaryColor;
+
+    // Danh sách các màu cố định mà bạn đang có trong _buildThemeSelector
+    List<Color> defaultColors = [
+      const Color(0xFF87CEFA),
+      Colors.black,
+      Colors.green,
+      const Color.fromARGB(255, 255, 125, 165),
+    ];
+
+    // Kiểm tra xem primaryColor có phải là một trong các màu mặc định không
+    bool isDefaultColor =
+        defaultColors.any((c) => c.value == primaryColor.value);
+
+    if (!isDefaultColor) {
+      // Nếu không phải màu mặc định -> Người dùng đang dùng màu tuỳ chỉnh (nút cầu vồng)
+      _customColor = primaryColor;
+      _isCustomActive = true;
+    } else {
+      _isCustomActive = false;
+    }
   }
 
   // --- HÀM CẬP NHẬT FIREBASE ---
@@ -419,7 +444,8 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildColorOption(const Color(0xFF87CEFA)), // Xanh dương nhạt
               _buildColorOption(Colors.black), // Đen
               _buildColorOption(Colors.green), // Xanh lá
-              _buildColorOption(const Color.fromARGB(255, 255, 125, 165)), // Hồng
+              _buildColorOption(
+                  const Color.fromARGB(255, 255, 125, 165)), // Hồng
               _buildColorOption(_customColor, isRainbow: true), // Nút cầu vồng
             ],
           ),
@@ -711,7 +737,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                "Cập nhật lần cuối: 09/05/2026",
+                "Cập nhật lần cuối: 18/05/2026",
                 style: TextStyle(color: Colors.grey.shade700, fontSize: 15),
               ),
               const SizedBox(height: 15),

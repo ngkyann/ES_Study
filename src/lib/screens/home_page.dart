@@ -251,11 +251,49 @@ class _HomePageState extends State<HomePage> {
         elevation: 0,
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
-        leadingWidth: 160,
+        leadingWidth: 230,
         leading: Container(
-          margin: const EdgeInsets.only(left: 16),
+          margin: const EdgeInsets.only(left: 16, top: 10),
           child: Row(
             children: [
+              GestureDetector(
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProfilePage(
+                        userName: widget.userName,
+                        userId: widget.userId,
+                        selectedClass: widget.selectedClass,
+                        userPoints: userPoints,
+                        email: widget.email,
+                        userStreak: userStreak,
+                      ),
+                    ),
+                  );
+                  if (mounted) setState(() {});
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.white,
+                    child: Icon(Icons.person, color: primaryColor, size: 20),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
               const Icon(
                 Icons.local_fire_department,
                 color: Colors.orangeAccent,
@@ -299,40 +337,31 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-        title: const FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            "Trang chủ",
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
-        centerTitle: true,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: GestureDetector(
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProfilePage(
-                      userName: widget.userName,
-                      userId: widget.userId,
-                      selectedClass: widget.selectedClass,
-                      userPoints: userPoints,
-                      email: widget.email,
-                      userStreak: userStreak,
-                    ),
-                  ),
-                );
-                if (mounted) setState(() {});
-              },
-              child: CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Icon(Icons.person, color: primaryColor),
-              ),
+          IconButton(
+            icon: const Icon(
+              Icons.settings,
+              size: 28,
+              color: Colors.white,
             ),
+            onPressed: () async {
+              // Chuyển hướng sang SettingsPage và truyền các tham số cần thiết
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SettingsPage(
+                    userName: widget.userName,
+                    selectedClass: widget.selectedClass,
+                    userId: widget.userId,
+                    email: widget.email,
+                  ),
+                ),
+              );
+              // Khi từ trang Settings quay lại, cập nhật lại trạng thái nếu có thay đổi (ví dụ: đổi tên/lớp)
+              if (mounted) setState(() {});
+            },
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: RefreshIndicator(
@@ -359,7 +388,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: primaryColor,
                       borderRadius: const BorderRadius.only(
@@ -374,25 +402,75 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ],
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "${getGreeting()},",
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(30),
+                        bottomRight: Radius.circular(30),
+                      ),
+                      child: Stack(
+                        children: [
+                          // --- ĐÁM MÂY ĐÃ ĐƯỢC CHỈNH LẠI ĐỂ KHÔNG BỊ CẮT TRÊN ---
+
+                          Positioned(
+                            bottom: -50,
+                            right: -30,
+                            child: Transform.scale(
+                              scaleX: 1.4, // Kéo dài ra theo chiều ngang
+                              child: Icon(
+                                Icons.cloud,
+                                color: Colors.white.withOpacity(0.32),
+                                size: 180,
+                              ),
+                            ),
                           ),
-                        ),
-                        Text(
-                          widget.userName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
+
+                          // Đám mây phụ nối đuôi nhau về phía trái (giữa màn hình)
+                          Positioned(
+                            bottom: 10,
+                            right: 120,
+                            child: Transform.scale(
+                              scaleX: 1.3,
+                              child: Icon(
+                                Icons.cloud,
+                                color: Colors.white.withOpacity(0.28),
+                                size: 90,
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+
+                          // Nội dung chữ (Tăng padding dưới để đẩy khung dài ra, mây không bị gò bó)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: 15,
+                              left: 20,
+                              right: 20,
+                              bottom:
+                                  45, // Kéo dài vùng này ra để mây hiển thị đủ
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "${getGreeting()},",
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.userName,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -426,7 +504,8 @@ class _HomePageState extends State<HomePage> {
                 MenuData(Icons.leaderboard, "Bảng xếp hạng", Colors.redAccent),
                 MenuData(Icons.people, "Bạn bè", Colors.teal),
                 MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
-                MenuData(Icons.emoji_events, "Thành tích học tập", Colors.indigo),
+                MenuData(
+                    Icons.emoji_events, "Thành tích học tập", Colors.indigo),
                 MenuData(Icons.smart_toy, "Trợ lý học tập", Colors.blueAccent),
               ]),
               const SizedBox(height: 20),
@@ -484,7 +563,6 @@ class _HomePageState extends State<HomePage> {
               );
               if (mounted) setState(() {});
             } else if (item.isSearch) {
-              // 🔥 ĐÃ SỬA: Truyền currentUserId vào RoomSearchPage
               await Navigator.push(
                 context,
                 MaterialPageRoute(
