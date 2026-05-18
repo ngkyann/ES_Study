@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:esstudy/constants/colors.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 
 class ChatPage extends StatefulWidget {
@@ -27,75 +29,174 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _msgController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   XFile? _selectedImage;
+  PlatformFile? _selectedFile;
   bool _isUploading = false;
 
-  Future<void> _pickImage() async {
-    if (_isUploading) return; // Không cho chọn ảnh khi đang upload
+  // 🔥 HÀM MỚI: Tự động mở link để tải file về máy
+  Future<void> _downloadFile(String fileUrl) async {
+    final Uri url = Uri.parse(fileUrl);
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 75, // Giảm chất lượng xuống 75%
-        maxWidth: 1024,   // 🔥 TỐI ƯU: Giới hạn chiều rộng tối đa
-        maxHeight: 1024,  // 🔥 TỐI ƯU: Giới hạn chiều cao tối đa
-      );
-
-      if (image != null) {
-        setState(() {
-          _selectedImage = image;
-        });
+      if (await canLaunchUrl(url)) {
+        await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        throw 'Không thể mở liên kết tải file.';
       }
     } catch (e) {
-      debugPrint("Lỗi chọn ảnh: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Không thể mở thư viện ảnh")),
+          SnackBar(content: Text("Lỗi khi tải file: $e")),
         );
       }
     }
   }
 
+  Future<void> _pickImage() async {
+    if (_isUploading) return;
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 75,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+
+      if (image != null) {
+        setState(() {
+          _selectedImage = image;
+          _selectedFile = null; // Xóa file nếu chọn ảnh
+        });
+      }
+    } catch (e) {
+      debugPrint("Lỗi chọn ảnh: $e");
+    }
+  }
+
+  Future<void> _pickFile() async {
+    if (_isUploading) return;
+    try {
+      FilePickerResult? result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: [
+          'pdf',
+          'doc',
+          'docx',
+          'xls',
+          'xlsx',
+          'ppt',
+          'pptx',
+          'txt'
+        ],
+        withData: true, // 🔥 BẮT BUỘC THÊM DÒNG NÀY ĐỂ TRÁNH LỖI ĐỌC FILE
+      );
+
+      if (result != null) {
+        setState(() {
+          _selectedFile = result.files.first;
+          _selectedImage = null;
+        });
+      }
+    } catch (e) {
+      debugPrint("Lỗi chọn file: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Không thể chọn file")),
+        );
+      }
+    }
+  }
+
+  void _showAttachmentMenu() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.image, color: Colors.lightBlue),
+                title: const Text('Gửi hình ảnh'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage();
+                },
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.insert_drive_file, color: Colors.orange),
+                title: const Text('Gửi tài liệu'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickFile();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
 
-    // Kiểm tra nếu không có cả chữ lẫn ảnh hoặc đang upload thì dừng
-    if (text.isEmpty && _selectedImage == null) return;
+    if (text.isEmpty && _selectedImage == null && _selectedFile == null) return;
     if (_isUploading) return;
 
     setState(() => _isUploading = true);
 
     try {
-      String? imageUrl;
+      String? fileUrl;
+      String? fileName;
+      String msgType = 'text';
 
       if (_selectedImage != null) {
-        // Sao chép thông tin ảnh ra biến tạm và clear UI preview ngay để giải phóng RAM
         final XFile imageToUpload = _selectedImage!;
-        setState(() {
-          _selectedImage = null; 
-        });
+        setState(() => _selectedImage = null);
 
         Uint8List imageData = await imageToUpload.readAsBytes();
-        
-        // Tạo tên file duy nhất kèm đuôi .jpg
-        String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+        fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+        Reference ref = FirebaseStorage.instance
+            .ref()
+            .child('chat_images/${widget.chatId}/$fileName');
 
-        Reference ref = FirebaseStorage.instance.ref().child(
-              'chat_images/${widget.chatId}/$fileName',
-            );
+        TaskSnapshot snapshot = await ref.putData(
+            imageData, SettableMetadata(contentType: 'image/jpeg'));
+        fileUrl = await snapshot.ref.getDownloadURL();
+        msgType = 'image';
+      } else if (_selectedFile != null) {
+        final PlatformFile fileToUpload = _selectedFile!;
+        setState(() => _selectedFile = null);
 
-        // Upload dữ liệu dưới dạng byte (Hỗ trợ tốt cho cả Web và Mobile)
-        UploadTask uploadTask = ref.putData(
-          imageData,
-          SettableMetadata(contentType: 'image/jpeg'),
-        );
+        fileName = fileToUpload.name;
 
-        TaskSnapshot snapshot = await uploadTask;
-        imageUrl = await snapshot.ref.getDownloadURL();
+        // 🔥 Đọc byte an toàn không dùng dấu !
+        Uint8List? fileBytes = fileToUpload.bytes;
+        if (fileBytes == null && !kIsWeb && fileToUpload.path != null) {
+          fileBytes = await File(fileToUpload.path!).readAsBytes();
+        }
+
+        if (fileBytes == null)
+          throw Exception("Hệ thống không thể đọc tệp này.");
+
+        String uniqueFileName =
+            '${DateTime.now().millisecondsSinceEpoch}_$fileName';
+        Reference ref = FirebaseStorage.instance
+            .ref()
+            .child('chat_files/${widget.chatId}/$uniqueFileName');
+
+        TaskSnapshot snapshot = await ref.putData(fileBytes);
+        fileUrl = await snapshot.ref.getDownloadURL();
+        msgType = 'file';
       }
 
-      // Xóa chữ ở ô nhập liệu sau khi upload ảnh hoàn tất (hoặc song song)
       _msgController.clear();
 
-      // Lưu thông tin vào Firestore
       await FirebaseFirestore.instance
           .collection('chats')
           .doc(widget.chatId)
@@ -103,8 +204,11 @@ class _ChatPageState extends State<ChatPage> {
           .add({
         'senderId': widget.currentUserId,
         'text': text,
-        'imageUrl': imageUrl ?? '',
-        'type': imageUrl != null ? 'image' : 'text',
+        'imageUrl':
+            msgType == 'image' ? (fileUrl ?? '') : '', // 🔥 Thêm lại dòng này
+        'fileUrl': fileUrl ?? '',
+        'fileName': fileName ?? '',
+        'type': msgType,
         'timestamp': FieldValue.serverTimestamp(),
         'deletedBy': [],
       });
@@ -116,8 +220,8 @@ class _ChatPageState extends State<ChatPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Không thể gửi tin nhắn. Vui lòng thử lại!"),
+          SnackBar(
+            content: Text("Lỗi: ${e.toString().replaceAll('Exception: ', '')}"),
           ),
         );
       }
@@ -251,9 +355,13 @@ class _ChatPageState extends State<ChatPage> {
                     final data =
                         visibleMessages[index].data() as Map<String, dynamic>;
                     bool isMe = data['senderId'] == widget.currentUserId;
-                    bool isImage = data['type'] == 'image' &&
-                        data['imageUrl'] != null &&
-                        data['imageUrl'].toString().isNotEmpty;
+
+                    // 🔥 Đọc link gom chung để tương thích dữ liệu cũ và mới
+                    String linkUrl = data['fileUrl'] ?? data['imageUrl'] ?? '';
+
+                    bool isImage =
+                        data['type'] == 'image' && linkUrl.isNotEmpty;
+                    bool isFile = data['type'] == 'file' && linkUrl.isNotEmpty;
 
                     return Align(
                       alignment:
@@ -265,12 +373,9 @@ class _ChatPageState extends State<ChatPage> {
                                     data['text'].toString().trim().isEmpty)
                             ? const EdgeInsets.all(5)
                             : const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
+                                horizontal: 16, vertical: 12),
                         constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75,
-                        ),
+                            maxWidth: MediaQuery.of(context).size.width * 0.75),
                         decoration: BoxDecoration(
                           color: isMe
                               ? primaryColor.withOpacity(0.2)
@@ -285,57 +390,122 @@ class _ChatPageState extends State<ChatPage> {
                                 ? const Radius.circular(5)
                                 : const Radius.circular(20),
                           ),
-                          boxShadow: [
-                            if (!isMe)
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 5,
-                                offset: const Offset(0, 2),
-                              ),
-                          ],
                         ),
-                        // 🔥 FIX: Hỗ trợ hiển thị cả ảnh và chữ trong cùng một tin nhắn
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            // 1. HIỂN THỊ ẢNH
                             if (isImage)
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(
-                                  isImage &&
-                                          (data['text'] == null ||
-                                              data['text']
-                                                  .toString()
-                                                  .trim()
-                                                  .isEmpty)
-                                      ? 15
-                                      : 8,
-                                ),
-                                child: Image.network(
-                                  data['imageUrl'],
-                                  fit: BoxFit.cover,
-                                  loadingBuilder:
-                                      (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return const Padding(
-                                      padding: EdgeInsets.all(20),
-                                      child: CircularProgressIndicator(),
-                                    );
-                                  },
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          FullScreenImageViewer(
+                                              imageUrl: linkUrl),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  constraints: const BoxConstraints(
+                                    maxHeight: 300,
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(
+                                      isImage &&
+                                              (data['text'] == null ||
+                                                  data['text']
+                                                      .toString()
+                                                      .trim()
+                                                      .isEmpty)
+                                          ? 15
+                                          : 8,
+                                    ),
+                                    child: Image.network(
+                                      linkUrl,
+                                      fit: BoxFit.contain,
+                                      loadingBuilder:
+                                          (context, child, loadingProgress) {
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return const Padding(
+                                            padding: EdgeInsets.all(20),
+                                            child: CircularProgressIndicator());
+                                      },
+                                    ),
+                                  ),
                                 ),
                               ),
+
+                            // 2. HIỂN THỊ TÀI LIỆU (FILE)
+                            if (isFile)
+                              InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                // 🔥 SỰ KIỆN CLICK: Gọi hàm tải file về thiết bị
+                                onTap: () => _downloadFile(linkUrl),
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: isMe
+                                        ? Colors.black.withOpacity(0.05)
+                                        : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.black12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.insert_drive_file,
+                                        color: isMe
+                                            ? primaryColor
+                                            : Colors.orangeAccent,
+                                        size: 32,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Flexible(
+                                        child: Text(
+                                          data['fileName'] ??
+                                              'Tài liệu Văn phòng',
+                                          style: TextStyle(
+                                            color: isMe
+                                                ? Colors.black87
+                                                : Colors.black87,
+                                            fontWeight: FontWeight.bold,
+                                            decoration: TextDecoration
+                                                .underline, // Tạo gạch chân giống link tải
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Icon(
+                                        Icons
+                                            .download_for_offline_outlined, // Thêm icon download nhỏ cho trực quan
+                                        size: 20,
+                                        color:
+                                            isMe ? primaryColor : Colors.grey,
+                                      )
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                            // 3. HIỂN THỊ CHỮ CHAT
                             if (data['text'] != null &&
                                 data['text'].toString().trim().isNotEmpty)
                               Padding(
                                 padding: EdgeInsets.only(
-                                  top: isImage ? 8.0 : 0,
-                                ),
+                                    top: (isImage || isFile) ? 8.0 : 0),
                                 child: Text(
                                   data['text'],
                                   style: TextStyle(
-                                    fontSize: 15,
-                                    color: isMe ? Colors.black87 : Colors.black,
-                                  ),
+                                      fontSize: 15,
+                                      color:
+                                          isMe ? Colors.black87 : Colors.black),
                                 ),
                               ),
                           ],
@@ -362,47 +532,40 @@ class _ChatPageState extends State<ChatPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_selectedImage != null)
+                if (_selectedFile != null)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          // 🔥 FIX: Thay đổi cách render ảnh local để tránh tràn RAM gây crash
-                          child: kIsWeb
-                              ? Image.network(
-                                  _selectedImage!.path,
-                                  height: 80,
-                                  width: 80,
-                                  fit: BoxFit.cover,
-                                )
-                              : Image.file(
-                                  File(_selectedImage!.path),
-                                  height: 80,
-                                  width: 80,
-                                  fit: BoxFit.cover,
-                                ),
-                        ),
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedImage = null),
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                color: Colors.black54,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.close,
-                                size: 18,
-                                color: Colors.white,
-                              ),
+                    padding:
+                        const EdgeInsets.only(bottom: 8.0, left: 8, right: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.insert_drive_file,
+                              color: Colors.blue),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _selectedFile!.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w500),
                             ),
                           ),
-                        ),
-                      ],
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.red),
+                            onPressed: () =>
+                                setState(() => _selectedFile = null),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 Row(
@@ -413,7 +576,7 @@ class _ChatPageState extends State<ChatPage> {
                         color: primaryColor,
                         size: 28,
                       ),
-                      onPressed: _pickImage,
+                      onPressed: _isUploading ? null : _showAttachmentMenu,
                     ),
                     const SizedBox(width: 4),
                     Expanded(
@@ -462,6 +625,52 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// 🔥 WIDGET MỚI: Xem ảnh toàn màn hình giống Zalo
+class FullScreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+  const FullScreenImageViewer({super.key, required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download, color: Colors.white),
+            onPressed: () async {
+              // Có thể tích hợp tải ảnh về máy ở đây nếu muốn, tạm thời mở bằng trình duyệt để tải
+              final Uri url = Uri.parse(imageUrl);
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        ],
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          // Cho phép người dùng zoom bằng 2 ngón tay
+          panEnabled: true,
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return const Center(
+                  child: CircularProgressIndicator(color: Colors.white));
+            },
+          ),
+        ),
       ),
     );
   }

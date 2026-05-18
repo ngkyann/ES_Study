@@ -197,10 +197,15 @@ class _FriendsPageState extends State<FriendsPage> {
                             ), // 🔥 Bấm để xem thông tin
                             leading: CircleAvatar(
                               backgroundColor: primaryColor.withOpacity(0.2),
-                              child: const Icon(
-                                Icons.person,
-                                color: Colors.blue,
-                              ),
+                              backgroundImage: (friendData['avatarUrl'] != null && friendData['avatarUrl'].toString().isNotEmpty)
+                                ? NetworkImage(friendData['avatarUrl'])
+                                : null,
+                            child: (friendData['avatarUrl'] != null && friendData['avatarUrl'].toString().isNotEmpty)
+                                ? null
+                                : const Icon(
+                                    Icons.person,
+                                    color: Colors.blue,
+                                  ),
                             ),
                             title: Text(
                               targetName,
@@ -269,10 +274,15 @@ class _FriendsPageState extends State<FriendsPage> {
                             ), // 🔥 Bấm để xem thông tin
                             leading: CircleAvatar(
                               backgroundColor: Colors.orange.withOpacity(0.2),
-                              child: const Icon(
-                                Icons.person_add,
-                                color: Colors.orange,
-                              ),
+                              backgroundImage: (reqData['avatarUrl'] != null && reqData['avatarUrl'].toString().isNotEmpty)
+                                  ? NetworkImage(reqData['avatarUrl'])
+                                  : null,
+                              child: (reqData['avatarUrl'] != null && reqData['avatarUrl'].toString().isNotEmpty)
+                                  ? null
+                                  : const Icon(
+                                      Icons.person_add,
+                                      color: Colors.orange,
+                                    ),
                             ),
                             title: Text(
                               targetName,
@@ -408,9 +418,16 @@ class _FriendsPageState extends State<FriendsPage> {
                                         targetId,
                                         targetName,
                                       ), // 🔥 Bấm để xem thông tin
-                                      leading: const CircleAvatar(
-                                        child: Icon(Icons.person),
-                                      ),
+                                      leading: CircleAvatar(
+                                      backgroundColor: Colors.grey.shade200,
+                                      // 🔥 FIX: Hiển thị avatar kết quả tìm kiếm
+                                      backgroundImage: (searchData['avatarUrl'] != null && searchData['avatarUrl'].toString().isNotEmpty)
+                                          ? NetworkImage(searchData['avatarUrl'])
+                                          : null,
+                                      child: (searchData['avatarUrl'] != null && searchData['avatarUrl'].toString().isNotEmpty)
+                                          ? null
+                                          : const Icon(Icons.person, color: Colors.grey),
+                                    ),
                                       title: Text(
                                         targetName,
                                         style: const TextStyle(
