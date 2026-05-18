@@ -78,9 +78,19 @@ class _PlanPageState extends State<PlanPage> {
 
   Future<void> _addPlan() async {
     TextEditingController titleController = TextEditingController();
+    TextEditingController dateController =
+        TextEditingController(); // 🆕 Controller nhập ngày
+    TextEditingController timeController =
+        TextEditingController(); // 🆕 Controller nhập giờ
     TextEditingController taskController = TextEditingController();
-    DateTime? selectedDate;
     List<String> tasks = [];
+
+    // Gợi ý ngày giờ hiện tại cho user dễ nhập
+    DateTime now = DateTime.now();
+    dateController.text =
+        "${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}";
+    timeController.text =
+        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
 
     showDialog(
       context: context,
@@ -91,6 +101,10 @@ class _PlanPageState extends State<PlanPage> {
                 languageNotifier.value == "Tiếng Việt"; // 🔥 LẤY NGÔN NGỮ
 
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.circular(16), // 🆕 Bo góc Dialog cho đẹp
+              ),
               title: Text(isVN ? "Tạo kế hoạch" : "Create Plan"),
               content: SizedBox(
                 width: double.maxFinite,
@@ -102,46 +116,52 @@ class _PlanPageState extends State<PlanPage> {
                         controller: titleController,
                         decoration: InputDecoration(
                           labelText: isVN
-                              ? "Tên kế hoạch (VD: Học toán 15 phút)"
-                              : "Plan name (e.g., Math for 15 mins)",
+                              ? "Tên kế hoạch (VD: Học toán)"
+                              : "Plan name (e.g., Math)",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          isDense: true,
                         ),
                       ),
                       const SizedBox(height: 15),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                        ),
-                        onPressed: () async {
-                          final date = await showDatePicker(
-                            context: context,
-                            firstDate: DateTime.now(),
-                            lastDate: DateTime(2100),
-                            initialDate: DateTime.now(),
-                          );
-                          if (date == null) return;
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: TimeOfDay.now(),
-                          );
-                          if (time == null) return;
 
-                          setDialogState(() {
-                            selectedDate = DateTime(
-                              date.year,
-                              date.month,
-                              date.day,
-                              time.hour,
-                              time.minute,
-                            );
-                          });
-                        },
-                        icon: const Icon(Icons.timer, color: Colors.white),
-                        label: Text(
-                          selectedDate == null
-                              ? (isVN ? "Chọn thời gian" : "Select time")
-                              : "${selectedDate!.hour}:${selectedDate!.minute.toString().padLeft(2, '0')} - ${selectedDate!.day}/${selectedDate!.month}",
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                      // 🆕 Khung nhập Ngày và Giờ
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: dateController,
+                              keyboardType: TextInputType.datetime,
+                              decoration: InputDecoration(
+                                labelText: isVN
+                                    ? "Ngày (DD/MM/YYYY)"
+                                    : "Date (DD/MM/YYYY)",
+                                hintText: "VD: 25/12/2024",
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextField(
+                              controller: timeController,
+                              keyboardType: TextInputType.datetime,
+                              decoration: InputDecoration(
+                                labelText:
+                                    isVN ? "Giờ (HH:MM)" : "Time (HH:MM)",
+                                hintText: "VD: 14:30",
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const Divider(height: 30),
                       Align(
@@ -151,6 +171,7 @@ class _PlanPageState extends State<PlanPage> {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Expanded(
@@ -159,6 +180,10 @@ class _PlanPageState extends State<PlanPage> {
                               decoration: InputDecoration(
                                 hintText:
                                     isVN ? "Nhập nhiệm vụ..." : "Enter task...",
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                isDense: true,
                               ),
                               onSubmitted: (_) {
                                 if (taskController.text.trim().isNotEmpty) {
@@ -170,8 +195,10 @@ class _PlanPageState extends State<PlanPage> {
                               },
                             ),
                           ),
+                          const SizedBox(width: 8),
                           IconButton(
-                            icon: Icon(Icons.add_circle, color: primaryColor),
+                            icon: Icon(Icons.add_circle,
+                                color: primaryColor, size: 32),
                             onPressed: () {
                               if (taskController.text.trim().isNotEmpty) {
                                 setDialogState(() {
@@ -185,26 +212,31 @@ class _PlanPageState extends State<PlanPage> {
                       ),
                       const SizedBox(height: 10),
                       if (tasks.isNotEmpty)
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: tasks.length,
-                          itemBuilder: (context, i) {
-                            return ListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text("- ${tasks[i]}"),
-                              trailing: IconButton(
-                                icon: const Icon(
-                                  Icons.remove_circle,
-                                  color: Colors.red,
-                                  size: 20,
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: tasks.length,
+                            itemBuilder: (context, i) {
+                              return ListTile(
+                                dense: true,
+                                title: Text("- ${tasks[i]}"),
+                                trailing: IconButton(
+                                  icon: const Icon(
+                                    Icons.remove_circle,
+                                    color: Colors.red,
+                                    size: 20,
+                                  ),
+                                  onPressed: () =>
+                                      setDialogState(() => tasks.removeAt(i)),
                                 ),
-                                onPressed: () =>
-                                    setDialogState(() => tasks.removeAt(i)),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
                     ],
                   ),
@@ -213,15 +245,19 @@ class _PlanPageState extends State<PlanPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text(isVN ? "Hủy" : "Cancel"),
+                  child: Text(isVN ? "Hủy" : "Cancel",
+                      style: const TextStyle(color: Colors.grey)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                  ),
+                      backgroundColor: primaryColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      )),
                   onPressed: () async {
                     if (titleController.text.isEmpty ||
-                        selectedDate == null ||
+                        dateController.text.isEmpty ||
+                        timeController.text.isEmpty ||
                         tasks.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -233,10 +269,54 @@ class _PlanPageState extends State<PlanPage> {
                       return;
                     }
 
+                    DateTime parsedDate;
+                    try {
+                      // 🆕 Xử lý parse chuỗi ngày (DD/MM/YYYY)
+                      List<String> dateParts =
+                          dateController.text.trim().split('/');
+                      if (dateParts.length != 3) throw Exception();
+                      int day = int.parse(dateParts[0]);
+                      int month = int.parse(dateParts[1]);
+                      int year = int.parse(dateParts[2]);
+
+                      // 🆕 Xử lý parse chuỗi giờ (HH:MM)
+                      List<String> timeParts =
+                          timeController.text.trim().split(':');
+                      if (timeParts.length != 2) throw Exception();
+                      int hour = int.parse(timeParts[0]);
+                      int minute = int.parse(timeParts[1]);
+
+                      if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                        throw Exception();
+                      }
+
+                      parsedDate = DateTime(year, month, day, hour, minute);
+
+                      if (parsedDate.isBefore(DateTime.now())) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(isVN
+                                ? "Không thể đặt lịch trong quá khứ!"
+                                : "Cannot set a plan in the past!"),
+                          ),
+                        );
+                        return;
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(isVN
+                              ? "Định dạng ngày/giờ không hợp lệ!"
+                              : "Invalid date/time format!"),
+                        ),
+                      );
+                      return;
+                    }
+
                     await FirebaseFirestore.instance.collection('plans').add({
                       'userId': widget.userId,
                       'title': titleController.text,
-                      'time': selectedDate,
+                      'time': parsedDate,
                       'tasks': tasks,
                       'completedTasks': List.generate(
                         tasks.length,
@@ -246,7 +326,7 @@ class _PlanPageState extends State<PlanPage> {
 
                     await _scheduleNotification(
                       titleController.text,
-                      selectedDate!,
+                      parsedDate,
                     );
                     if (mounted) Navigator.pop(context);
                   },
@@ -356,7 +436,7 @@ class _PlanPageState extends State<PlanPage> {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
-                        "${time.day}/${time.month}/${time.year} - ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}\n" +
+                        "${time.day.toString().padLeft(2, '0')}/${time.month.toString().padLeft(2, '0')}/${time.year} - ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}\n" +
                             (isVN ? "Tiến độ" : "Progress") +
                             ": $completedCount/${tasksList.length} " +
                             (isVN ? "nhiệm vụ" : "tasks"),
