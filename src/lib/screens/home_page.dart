@@ -260,8 +260,9 @@ class _HomePageState extends State<HomePage> {
                 onTap: () async {
                   await Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => ProfilePage(
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          ProfilePage(
                         userName: widget.userName,
                         userId: widget.userId,
                         selectedClass: widget.selectedClass,
@@ -269,6 +270,22 @@ class _HomePageState extends State<HomePage> {
                         email: widget.email,
                         userStreak: userStreak,
                       ),
+                      transitionsBuilder:
+                          (context, animation, secondaryAnimation, child) {
+                        const begin = Offset(-1.0, 0.0);
+                        const end = Offset.zero;
+                        const curve = Curves.easeInOut;
+
+                        var tween = Tween(begin: begin, end: end)
+                            .chain(CurveTween(curve: curve));
+                        var offsetAnimation = animation.drive(tween);
+
+                        return SlideTransition(
+                          position: offsetAnimation,
+                          child: child,
+                        );
+                      },
+                      transitionDuration: const Duration(milliseconds: 750),
                     ),
                   );
                   if (mounted) setState(() {});
@@ -346,15 +363,35 @@ class _HomePageState extends State<HomePage> {
             ),
             onPressed: () async {
               // Chuyển hướng sang SettingsPage và truyền các tham số cần thiết
-              await Navigator.push(
+              // Thay thế đoạn điều hướng cũ bằng đoạn này:
+              Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => SettingsPage(
+                PageRouteBuilder(
+                  pageBuilder: (context, animation, secondaryAnimation) =>
+                      SettingsPage(
                     userName: widget.userName,
                     selectedClass: widget.selectedClass,
                     userId: widget.userId,
                     email: widget.email,
                   ),
+                  transitionsBuilder:
+                      (context, animation, secondaryAnimation, child) {
+                    // Xác định hướng trượt (từ phải sang trái)
+                    const begin = Offset(1.0, 0.0);
+                    const end = Offset.zero;
+                    const curve = Curves.easeInOut;
+
+                    var tween = Tween(begin: begin, end: end)
+                        .chain(CurveTween(curve: curve));
+                    var offsetAnimation = animation.drive(tween);
+
+                    return SlideTransition(
+                      position: offsetAnimation,
+                      child: child,
+                    );
+                  },
+                  // Thời gian hiệu ứng (tùy chọn)
+                  transitionDuration: const Duration(milliseconds: 750),
                 ),
               );
               // Khi từ trang Settings quay lại, cập nhật lại trạng thái nếu có thay đổi (ví dụ: đổi tên/lớp)
