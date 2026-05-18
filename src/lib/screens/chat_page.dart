@@ -30,10 +30,13 @@ class _ChatPageState extends State<ChatPage> {
   bool _isUploading = false;
 
   Future<void> _pickImage() async {
+    if (_isUploading) return; // Không cho chọn ảnh khi đang upload
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 70,
+        imageQuality: 75, // Giảm chất lượng xuống 75%
+        maxWidth: 1024,   // 🔥 TỐI ƯU: Giới hạn chiều rộng tối đa
+        maxHeight: 1024,  // 🔥 TỐI ƯU: Giới hạn chiều cao tối đa
       );
 
       if (image != null) {
@@ -54,6 +57,7 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
 
+    // Kiểm tra nếu không có cả chữ lẫn ảnh hoặc đang upload thì dừng
     if (text.isEmpty && _selectedImage == null) return;
     if (_isUploading) return;
 
@@ -63,14 +67,22 @@ class _ChatPageState extends State<ChatPage> {
       String? imageUrl;
 
       if (_selectedImage != null) {
-        Uint8List imageData = await _selectedImage!.readAsBytes();
-        // 🔥 FIX: Thêm đuôi .jpg để Storage và trình duyệt nhận diện chuẩn định dạng
+        // Sao chép thông tin ảnh ra biến tạm và clear UI preview ngay để giải phóng RAM
+        final XFile imageToUpload = _selectedImage!;
+        setState(() {
+          _selectedImage = null; 
+        });
+
+        Uint8List imageData = await imageToUpload.readAsBytes();
+        
+        // Tạo tên file duy nhất kèm đuôi .jpg
         String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
 
         Reference ref = FirebaseStorage.instance.ref().child(
               'chat_images/${widget.chatId}/$fileName',
             );
 
+        // Upload dữ liệu dưới dạng byte (Hỗ trợ tốt cho cả Web và Mobile)
         UploadTask uploadTask = ref.putData(
           imageData,
           SettableMetadata(contentType: 'image/jpeg'),
@@ -80,8 +92,10 @@ class _ChatPageState extends State<ChatPage> {
         imageUrl = await snapshot.ref.getDownloadURL();
       }
 
+      // Xóa chữ ở ô nhập liệu sau khi upload ảnh hoàn tất (hoặc song song)
       _msgController.clear();
 
+      // Lưu thông tin vào Firestore
       await FirebaseFirestore.instance
           .collection('chats')
           .doc(widget.chatId)
@@ -95,10 +109,7 @@ class _ChatPageState extends State<ChatPage> {
         'deletedBy': [],
       });
 
-      setState(() {
-        _selectedImage = null;
-        _isUploading = false;
-      });
+      setState(() => _isUploading = false);
     } catch (e) {
       debugPrint("Lỗi khi gửi tin nhắn: $e");
       setState(() => _isUploading = false);
