@@ -24,6 +24,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final TextEditingController _idController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _nameFocus = FocusNode();
+  final FocusNode _idFocus = FocusNode();
+  final FocusNode _emailFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
 
   final List<String> _classes = List.generate(
     12,
@@ -36,6 +40,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     _idController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _nameFocus.dispose();
+    _idFocus.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -414,6 +422,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         "Họ và tên",
                         Icons.person_outline_rounded,
                         _nameController,
+                        focusNode: _nameFocus,
                       ),
                       const SizedBox(height: 18),
                     ],
@@ -423,8 +432,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       "ID người dùng",
                       Icons.alternate_email_rounded,
                       _idController,
-                      keyboardType:
-                          TextInputType.visiblePassword, // Chặn gợi ý email
+                      focusNode: _idFocus,
+                      keyboardType: TextInputType.visiblePassword,
                       textInputAction: _isLogin
                           ? TextInputAction.done
                           : TextInputAction.next,
@@ -439,54 +448,76 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         "Email/Gmail",
                         Icons.email_outlined,
                         _emailController,
+                        focusNode: _emailFocus,
                         keyboardType: TextInputType.emailAddress,
                       ),
                       const SizedBox(height: 18),
                     ],
 
-                    // Trường MẬT KHẨU (Style UI Cũ)
+                    // Trường MẬT KHẨU
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white, // Nền ô input trắng tinh
-                        borderRadius: BorderRadius.circular(
-                            30), // Bo góc rất lớn giống UI cũ
+                        borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black
-                                .withOpacity(0.03), // Shadow rất nhẹ
-                            blurRadius: 10,
+                            color: _passwordFocus.hasFocus
+                                ? primaryColor.withOpacity(0.10)
+                                : Colors.black.withOpacity(0.03),
+                            blurRadius: _passwordFocus.hasFocus ? 16 : 10,
                             offset: const Offset(0, 5),
                           ),
                         ],
                       ),
                       child: TextField(
                         controller: _passwordController,
+                        focusNode: _passwordFocus,
                         obscureText: _obscureText,
                         textInputAction: _isLogin
                             ? TextInputAction.done
                             : TextInputAction.next,
                         onSubmitted: (_) => _isLogin ? _handleAuth() : null,
                         style: const TextStyle(
-                            fontSize: 15, color: Colors.black87),
+                          fontSize: 15,
+                          color: Colors.black87,
+                        ),
                         decoration: InputDecoration(
-                          hintText:
-                              'Mật khẩu', // Dùng hintText cho giống UI cũ thay vì label
-                          hintStyle: TextStyle(
-                              color: Colors.grey.shade400, fontSize: 15),
+                          labelText: "Mật khẩu",
+                          floatingLabelBehavior: FloatingLabelBehavior.auto,
+                          labelStyle: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 15,
+                          ),
+                          floatingLabelStyle: TextStyle(
+                            color: primaryColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                           prefixIcon: Padding(
-                            padding: const EdgeInsets.only(left: 10, right: 5),
-                            child: Icon(Icons.lock_outline_rounded,
-                                color: Colors.grey.shade500),
+                            padding: const EdgeInsets.only(
+                              left: 10,
+                              right: 5,
+                            ),
+                            child: Icon(
+                              Icons.lock_outline_rounded,
+                              color: Colors.grey.shade500,
+                            ),
                           ),
                           contentPadding:
-                              const EdgeInsets.symmetric(vertical: 18),
+                              const EdgeInsets.symmetric(vertical: 22),
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(30),
-                            borderSide: BorderSide.none, // Không viền
+                            borderSide: BorderSide.none,
                           ),
-                          // Nút ẩn/hiện mật khẩu
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(30),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(30),
+                            borderSide: BorderSide.none,
+                          ),
                           suffixIcon: Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: IconButton(
@@ -496,8 +527,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                     : Icons.visibility_outlined,
                                 color: Colors.grey.shade400,
                               ),
-                              onPressed: () =>
-                                  setState(() => _obscureText = !_obscureText),
+                              onPressed: () => setState(
+                                () => _obscureText = !_obscureText,
+                              ),
                             ),
                           ),
                         ),
@@ -691,56 +723,67 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  // =========================================================================
-  // --- 🔥 VIẾT LẠI HÀM HELPER XÂY DỰNG TEXTFIELD THEO PHONG CÁCH "UI CŨ" ---
-  // =========================================================================
   Widget _buildClassicTextField(
-    String hint, // Đổi label thành hint cho chuẩn UI cũ
+    String label,
     IconData icon,
     TextEditingController? controller, {
-    TextInputType keyboardType = TextInputType.text, // Mặc định là text
+    FocusNode? focusNode,
+    TextInputType keyboardType = TextInputType.text,
     TextInputAction? textInputAction,
     ValueChanged<String>? onSubmitted,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white, // Nền ô input trắng tinh
-        borderRadius: BorderRadius.circular(30), // Bo góc rất lớn giống UI cũ
+        borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03), // Shadow rất nhẹ
-            blurRadius: 10,
+            color: (focusNode?.hasFocus ?? false)
+                ? primaryColor.withOpacity(0.10)
+                : Colors.black.withOpacity(0.03),
+            blurRadius: (focusNode?.hasFocus ?? false) ? 16 : 10,
             offset: const Offset(0, 5),
           ),
         ],
       ),
       child: TextField(
         controller: controller,
+        focusNode: focusNode,
+        keyboardType: keyboardType,
         textInputAction: textInputAction ?? TextInputAction.next,
         onSubmitted: onSubmitted,
-        keyboardType: keyboardType,
         style: const TextStyle(
-            fontSize: 15, color: Colors.black87), // Chữ nhập đen
+          fontSize: 15,
+          color: Colors.black87,
+        ),
         decoration: InputDecoration(
-          hintText: hint, // Dùng hintText nằm im trong ô cho giống UI cũ
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+          labelText: label,
+          floatingLabelBehavior: FloatingLabelBehavior.auto,
+          labelStyle: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: 15,
+          ),
+          floatingLabelStyle: TextStyle(
+            color: primaryColor,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
           prefixIcon: Padding(
-            padding:
-                const EdgeInsets.only(left: 10, right: 5), // Cách lề trái 10
+            padding: const EdgeInsets.only(
+              left: 10,
+              right: 5,
+            ),
             child: Icon(
               icon,
-              color: Colors.grey.shade500, // Icon màu xám chuẩn Ảnh 2
+              color: Colors.grey.shade500,
               size: 22,
             ),
           ),
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 18), // Chiều cao ô input lớn
+          contentPadding: const EdgeInsets.symmetric(vertical: 22),
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(30), // Bo viền ẩn giống BoxDecoration
-            borderSide: BorderSide.none, // Không viền đỏ/đen
+            borderRadius: BorderRadius.circular(30),
+            borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30),
@@ -748,7 +791,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30),
-            borderSide: BorderSide.none, // Khi focus cũng không hiện viền
+            borderSide: BorderSide.none,
           ),
         ),
       ),
