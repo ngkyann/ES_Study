@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -80,6 +81,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   Future<void> _showForgotPasswordDialog() async {
     final TextEditingController resetEmailController = TextEditingController();
     bool isSending = false;
+    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 Lấy ngôn ngữ
 
     // Lấy Email hiện tại ở ô nhập nếu user đã gõ
     if (_idController.text.isNotEmpty && _idController.text.contains('@')) {
@@ -100,9 +102,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 children: [
                   Icon(Icons.lock_reset, color: primaryColor, size: 28),
                   const SizedBox(width: 10),
-                  const Text(
-                    "Quên mật khẩu?",
-                    style: TextStyle(
+                  Text(
+                    isVN ? "Quên mật khẩu?" : "Forgot Password?",
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 20,
                       color: Colors.black87,
@@ -113,15 +115,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    "Nhập ID hoặc Email tài khoản của bạn. Chúng tôi sẽ gửi một liên kết an toàn để bạn đặt lại mật khẩu mới qua Email.",
+                  Text(
+                    isVN
+                        ? "Nhập ID hoặc Email tài khoản của bạn. Chúng tôi sẽ gửi một liên kết an toàn để bạn đặt lại mật khẩu mới qua Email."
+                        : "Enter your ID or Email. We will send a secure link to reset your password via Email.",
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                         color: Colors.black54, fontSize: 14, height: 1.4),
                   ),
                   const SizedBox(height: 20),
                   _buildClassicTextField(
-                    "ID hoặc Email của bạn",
+                    isVN ? "ID hoặc Email của bạn" : "Your ID or Email",
                     Icons.alternate_email,
                     resetEmailController,
                     keyboardType: TextInputType.emailAddress,
@@ -134,9 +138,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    "Hủy",
-                    style: TextStyle(
+                  child: Text(
+                    isVN ? "Hủy" : "Cancel",
+                    style: const TextStyle(
                         color: Colors.grey, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -156,7 +160,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       : () async {
                           final inputText = resetEmailController.text.trim();
                           if (inputText.isEmpty) {
-                            _showMessage("Vui lòng nhập ID/Email!");
+                            _showMessage(isVN
+                                ? "Vui lòng nhập ID/Email!"
+                                : "Please enter ID/Email!");
                             return;
                           }
 
@@ -173,13 +179,16 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             if (context.mounted) {
                               Navigator.pop(context); // Tắt popup
                               _showMessage(
-                                  "Đã gửi link khôi phục mật khẩu. Vui lòng kiểm tra hộp thư Email của bạn!",
+                                  isVN
+                                      ? "Đã gửi link khôi phục mật khẩu. Vui lòng kiểm tra hộp thư Email của bạn!"
+                                      : "Password recovery link sent. Please check your Email inbox!",
                                   isError: false);
                             }
                           } catch (e) {
                             setStateDialog(() => isSending = false);
-                            _showMessage(
-                                "Không tìm thấy tài khoản với thông tin này hoặc Lỗi hệ thống.");
+                            _showMessage(isVN
+                                ? "Không tìm thấy tài khoản với thông tin này hoặc Lỗi hệ thống."
+                                : "Account not found or System Error.");
                           }
                         },
                   child: isSending
@@ -188,9 +197,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           height: 20,
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
-                      : const Text(
-                          "Gửi khôi phục",
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                      : Text(
+                          isVN ? "Gửi khôi phục" : "Send Recovery",
+                          style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                 ),
               ],
@@ -201,14 +210,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  // --- 🔥 GIỮ NGUYÊN HOÀN TOÀN LOGIC XỬ LÝ FIREBASE CŨ CỦA BẠN ---
+  // --- LOGIC XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ ---
   Future<void> _handleAuth() async {
     final String id = _idController.text.trim();
     final String password = _passwordController.text.trim();
     final String email = _emailController.text.trim();
+    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 Lấy ngôn ngữ
 
     if (id.isEmpty || password.isEmpty) {
-      _showMessage("Vui lòng nhập ID và Mật khẩu!");
+      _showMessage(isVN
+          ? "Vui lòng nhập ID và Mật khẩu!"
+          : "Please enter ID and Password!");
       return;
     }
 
@@ -231,13 +243,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         // ================= ĐĂNG KÝ =================
         if (_nameController.text.isEmpty || _selectedClass == null) {
           setState(() => _isLoading = false);
-          _showMessage("Vui lòng điền đầy đủ thông tin!");
+          _showMessage(isVN
+              ? "Vui lòng điền đầy đủ thông tin!"
+              : "Please fill in all information!");
           return;
         }
 
         if (password.length < 6 && password.isNotEmpty) {
           setState(() => _isLoading = false);
-          _showMessage("Mật khẩu phải có ít nhất 6 ký tự!");
+          _showMessage(isVN
+              ? "Mật khẩu phải có ít nhất 6 ký tự!"
+              : "Password must be at least 6 characters!");
           return;
         }
 
@@ -277,449 +293,441 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           _passwordController.text = password;
         });
 
-        _showMessage("Đăng ký thành công! Vui lòng nhấn Đăng nhập.",
+        _showMessage(
+            isVN
+                ? "Đăng ký thành công! Vui lòng nhấn Đăng nhập."
+                : "Registration successful! Please tap Login.",
             isError: false);
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      String errorMessage = "Đã xảy ra lỗi, vui lòng thử lại!";
+      String errorMessage = isVN
+          ? "Đã xảy ra lỗi, vui lòng thử lại!"
+          : "An error occurred, please try again!";
 
       switch (e.code) {
         case 'invalid-credential':
         case 'wrong-password':
         case 'user-not-found':
-          errorMessage = "ID hoặc mật khẩu không chính xác!";
+          errorMessage = isVN
+              ? "ID hoặc mật khẩu không chính xác!"
+              : "Incorrect ID or password!";
           break;
         case 'email-already-in-use':
-          errorMessage = "ID này đã được sử dụng. Vui lòng chọn ID khác!";
+          errorMessage = isVN
+              ? "ID này đã được sử dụng. Vui lòng chọn ID khác!"
+              : "This ID is already in use. Please choose another one!";
           break;
         case 'weak-password':
-          errorMessage = "Mật khẩu quá yếu!";
+          errorMessage = isVN ? "Mật khẩu quá yếu!" : "Password is too weak!";
           break;
         case 'invalid-email':
-          errorMessage = "ID không hợp lệ!";
+          errorMessage = isVN ? "ID không hợp lệ!" : "Invalid ID!";
           break;
         case 'too-many-requests':
-          errorMessage = "Quá nhiều lần thử sai. Thử lại sau!";
+          errorMessage = isVN
+              ? "Quá nhiều lần thử sai. Thử lại sau!"
+              : "Too many failed attempts. Try again later!";
           break;
         default:
-          errorMessage = "Lỗi: ${e.message}";
+          errorMessage = isVN ? "Lỗi: ${e.message}" : "Error: ${e.message}";
       }
 
       _showMessage(errorMessage);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      _showMessage("Lỗi không xác định: $e");
+      _showMessage(isVN ? "Lỗi không xác định: $e" : "Unknown error: $e");
     }
   }
 
   // =========================================================================
-  // --- 🔥 VẼ LẠI UI (BUILD) THEO PHONG CÁCH "UI CŨ" + CHÈN QUÊN MẬT KHẨU ---
+  // --- VẼ LẠI UI (BUILD) ---
   // =========================================================================
   @override
   Widget build(BuildContext context) {
-    // Lấy kích thước màn hình để tính toán tỷ lệ bố cục
     final double screenHeight = MediaQuery.of(context).size.height;
     final double screenWidth = MediaQuery.of(context).size.width;
 
-    return Scaffold(
-      backgroundColor:
-          const Color(0xFFFBFDFF), // Màu nền trắng xanh nhẹ nhàng của UI cũ
-      body: Stack(
-        children: [
-          // 1. Phông nền trang trí (Optional - có thể thêm gradient ẩn phía sau)
-          Positioned(
-            top: -50,
-            left: -50,
-            child: CircleAvatar(
-              radius: 80,
-              backgroundColor: primaryColor.withOpacity(0.05),
-            ),
-          ),
-          Positioned(
-            bottom: -screenWidth * 0.3,
-            right: -screenWidth * 0.2,
-            child: Icon(Icons.school,
-                size: screenWidth * 0.8, color: primaryColor.withOpacity(0.03)),
-          ),
+    // 🔥 BỌC TÒAN BỘ GIAO DIỆN VỚI ValueListenableBuilder
+    return ValueListenableBuilder<String>(
+      valueListenable: languageNotifier,
+      builder: (context, lang, child) {
+        bool isVN = lang == "Tiếng Việt";
 
-          // 2. Nội dung chính nằm trong RefreshIndicator & ScrollView
-          RefreshIndicator(
-            color: primaryColor,
-            backgroundColor: Colors.white,
-            displacement: 60, // Đẩy vị trí vòng xoay xuống chút
-            onRefresh: () async {
-              await Future.delayed(const Duration(milliseconds: 800));
-              if (mounted) setState(() {});
-            },
-            child: SingleChildScrollView(
-              physics:
-                  const AlwaysScrollableScrollPhysics(), // Đảm bảo luôn vuốt được
-              padding: const EdgeInsets.symmetric(horizontal: 30.0),
-              child: ConstrainedBox(
-                // Đảm bảo Column con luôn có chiều cao ít nhất bằng màn hình
-                constraints: BoxConstraints(minHeight: screenHeight),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment
-                      .center, // Căn giữa Column theo chiều dọc
-                  crossAxisAlignment: CrossAxisAlignment
-                      .stretch, // Dãn đều Column theo chiều ngang
-                  children: [
-                    // --- 🔥 THAY ĐỔI  bố cục HEADER THEO UI CŨ ---
-                    SizedBox(
-                        height: screenHeight * 0.12), // Khoảng trống trên cùng
+        return Scaffold(
+          backgroundColor: const Color(0xFFFBFDFF),
+          body: Stack(
+            children: [
+              Positioned(
+                top: -50,
+                left: -50,
+                child: CircleAvatar(
+                  radius: 80,
+                  backgroundColor: primaryColor.withOpacity(0.05),
+                ),
+              ),
+              Positioned(
+                bottom: -screenWidth * 0.3,
+                right: -screenWidth * 0.2,
+                child: Icon(Icons.school,
+                    size: screenWidth * 0.8,
+                    color: primaryColor.withOpacity(0.03)),
+              ),
+              RefreshIndicator(
+                color: primaryColor,
+                backgroundColor: Colors.white,
+                displacement: 60,
+                onRefresh: () async {
+                  await Future.delayed(const Duration(milliseconds: 800));
+                  if (mounted) setState(() {});
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 30.0),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: screenHeight),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(height: screenHeight * 0.12),
 
-                    // ICON LOGO: Dùng Book Icon của UI cũ (Hình 2)
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: primaryColor.withOpacity(0.15),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons
-                              .menu_book_rounded, // Icon sách nghệ thuật hơn Icons.auto_stories
-                          size: 70,
-                          color: primaryColor, // Màu xanh nhạt của UI cũ
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    // TIÊU ĐỀ "ĐĂNG NHẬP" / "ĐĂNG KÝ" (UI Cũ - Hình 2)
-                    Center(
-                      child: Text(
-                        _isLogin ? "ĐĂNG NHẬP" : "ĐĂNG KÝ",
-                        style: TextStyle(
-                          fontSize: 26, // Kích thước chữ chuẩn UI cũ
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2, // Giãn chữ chút cho sang
-                          color: primaryColor, // Màu xanh nhạt
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(
-                        height: 35), // Khoảng trống lớn trước Form nhập liệu
-
-                    // --- FORM NHẬP LIỆU (VẼ THEO STYLE UI CŨ - BO GÓC LỚN, SHADOW NHẸ) ---
-
-                    if (!_isLogin) ...[
-                      // Trường Họ và Tên (Chỉ hiện khi Đăng ký)
-                      _buildClassicTextField(
-                        "Họ và tên",
-                        Icons.person_outline_rounded,
-                        _nameController,
-                        focusNode: _nameFocus,
-                      ),
-                      const SizedBox(height: 18),
-                    ],
-
-                    // Trường ID NGƯỜI DÙNG (Style UI Cũ - Dùng Icon @ chuẩn hơn alternate_email)
-                    _buildClassicTextField(
-                      "ID người dùng",
-                      Icons.alternate_email_rounded,
-                      _idController,
-                      focusNode: _idFocus,
-                      keyboardType: TextInputType.visiblePassword,
-                      textInputAction: _isLogin
-                          ? TextInputAction.done
-                          : TextInputAction.next,
-                      onSubmitted: (_) => _isLogin ? _handleAuth() : null,
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    if (!_isLogin) ...[
-                      // Trường Email/Gmail (Chỉ hiện khi Đăng ký)
-                      _buildClassicTextField(
-                        "Email/Gmail",
-                        Icons.email_outlined,
-                        _emailController,
-                        focusNode: _emailFocus,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 18),
-                    ],
-
-                    // Trường MẬT KHẨU
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _passwordFocus.hasFocus
-                                ? primaryColor.withOpacity(0.10)
-                                : Colors.black.withOpacity(0.03),
-                            blurRadius: _passwordFocus.hasFocus ? 16 : 10,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _passwordController,
-                        focusNode: _passwordFocus,
-                        obscureText: _obscureText,
-                        textInputAction: _isLogin
-                            ? TextInputAction.done
-                            : TextInputAction.next,
-                        onSubmitted: (_) => _isLogin ? _handleAuth() : null,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Colors.black87,
-                        ),
-                        decoration: InputDecoration(
-                          labelText: "Mật khẩu",
-                          floatingLabelBehavior: FloatingLabelBehavior.auto,
-                          labelStyle: TextStyle(
-                            color: Colors.grey.shade400,
-                            fontSize: 15,
-                          ),
-                          floatingLabelStyle: TextStyle(
-                            color: primaryColor,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          prefixIcon: Padding(
-                            padding: const EdgeInsets.only(
-                              left: 10,
-                              right: 5,
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(15),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: primaryColor.withOpacity(0.15),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
                             ),
                             child: Icon(
-                              Icons.lock_outline_rounded,
-                              color: Colors.grey.shade500,
+                              Icons.menu_book_rounded,
+                              size: 70,
+                              color: primaryColor,
                             ),
                           ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 22),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(30),
-                            borderSide: BorderSide.none,
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // 🔥 DỊCH TIÊU ĐỀ
+                        Center(
+                          child: Text(
+                            _isLogin
+                                ? (isVN ? "ĐĂNG NHẬP" : "LOGIN")
+                                : (isVN ? "ĐĂNG KÝ" : "REGISTER"),
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                              color: primaryColor,
+                            ),
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(30),
-                            borderSide: BorderSide.none,
+                        ),
+
+                        const SizedBox(height: 35),
+
+                        if (!_isLogin) ...[
+                          _buildClassicTextField(
+                            isVN ? "Họ và tên" : "Full Name",
+                            Icons.person_outline_rounded,
+                            _nameController,
+                            focusNode: _nameFocus,
                           ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(30),
-                            borderSide: BorderSide.none,
+                          const SizedBox(height: 18),
+                        ],
+
+                        _buildClassicTextField(
+                          isVN ? "ID người dùng" : "User ID",
+                          Icons.alternate_email_rounded,
+                          _idController,
+                          focusNode: _idFocus,
+                          keyboardType: TextInputType.visiblePassword,
+                          textInputAction: _isLogin
+                              ? TextInputAction.done
+                              : TextInputAction.next,
+                          onSubmitted: (_) => _isLogin ? _handleAuth() : null,
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        if (!_isLogin) ...[
+                          _buildClassicTextField(
+                            isVN ? "Email/Gmail" : "Email/Gmail",
+                            Icons.email_outlined,
+                            _emailController,
+                            focusNode: _emailFocus,
+                            keyboardType: TextInputType.emailAddress,
                           ),
-                          suffixIcon: Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: IconButton(
-                              icon: Icon(
-                                _obscureText
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                color: Colors.grey.shade400,
+                          const SizedBox(height: 18),
+                        ],
+
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _passwordFocus.hasFocus
+                                    ? primaryColor.withOpacity(0.10)
+                                    : Colors.black.withOpacity(0.03),
+                                blurRadius: _passwordFocus.hasFocus ? 16 : 10,
+                                offset: const Offset(0, 5),
                               ),
-                              onPressed: () => setState(
-                                () => _obscureText = !_obscureText,
+                            ],
+                          ),
+                          child: TextField(
+                            controller: _passwordController,
+                            focusNode: _passwordFocus,
+                            obscureText: _obscureText,
+                            textInputAction: _isLogin
+                                ? TextInputAction.done
+                                : TextInputAction.next,
+                            onSubmitted: (_) => _isLogin ? _handleAuth() : null,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Colors.black87,
+                            ),
+                            decoration: InputDecoration(
+                              labelText:
+                                  isVN ? "Mật khẩu" : "Password", // 🔥 Dịch
+                              floatingLabelBehavior: FloatingLabelBehavior.auto,
+                              labelStyle: TextStyle(
+                                color: Colors.grey.shade400,
+                                fontSize: 15,
+                              ),
+                              floatingLabelStyle: TextStyle(
+                                color: primaryColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              prefixIcon: Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 10,
+                                  right: 5,
+                                ),
+                                child: Icon(
+                                  Icons.lock_outline_rounded,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 22),
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(30),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(30),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(30),
+                                borderSide: BorderSide.none,
+                              ),
+                              suffixIcon: Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: IconButton(
+                                  icon: Icon(
+                                    _obscureText
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                  onPressed: () => setState(
+                                    () => _obscureText = !_obscureText,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
 
-                    // 🔥 --- THÊM: NÚT QUÊN MẬT KHẨU --- 🔥
-                    // Đặt ngay dưới ô Mật khẩu, căn phải chuẩn Ảnh 1 bạn gửi
-                    if (_isLogin)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Container(
-                          margin: const EdgeInsets.only(top: 10, right: 10),
+                        if (_isLogin)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Container(
+                              margin: const EdgeInsets.only(top: 10, right: 10),
+                              child: InkWell(
+                                onTap: _showForgotPasswordDialog,
+                                borderRadius: BorderRadius.circular(10),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 5, vertical: 2),
+                                  child: Text(
+                                    isVN
+                                        ? 'Quên mật khẩu?'
+                                        : 'Forgot password?', // 🔥 Dịch
+                                    style: const TextStyle(
+                                      color: Color(0xFFA6E0FF),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+
+                        const SizedBox(height: 18),
+
+                        if (!_isLogin) ...[
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(30),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: DropdownButtonFormField<String>(
+                              decoration: InputDecoration(
+                                hintText: isVN
+                                    ? 'Chọn lớp'
+                                    : 'Select class', // 🔥 Dịch
+                                hintStyle: TextStyle(
+                                    color: Colors.grey.shade400, fontSize: 15),
+                                prefixIcon: Padding(
+                                  padding:
+                                      const EdgeInsets.only(left: 10, right: 5),
+                                  child: Icon(Icons.school_outlined,
+                                      color: Colors.grey.shade500),
+                                ),
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 18),
+                                filled: true,
+                                fillColor: Colors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              icon: Padding(
+                                padding: const EdgeInsets.only(right: 15),
+                                child: Icon(Icons.keyboard_arrow_down_rounded,
+                                    color: Colors.grey.shade400),
+                              ),
+                              style: const TextStyle(
+                                  fontSize: 15, color: Colors.black87),
+                              value: _selectedClass,
+                              // 🔥 ĐÃ CẬP NHẬT: Dịch Lớp -> Class khi hiển thị
+                              items: _classes.map((s) {
+                                String displayTxt =
+                                    isVN ? s : s.replaceFirst('Lớp', 'Class');
+                                return DropdownMenuItem(
+                                    value: s, child: Text(displayTxt));
+                              }).toList(),
+                              onChanged: (val) =>
+                                  setState(() => _selectedClass = val),
+                            ),
+                          ),
+                          const SizedBox(height: 35),
+                        ],
+
+                        if (_isLogin) const SizedBox(height: 35),
+
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                color: primaryColor.withOpacity(0.35),
+                                blurRadius: 15,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryColor,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                              onPressed: _isLoading ? null : _handleAuth,
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2.5,
+                                      ),
+                                    )
+                                  : Text(
+                                      _isLogin
+                                          ? (isVN ? "ĐĂNG NHẬP" : "LOGIN")
+                                          : (isVN ? "ĐĂNG KÝ" : "REGISTER"),
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 1.1,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        Center(
                           child: InkWell(
-                            onTap: _showForgotPasswordDialog,
+                            onTap: () {
+                              setState(() {
+                                _isLogin = !_isLogin;
+                              });
+                            },
                             borderRadius: BorderRadius.circular(10),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 5, vertical: 2),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
                               child: Text(
-                                'Quên mật khẩu?',
+                                _isLogin
+                                    ? (isVN
+                                        ? "Chưa có tài khoản? Đăng ký ngay"
+                                        : "Don't have an account? Register now")
+                                    : (isVN
+                                        ? "Đã có tài khoản? Đăng nhập"
+                                        : "Already have an account? Login"),
                                 style: TextStyle(
-                                  color: Color(
-                                      0xFFA6E0FF), // Màu xanh rất nhạt như Ảnh 1 bạn gửi
-                                  fontSize: 13,
+                                  fontSize: 15,
+                                  color: primaryColor,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
 
-                    const SizedBox(height: 18), // Khoảng trống nhỏ trước ô Lớp
-
-                    if (!_isLogin) ...[
-                      // Trường chọn lớp (Chỉ hiện khi Đăng ký - Style UI Cũ)
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: DropdownButtonFormField<String>(
-                          decoration: InputDecoration(
-                            hintText: 'Chọn lớp',
-                            hintStyle: TextStyle(
-                                color: Colors.grey.shade400, fontSize: 15),
-                            prefixIcon: Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 10, right: 5),
-                              child: Icon(Icons.school_outlined,
-                                  color: Colors.grey.shade500),
-                            ),
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 18),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                          icon: Padding(
-                            padding: const EdgeInsets.only(right: 15),
-                            child: Icon(Icons.keyboard_arrow_down_rounded,
-                                color: Colors.grey.shade400),
-                          ),
-                          style: const TextStyle(
-                              fontSize: 15, color: Colors.black87),
-                          value: _selectedClass,
-                          items: _classes
-                              .map(
-                                (s) =>
-                                    DropdownMenuItem(value: s, child: Text(s)),
-                              )
-                              .toList(),
-                          onChanged: (val) =>
-                              setState(() => _selectedClass = val),
-                        ),
-                      ),
-                      const SizedBox(
-                          height:
-                              35), // Khoảng trống lớn trước nút Login khi Đăng ký
-                    ],
-
-                    // Tăng thêm khoảng cách nếu ở màn hình Đăng nhập
-                    if (_isLogin) const SizedBox(height: 35),
-
-                    // --- NÚT ĐĂNG NHẬP / ĐĂNG KÝ (STYLE UI CŨ - BO GÓC LỚN, MÀU XANH NHẠT) ---
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(
-                            30), // Bo góc lớn 30 giống UI cũ
-                        boxShadow: [
-                          BoxShadow(
-                            color: primaryColor.withOpacity(
-                                0.35), // Shadow màu xanh lan tỏa giống UI cũ
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 56, // Chiều cao nút lớn chuẩn UI cũ
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                primaryColor, // Màu xanh nhạt chuẩn UI cũ
-                            foregroundColor: Colors.white,
-                            elevation:
-                                0, // Tắt elevation mặc định vì đã dùng BoxShadow
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                          onPressed: _isLoading ? null : _handleAuth,
-                          child: _isLoading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : Text(
-                                  _isLogin ? "ĐĂNG NHẬP" : "ĐĂNG KÝ",
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.1,
-                                  ),
-                                ),
-                        ),
-                      ),
+                        SizedBox(height: screenHeight * 0.05),
+                      ],
                     ),
-
-                    const SizedBox(
-                        height: 30), // Khoảng trống trước TextButton chuyển đổi
-
-                    // --- NÚT CHUYỂN ĐỔI CHẾ ĐỘ ĐĂNG KÝ / ĐĂNG NHẬP (STYLE UI CŨ - MÀU XANH) ---
-                    Center(
-                      child: InkWell(
-                        onTap: () {
-                          setState(() {
-                            _isLogin = !_isLogin;
-                          });
-                        },
-                        borderRadius: BorderRadius.circular(10),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          child: Text(
-                            _isLogin
-                                ? "Chưa có tài khoản? Đăng ký ngay"
-                                : "Đã có tài khoản? Đăng nhập",
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: primaryColor, // Màu xanh nhạt UI cũ
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    SizedBox(
-                        height: screenHeight * 0.05), // Khoảng trống dưới cùng
-                  ],
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-
-          // 3. Hiển thị Loading Overlay nếu cần (Tùy chọn cho UX chuyên nghiệp hơn)
-          // if (_isLoading)
-          //   Container(
-          //     color: Colors.black.withOpacity(0.3),
-          //     child: Center(child: CircularProgressIndicator(color: primaryColor)),
-          //   ),
-        ],
-      ),
+        );
+      },
     );
   }
 

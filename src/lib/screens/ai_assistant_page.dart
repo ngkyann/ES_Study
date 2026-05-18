@@ -58,63 +58,65 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
   }
 
   Future<void> _loadChatHistory() async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-  try {
-    // 1. Chỉ lấy tối đa 20-30 tin nhắn gần nhất để tiết kiệm và nhanh
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('ai_chats')
-        .orderBy('timestamp', descending: true) // Lấy từ mới nhất
-        .limit(25) // Giới hạn số lượng tin nạp lại
-        .get();
+    try {
+      // 1. Chỉ lấy tối đa 20-30 tin nhắn gần nhất để tiết kiệm và nhanh
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('ai_chats')
+          .orderBy('timestamp', descending: true) // Lấy từ mới nhất
+          .limit(25) // Giới hạn số lượng tin nạp lại
+          .get();
 
-    if (mounted) {
-      setState(() {
-        _messages.clear();
-        _history.clear();
+      if (mounted) {
+        setState(() {
+          _messages.clear();
+          _history.clear();
 
-        if (snapshot.docs.isEmpty) {
-          _messages.add({
-            'role': 'model',
-            'text': 'Chào bạn! Mình là ES Assistant. Mình có thể giúp gì cho bạn hôm nay?',
-          });
-        } else {
-          // 2. Đảo ngược lại danh sách vì mình lấy descending: true
-          final docs = snapshot.docs.reversed.toList();
-          
-          for (var doc in docs) {
-            final data = doc.data();
-            final role = data['role'] as String;
-            final text = data['text'] as String;
+          if (snapshot.docs.isEmpty) {
+            _messages.add({
+              'role': 'model',
+              'text': languageNotifier.value == "Tiếng Việt"
+                  ? 'Chào bạn! Mình là ES Assistant. Mình có thể giúp gì cho bạn hôm nay?'
+                  : 'Hello! I am ES Assistant. How can I help you today?',
+            });
+          } else {
+            // 2. Đảo ngược lại danh sách vì mình lấy descending: true
+            final docs = snapshot.docs.reversed.toList();
 
-            _messages.add({'role': role, 'text': text});
+            for (var doc in docs) {
+              final data = doc.data();
+              final role = data['role'] as String;
+              final text = data['text'] as String;
 
-            // Nạp vào history cho AI
-            if (role == 'user') {
-              _history.add(Content.text(text));
-            } else {
-              _history.add(Content.model([TextPart(text)]));
+              _messages.add({'role': role, 'text': text});
+
+              // Nạp vào history cho AI
+              if (role == 'user') {
+                _history.add(Content.text(text));
+              } else {
+                _history.add(Content.model([TextPart(text)]));
+              }
+            }
+
+            while (_history.isNotEmpty && _history.first.role == 'model') {
+              _history.removeAt(0);
             }
           }
-          
-          while (_history.isNotEmpty && _history.first.role == 'model') {
-            _history.removeAt(0);
-          }
-        }
-        _isFetchingHistory = false;
-      });
-      
-      // Đợi UI render xong rồi mới scroll
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+          _isFetchingHistory = false;
+        });
+
+        // Đợi UI render xong rồi mới scroll
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+      }
+    } catch (e) {
+      debugPrint("Lỗi khi tải lịch sử: $e");
+      if (mounted) setState(() => _isFetchingHistory = false);
     }
-  } catch (e) {
-    debugPrint("Lỗi khi tải lịch sử: $e");
-    if (mounted) setState(() => _isFetchingHistory = false);
   }
-}
 
   Future<void> _saveMessageToFirestore(String role, String text) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -155,10 +157,11 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
         for (var i = 0; i < snapshot.docs.length; i += writeBatchSize) {
           final batch = FirebaseFirestore.instance.batch();
           final chunk = snapshot.docs.sublist(
-            i, 
-            i + writeBatchSize > snapshot.docs.length ? snapshot.docs.length : i + writeBatchSize
-          );
-          
+              i,
+              i + writeBatchSize > snapshot.docs.length
+                  ? snapshot.docs.length
+                  : i + writeBatchSize);
+
           for (var doc in chunk) {
             batch.delete(doc.reference);
           }
@@ -176,7 +179,9 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
           _history.clear();
           _messages.add({
             'role': 'model',
-            'text': 'Đã xóa lịch sử trò chuyện. Chúng ta bắt đầu chủ đề mới nhé!',
+            'text': languageNotifier.value == "Tiếng Việt"
+                ? 'Đã xóa lịch sử trò chuyện. Chúng ta bắt đầu chủ đề mới nhé!'
+                : 'Chat history deleted. Let\'s start a new topic!',
           });
           _isLoading = false;
         });
@@ -203,8 +208,9 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
     if (user == null) return;
 
     final now = DateTime.now();
-    final userLimitDoc = FirebaseFirestore.instance.collection('user_limits').doc(user.uid);
-    
+    final userLimitDoc =
+        FirebaseFirestore.instance.collection('user_limits').doc(user.uid);
+
     // 1. CHỈ KIỂM TRA (CHECK), CHƯA TRỪ LƯỢT
     int rpmCount = 0;
     int rpdCount = 0;
@@ -233,11 +239,15 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
       }
 
       if (rpdCount >= 100) {
-        _showLimitDialog("Bạn đã dùng hết 100 lượt hỏi hôm nay.");
+        _showLimitDialog(languageNotifier.value == "Tiếng Việt"
+            ? "Bạn đã dùng hết 100 lượt hỏi hôm nay."
+            : "You have used all 100 questions for today.");
         return;
       }
       if (rpmCount >= 6) {
-        _showLimitDialog("Hỏi nhanh quá! Đợi xíu nhé.");
+        _showLimitDialog(languageNotifier.value == "Tiếng Việt"
+            ? "Hỏi nhanh quá! Đợi xíu nhé."
+            : "Asking too fast! Please wait a moment.");
         return;
       }
     } catch (e) {
@@ -271,7 +281,7 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
 
         if (mounted) {
           final aiText = response.text ?? '...';
-          
+
           // 3. AI TRẢ LỜI THÀNH CÔNG -> MỚI THỰC HIỆN TRỪ LƯỢT (SET DATA)
           await userLimitDoc.set({
             'rpmCount': rpmCount + 1,
@@ -293,26 +303,27 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
         success = true;
       } catch (e) {
         debugPrint("Lỗi tại model ${_modelPool[_currentModelIndex]}: $e");
-          attempt++;
+        attempt++;
 
-          if (attempt < _modelPool.length) {
-            await Future.delayed(const Duration(seconds: 1));
-            _currentModelIndex = (_currentModelIndex + 1) % _modelPool.length;
-            continue;
-          }
+        if (attempt < _modelPool.length) {
+          await Future.delayed(const Duration(seconds: 1));
+          _currentModelIndex = (_currentModelIndex + 1) % _modelPool.length;
+          continue;
+        }
 
-          if (mounted) {
-            setState(() {
-              _messages.add({
-                'role': 'model',
-                'text':
-                    '⚠️ Hiện tại tất cả mô hình AI đều đang bận. Bạn đợi khoảng 30 giây rồi hỏi lại nhé!',
-              });
-              _isLoading = false;
+        if (mounted) {
+          setState(() {
+            _messages.add({
+              'role': 'model',
+              'text': languageNotifier.value == "Tiếng Việt"
+                  ? '⚠️ Hiện tại tất cả mô hình AI đều đang bận. Bạn đợi khoảng 30 giây rồi hỏi lại nhé!'
+                  : '⚠️ All AI models are currently busy. Please wait about 30 seconds and try again!',
             });
-            _scrollToBottom();
-          }
-          break;
+            _isLoading = false;
+          });
+          _scrollToBottom();
+        }
+        break;
       }
     }
   }
@@ -342,271 +353,302 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: const Row(
-          children: [
-            Icon(Icons.auto_awesome, color: Colors.white),
-            SizedBox(width: 8),
-            Text(
-              "ES Assistant",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+    // 🔥 THÊM ValueListenableBuilder bọc ngoài Scaffold
+    return ValueListenableBuilder<String>(
+        valueListenable: languageNotifier,
+        builder: (context, lang, child) {
+          // Tạo biến isVN để code ngắn gọn hơn
+          bool isVN = lang == "Tiếng Việt";
+
+          return Scaffold(
+            backgroundColor: Colors.grey.shade50,
+            appBar: AppBar(
+              title: const Row(
+                children: [
+                  Icon(Icons.auto_awesome, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text(
+                    "ES Assistant",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            tooltip: "Cuộc trò chuyện mới",
-            icon: const Icon(Icons.delete_sweep, color: Colors.white),
-            onPressed: () {
-              showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                        title: const Text("Xóa đoạn chat này?"),
-                        content: const Text(
-                            "Lịch sử trò chuyện này sẽ bị xóa vĩnh viễn và không thể khôi phục."),
-                        actions: [
-                          TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: const Text("Hủy",
-                                  style: TextStyle(color: Colors.grey))),
-                          ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red),
-                              onPressed: () {
-                                Navigator.pop(ctx);
-                                _startNewChat();
-                              },
-                              child: const Text("Xóa",
-                                  style: TextStyle(color: Colors.white)))
-                        ],
-                      ));
-            },
-          ),
-        ],
-      ),
-      body: _isFetchingHistory
-          ? Center(child: CircularProgressIndicator(color: primaryColor))
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, i) {
-                      final m = _messages[i];
-                      final isUser = m['role'] == 'user';
-                      return Align(
-                        alignment: isUser
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.75,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isUser
-                                ? primaryColor.withOpacity(0.15)
-                                : Colors.white,
-                            borderRadius: BorderRadius.only(
-                              topLeft: const Radius.circular(20),
-                              topRight: const Radius.circular(20),
-                              bottomLeft: isUser
-                                  ? const Radius.circular(20)
-                                  : const Radius.circular(5),
-                              bottomRight: isUser
-                                  ? const Radius.circular(5)
-                                  : const Radius.circular(20),
-                            ),
-                            boxShadow: [
-                              if (!isUser)
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 5,
-                                  offset: const Offset(0, 2),
-                                ),
-                            ],
-                          ),
-                          // 🔥 ĐÃ CẬP NHẬT: COLUMN CHỨA LATEX VÀ NÚT COPY
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              MarkdownBody(
-                                data: m['text']!,
-                                selectable: true,
-                                builders: {
-                                  'latex': LatexElementBuilder(
-                                    textStyle: TextStyle(
-                                      color: isUser
-                                          ? Colors.black87
-                                          : Colors.black,
-                                      fontSize: 15,
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                },
-                                extensionSet: md.ExtensionSet(
-                                  [
-                                    ...md.ExtensionSet.gitHubFlavored
-                                        .blockSyntaxes,
-                                    LatexBlockSyntax()
-                                  ],
-                                  [
-                                    ...md.ExtensionSet.gitHubFlavored
-                                        .inlineSyntaxes,
-                                    LatexInlineSyntax()
-                                  ],
-                                ),
-                                styleSheet: MarkdownStyleSheet(
-                                  p: TextStyle(
-                                    fontSize: 15,
-                                    height: 1.4,
-                                    color:
-                                        isUser ? Colors.black87 : Colors.black,
-                                  ),
-                                  strong: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color:
-                                        isUser ? Colors.black87 : Colors.black,
-                                  ),
-                                  code: TextStyle(
-                                    backgroundColor: Colors.grey.shade200,
-                                    color: Colors.red.shade800,
-                                    fontFamily: 'monospace',
-                                    fontSize: 14,
-                                  ),
-                                  codeblockDecoration: BoxDecoration(
-                                    color: Colors.grey.shade900,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                              if (!isUser) ...[
-                                const SizedBox(height: 8),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: InkWell(
-                                    onTap: () {
-                                      Clipboard.setData(
-                                          ClipboardData(text: m['text']!));
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: const Text(
-                                              "Đã sao chép tin nhắn này!"),
-                                          backgroundColor: primaryColor,
-                                          duration: const Duration(seconds: 2),
-                                        ),
-                                      );
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              actions: [
+                IconButton(
+                  // 🔥 SỬA TOOLTIP
+                  tooltip: isVN ? "Cuộc trò chuyện mới" : "New chat",
+                  icon: const Icon(Icons.delete_sweep, color: Colors.white),
+                  onPressed: () {
+                    showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                              // 🔥 SỬA CHỮ TRONG DIALOG
+                              title: Text(isVN
+                                  ? "Xóa đoạn chat này?"
+                                  : "Delete this chat?"),
+                              content: Text(isVN
+                                  ? "Lịch sử trò chuyện này sẽ bị xóa vĩnh viễn và không thể khôi phục."
+                                  : "This chat history will be permanently deleted and cannot be recovered."),
+                              actions: [
+                                TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: Text(isVN ? "Hủy" : "Cancel",
+                                        style: const TextStyle(
+                                            color: Colors.grey))),
+                                ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red),
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      _startNewChat();
                                     },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 5),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade100,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: Colors.grey.shade300),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.copy,
-                                              size: 14,
-                                              color: Colors.grey.shade700),
-                                          const SizedBox(width: 4),
-                                          Text("Copy",
-                                              style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.grey.shade700,
-                                                  fontWeight: FontWeight.bold)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                                    child: Text(isVN ? "Xóa" : "Delete",
+                                        style: const TextStyle(
+                                            color: Colors.white)))
                               ],
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                if (_isLoading)
-                  LinearProgressIndicator(
-                    minHeight: 3,
-                    color: primaryColor,
-                    backgroundColor: primaryColor.withOpacity(0.2),
-                  ),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, -3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _textController,
-                          style: const TextStyle(fontSize: 15),
-                          autocorrect: false,
-                          enableSuggestions: true,
-                          keyboardType: TextInputType.multiline,
-                          minLines: 1,
-                          maxLines: 5,
-                          decoration: InputDecoration(
-                            hintText: "Hỏi AI điều gì đó...",
-                            hintStyle: TextStyle(color: Colors.grey.shade400),
-                            filled: true,
-                            fillColor: Colors.grey.shade100,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(25),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: primaryColor,
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.send, color: Colors.white),
-                          onPressed: _sendMessage,
-                        ),
-                      ),
-                    ],
-                  ),
+                            ));
+                  },
                 ),
               ],
             ),
-    );
+            body: _isFetchingHistory
+                ? Center(child: CircularProgressIndicator(color: primaryColor))
+                : Column(
+                    children: [
+                      Expanded(
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, i) {
+                            final m = _messages[i];
+                            final isUser = m['role'] == 'user';
+                            return Align(
+                              alignment: isUser
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                                constraints: BoxConstraints(
+                                  maxWidth:
+                                      MediaQuery.of(context).size.width * 0.75,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isUser
+                                      ? primaryColor.withOpacity(0.15)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(20),
+                                    topRight: const Radius.circular(20),
+                                    bottomLeft: isUser
+                                        ? const Radius.circular(20)
+                                        : const Radius.circular(5),
+                                    bottomRight: isUser
+                                        ? const Radius.circular(5)
+                                        : const Radius.circular(20),
+                                  ),
+                                  boxShadow: [
+                                    if (!isUser)
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 5,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                  ],
+                                ),
+                                // 🔥 ĐÃ CẬP NHẬT: COLUMN CHỨA LATEX VÀ NÚT COPY
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    MarkdownBody(
+                                      data: m['text']!,
+                                      selectable: true,
+                                      builders: {
+                                        'latex': LatexElementBuilder(
+                                          textStyle: TextStyle(
+                                            color: isUser
+                                                ? Colors.black87
+                                                : Colors.black,
+                                            fontSize: 15,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      },
+                                      extensionSet: md.ExtensionSet(
+                                        [
+                                          ...md.ExtensionSet.gitHubFlavored
+                                              .blockSyntaxes,
+                                          LatexBlockSyntax()
+                                        ],
+                                        [
+                                          ...md.ExtensionSet.gitHubFlavored
+                                              .inlineSyntaxes,
+                                          LatexInlineSyntax()
+                                        ],
+                                      ),
+                                      styleSheet: MarkdownStyleSheet(
+                                        p: TextStyle(
+                                          fontSize: 15,
+                                          height: 1.4,
+                                          color: isUser
+                                              ? Colors.black87
+                                              : Colors.black,
+                                        ),
+                                        strong: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: isUser
+                                              ? Colors.black87
+                                              : Colors.black,
+                                        ),
+                                        code: TextStyle(
+                                          backgroundColor: Colors.grey.shade200,
+                                          color: Colors.red.shade800,
+                                          fontFamily: 'monospace',
+                                          fontSize: 14,
+                                        ),
+                                        codeblockDecoration: BoxDecoration(
+                                          color: Colors.grey.shade900,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                    ),
+                                    if (!isUser) ...[
+                                      const SizedBox(height: 8),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: InkWell(
+                                          onTap: () {
+                                            Clipboard.setData(ClipboardData(
+                                                text: m['text']!));
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                // 🔥 SỬA THÔNG BÁO COPY
+                                                content: Text(isVN
+                                                    ? "Đã sao chép tin nhắn này!"
+                                                    : "Message copied!"),
+                                                backgroundColor: primaryColor,
+                                                duration:
+                                                    const Duration(seconds: 2),
+                                              ),
+                                            );
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 5),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade100,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                  color: Colors.grey.shade300),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.copy,
+                                                    size: 14,
+                                                    color:
+                                                        Colors.grey.shade700),
+                                                const SizedBox(width: 4),
+                                                // 🔥 SỬA CHỮ NÚT COPY
+                                                Text(isVN ? "Sao chép" : "Copy",
+                                                    style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors
+                                                            .grey.shade700,
+                                                        fontWeight:
+                                                            FontWeight.bold)),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      if (_isLoading)
+                        LinearProgressIndicator(
+                          minHeight: 3,
+                          color: primaryColor,
+                          backgroundColor: primaryColor.withOpacity(0.2),
+                        ),
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, -3),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _textController,
+                                style: const TextStyle(fontSize: 15),
+                                autocorrect: false,
+                                enableSuggestions: true,
+                                keyboardType: TextInputType.multiline,
+                                minLines: 1,
+                                maxLines: 5,
+                                decoration: InputDecoration(
+                                  hintText: isVN
+                                      ? "Hỏi AI điều gì đó..."
+                                      : "Ask AI something...",
+                                  hintStyle:
+                                      TextStyle(color: Colors.grey.shade400),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 12,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(25),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: primaryColor,
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon:
+                                    const Icon(Icons.send, color: Colors.white),
+                                onPressed: _sendMessage,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+          );
+        });
   }
 }

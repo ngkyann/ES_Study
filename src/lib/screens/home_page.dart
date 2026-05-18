@@ -13,6 +13,7 @@ import 'package:esstudy/screens/ai_assistant_page.dart';
 import 'package:esstudy/screens/friends_page.dart';
 import 'package:esstudy/screens/statistics_page.dart';
 import 'package:esstudy/screens/create_room_page.dart';
+import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -47,6 +48,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _checkTodayPlansAndShowPopup() async {
+    bool isVN = languageNotifier.value == "Tiếng Việt"; // Kiểm tra ngôn ngữ
+
     try {
       final now = DateTime.now();
       final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59);
@@ -78,9 +81,10 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Icon(Icons.auto_awesome, color: primaryColor),
                   const SizedBox(width: 10),
-                  const Text(
-                    "Nhắc nhở học tập",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  Text(
+                    isVN ? "Nhắc nhở học tập" : "Study Reminder",
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 18),
                   ),
                 ],
               ),
@@ -89,7 +93,9 @@ class _HomePageState extends State<HomePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Chào ${widget.userName}, bạn có các kế hoạch chưa hoàn thành:",
+                    isVN
+                        ? "Chào ${widget.userName}, bạn có các kế hoạch chưa hoàn thành:"
+                        : "Hi ${widget.userName}, you have uncompleted plans:",
                   ),
                   const SizedBox(height: 15),
                   ...todayPlans.map((doc) {
@@ -121,9 +127,9 @@ class _HomePageState extends State<HomePage> {
                   onPressed: () {
                     if (mounted) Navigator.pop(context);
                   },
-                  child: const Text(
-                    "Đã hiểu, vào học thôi!",
-                    style: TextStyle(
+                  child: Text(
+                    isVN ? "Đã hiểu, vào học thôi!" : "Got it, let's study!",
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
@@ -233,46 +239,186 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // Cập nhật hàm chào dựa vào ngôn ngữ
   String getGreeting() {
     final vn = tz.getLocation('Asia/Ho_Chi_Minh');
     final now = tz.TZDateTime.now(vn);
     final hour = now.hour;
+    bool isVN = languageNotifier.value == "Tiếng Việt";
 
-    if (hour >= 5 && hour < 12) return "Chào buổi sáng";
-    if (hour >= 12 && hour < 18) return "Chào buổi chiều";
-    return "Chào buổi tối";
+    if (hour >= 5 && hour < 12) return isVN ? "Chào buổi sáng" : "Good morning";
+    if (hour >= 12 && hour < 18)
+      return isVN ? "Chào buổi chiều" : "Good afternoon";
+    return isVN ? "Chào buổi tối" : "Good evening";
+  }
+
+  // 🔥 Hàm dịch Text Menu mà không ảnh hưởng code logic
+  String _getMenuTitle(String id, bool isVN) {
+    if (isVN) return id;
+    switch (id) {
+      case "Tạo phòng học":
+        return "Create Room";
+      case "Học offline":
+        return "Offline Study";
+      case "Tìm phòng học":
+        return "Search Room";
+      case "Kế hoạch học tập":
+        return "Study Plan";
+      case "Bảng xếp hạng":
+        return "Leaderboard";
+      case "Bạn bè":
+        return "Friends";
+      case "Lịch sử học tập":
+        return "Study History";
+      case "Thành tích học tập":
+        return "Achievements";
+      case "Trợ lý học tập":
+        return "AI Assistant";
+      default:
+        return id;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        leadingWidth: 230,
-        leading: Container(
-          margin: const EdgeInsets.only(left: 16, top: 10),
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: () async {
+    // 🔥 BỌC ValueListenableBuilder cho toàn bộ trang
+    return ValueListenableBuilder<String>(
+      valueListenable: languageNotifier,
+      builder: (context, lang, child) {
+        bool isVN = lang == "Tiếng Việt";
+
+        return Scaffold(
+          backgroundColor: Colors.grey.shade50,
+          appBar: AppBar(
+            elevation: 0,
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+            leadingWidth: 230,
+            leading: Container(
+              margin: const EdgeInsets.only(left: 16, top: 10),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  ProfilePage(
+                            userName: widget.userName,
+                            userId: widget.userId,
+                            selectedClass: widget.selectedClass,
+                            userPoints: userPoints,
+                            email: widget.email,
+                            userStreak: userStreak,
+                          ),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                            const begin = Offset(-1.0, 0.0);
+                            const end = Offset.zero;
+                            const curve = Curves.easeInOut;
+
+                            var tween = Tween(begin: begin, end: end)
+                                .chain(CurveTween(curve: curve));
+                            var offsetAnimation = animation.drive(tween);
+
+                            return SlideTransition(
+                              position: offsetAnimation,
+                              child: child,
+                            );
+                          },
+                          transitionDuration: const Duration(milliseconds: 750),
+                        ),
+                      );
+                      if (mounted) setState(() {});
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Colors.white,
+                        child:
+                            Icon(Icons.person, color: primaryColor, size: 20),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Icon(
+                    Icons.local_fire_department,
+                    color: Colors.orangeAccent,
+                  ),
+                  const SizedBox(width: 4),
+                  _isLoadingData
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          "$userStreak",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                  const SizedBox(width: 12),
+                  const Icon(Icons.workspace_premium, color: Colors.yellow),
+                  const SizedBox(width: 4),
+                  _isLoadingData
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          "$userPoints",
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                ],
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(
+                  Icons.settings,
+                  size: 28,
+                  color: Colors.white,
+                ),
+                onPressed: () async {
                   await Navigator.push(
                     context,
                     PageRouteBuilder(
                       pageBuilder: (context, animation, secondaryAnimation) =>
-                          ProfilePage(
+                          SettingsPage(
                         userName: widget.userName,
-                        userId: widget.userId,
                         selectedClass: widget.selectedClass,
-                        userPoints: userPoints,
+                        userId: widget.userId,
                         email: widget.email,
-                        userStreak: userStreak,
                       ),
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
-                        const begin = Offset(-1.0, 0.0);
+                        const begin = Offset(1.0, 0.0);
                         const end = Offset.zero;
                         const curve = Curves.easeInOut;
 
@@ -290,270 +436,173 @@ class _HomePageState extends State<HomePage> {
                   );
                   if (mounted) setState(() {});
                 },
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
+          body: RefreshIndicator(
+            color: primaryColor,
+            backgroundColor: Colors.white,
+            onRefresh: () async {
+              setState(() => _isLoadingData = true);
+              await _fetchUserData();
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        top: -500,
+                        left: 0,
+                        right: 0,
+                        height: 500,
+                        child: Container(color: primaryColor),
+                      ),
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: primaryColor,
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(30),
+                            bottomRight: Radius.circular(30),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 30,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(30),
+                            bottomRight: Radius.circular(30),
+                          ),
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                bottom: -50,
+                                right: -30,
+                                child: Transform.scale(
+                                  scaleX: 1.4,
+                                  child: Icon(
+                                    Icons.cloud,
+                                    color: Colors.white.withOpacity(0.32),
+                                    size: 180,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 10,
+                                right: 120,
+                                child: Transform.scale(
+                                  scaleX: 1.3,
+                                  child: Icon(
+                                    Icons.cloud,
+                                    color: Colors.white.withOpacity(0.28),
+                                    size: 90,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 15,
+                                  left: 20,
+                                  right: 20,
+                                  bottom: 45,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "${getGreeting()},",
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      widget.userName,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.person, color: primaryColor, size: 20),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Icon(
-                Icons.local_fire_department,
-                color: Colors.orangeAccent,
-              ),
-              const SizedBox(width: 4),
-              _isLoadingData
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(
-                      "$userStreak",
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                    child: Text(
+                      isVN ? "Bắt đầu học" : "Start Studying",
                       style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
+                          fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-              const SizedBox(width: 12),
-              const Icon(Icons.workspace_premium, color: Colors.yellow),
-              const SizedBox(width: 4),
-              _isLoadingData
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(
-                      "$userPoints",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-            ],
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(
-              Icons.settings,
-              size: 28,
-              color: Colors.white,
-            ),
-            onPressed: () async {
-              // Chuyển hướng sang SettingsPage và truyền các tham số cần thiết
-              // Thay thế đoạn điều hướng cũ bằng đoạn này:
-              Navigator.push(
-                context,
-                PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) =>
-                      SettingsPage(
-                    userName: widget.userName,
-                    selectedClass: widget.selectedClass,
-                    userId: widget.userId,
-                    email: widget.email,
                   ),
-                  transitionsBuilder:
-                      (context, animation, secondaryAnimation, child) {
-                    // Xác định hướng trượt (từ phải sang trái)
-                    const begin = Offset(1.0, 0.0);
-                    const end = Offset.zero;
-                    const curve = Curves.easeInOut;
-
-                    var tween = Tween(begin: begin, end: end)
-                        .chain(CurveTween(curve: curve));
-                    var offsetAnimation = animation.drive(tween);
-
-                    return SlideTransition(
-                      position: offsetAnimation,
-                      child: child,
-                    );
-                  },
-                  // Thời gian hiệu ứng (tùy chọn)
-                  transitionDuration: const Duration(milliseconds: 750),
-                ),
-              );
-              // Khi từ trang Settings quay lại, cập nhật lại trạng thái nếu có thay đổi (ví dụ: đổi tên/lớp)
-              if (mounted) setState(() {});
-            },
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: RefreshIndicator(
-        color: primaryColor,
-        backgroundColor: Colors.white,
-        onRefresh: () async {
-          setState(() => _isLoadingData = true);
-          await _fetchUserData();
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned(
-                    top: -500,
-                    left: 0,
-                    right: 0,
-                    height: 500,
-                    child: Container(color: primaryColor),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: primaryColor,
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(30),
-                        bottomRight: Radius.circular(30),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.25),
-                          blurRadius: 30,
-                          offset: const Offset(0, 12),
+                  // Truyền thêm biến isVN vào hàm vẽ Menu
+                  _buildGridMenu(
+                      context,
+                      [
+                        MenuData(
+                            Icons.add_home, "Tạo phòng học", Colors.orange),
+                        MenuData(Icons.menu_book, "Học offline", Colors.green),
+                        MenuData(
+                          Icons.search,
+                          "Tìm phòng học",
+                          primaryColor,
+                          isSearch: true,
                         ),
                       ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(30),
-                        bottomRight: Radius.circular(30),
-                      ),
-                      child: Stack(
-                        children: [
-                          // --- ĐÁM MÂY ĐÃ ĐƯỢC CHỈNH LẠI ĐỂ KHÔNG BỊ CẮT TRÊN ---
-
-                          Positioned(
-                            bottom: -50,
-                            right: -30,
-                            child: Transform.scale(
-                              scaleX: 1.4, // Kéo dài ra theo chiều ngang
-                              child: Icon(
-                                Icons.cloud,
-                                color: Colors.white.withOpacity(0.32),
-                                size: 180,
-                              ),
-                            ),
-                          ),
-
-                          // Đám mây phụ nối đuôi nhau về phía trái (giữa màn hình)
-                          Positioned(
-                            bottom: 10,
-                            right: 120,
-                            child: Transform.scale(
-                              scaleX: 1.3,
-                              child: Icon(
-                                Icons.cloud,
-                                color: Colors.white.withOpacity(0.28),
-                                size: 90,
-                              ),
-                            ),
-                          ),
-
-                          // Nội dung chữ (Tăng padding dưới để đẩy khung dài ra, mây không bị gò bó)
-                          Padding(
-                            padding: const EdgeInsets.only(
-                              top: 15,
-                              left: 20,
-                              right: 20,
-                              bottom:
-                                  45, // Kéo dài vùng này ra để mây hiển thị đủ
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "${getGreeting()},",
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  widget.userName,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                      isVN),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                    child: Text(
+                      isVN ? "Tiện ích khác" : "Other Utilities",
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
+                  _buildGridMenu(
+                      context,
+                      [
+                        MenuData(Icons.event_note, "Kế hoạch học tập",
+                            Colors.purple),
+                        MenuData(Icons.leaderboard, "Bảng xếp hạng",
+                            Colors.redAccent),
+                        MenuData(Icons.people, "Bạn bè", Colors.teal),
+                        MenuData(
+                            Icons.history, "Lịch sử học tập", Colors.blueGrey),
+                        MenuData(Icons.emoji_events, "Thành tích học tập",
+                            Colors.indigo),
+                        MenuData(Icons.smart_toy, "Trợ lý học tập",
+                            Colors.blueAccent),
+                      ],
+                      isVN),
+                  const SizedBox(height: 20),
                 ],
               ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
-                child: Text(
-                  "Bắt đầu học",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-              _buildGridMenu(context, [
-                MenuData(Icons.add_home, "Tạo phòng học", Colors.orange),
-                MenuData(Icons.menu_book, "Học offline", Colors.green),
-                MenuData(
-                  Icons.search,
-                  "Tìm phòng học",
-                  primaryColor,
-                  isSearch: true,
-                ),
-              ]),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
-                child: Text(
-                  "Tiện ích khác",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ),
-              _buildGridMenu(context, [
-                MenuData(Icons.event_note, "Kế hoạch học tập", Colors.purple),
-                MenuData(Icons.leaderboard, "Bảng xếp hạng", Colors.redAccent),
-                MenuData(Icons.people, "Bạn bè", Colors.teal),
-                MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
-                MenuData(
-                    Icons.emoji_events, "Thành tích học tập", Colors.indigo),
-                MenuData(Icons.smart_toy, "Trợ lý học tập", Colors.blueAccent),
-              ]),
-              const SizedBox(height: 20),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildGridMenu(BuildContext context, List<MenuData> items) {
+  // 🔥 Nhận thêm tham số isVN
+  Widget _buildGridMenu(BuildContext context, List<MenuData> items, bool isVN) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -572,6 +621,7 @@ class _HomePageState extends State<HomePage> {
             await Future.delayed(const Duration(milliseconds: 50));
             if (!context.mounted) return;
 
+            // Logic chuyển trang sử dụng nguyên gốc Tiếng Việt để không bị lỗi
             if (item.title == "Tạo phòng học") {
               await Navigator.push(
                 context,
@@ -642,19 +692,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
               if (mounted) setState(() {});
-            } else if (item.title == "Cài đặt") {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SettingsPage(
-                    userName: widget.userName,
-                    selectedClass: widget.selectedClass,
-                    userId: widget.userId,
-                    email: widget.email,
-                  ),
-                ),
-              );
-              if (mounted) setState(() {});
             } else if (item.title == "Bạn bè") {
               await Navigator.push(
                 context,
@@ -693,7 +730,8 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  item.title,
+                  // Dùng hàm dịch tại đây
+                  _getMenuTitle(item.title, isVN),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 12,

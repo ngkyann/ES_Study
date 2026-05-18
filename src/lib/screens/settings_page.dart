@@ -4,6 +4,7 @@ import 'package:esstudy/constants/colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
 
 class SettingsPage extends StatefulWidget {
   final String userName;
@@ -28,25 +29,20 @@ class _SettingsPageState extends State<SettingsPage> {
 
   late String _currentUserName;
   late String _currentClass;
-  // 1. Khai báo các biến trạng thái trong State của ông
-  Color _selectedColor = const Color(0xFF87CEFA); // Màu đang dùng hiện tại
-  Color _customColor = const Color(
-    0xFF87CEFA,
-  ); // Màu người dùng tự chọn (mặc định xanh nhạt)
-  bool _isCustomActive = false; // Kiểm tra xem có đang dùng màu custom không
+
+  Color _selectedColor = const Color(0xFF87CEFA);
+  Color _customColor = const Color(0xFF87CEFA);
+  bool _isCustomActive = false;
 
   @override
   void initState() {
     super.initState();
     _currentUserName = widget.userName;
     _currentClass = widget.selectedClass;
+    _selectedLanguage = languageNotifier.value;
 
-    // --- THÊM PHẦN KIỂM TRA MÀU HIỆN TẠI ---
-
-    // Gán màu đang chọn bằng màu hiện tại của app
     _selectedColor = primaryColor;
 
-    // Danh sách các màu cố định mà bạn đang có trong _buildThemeSelector
     List<Color> defaultColors = [
       const Color(0xFF87CEFA),
       Colors.black,
@@ -54,12 +50,10 @@ class _SettingsPageState extends State<SettingsPage> {
       const Color.fromARGB(255, 255, 125, 165),
     ];
 
-    // Kiểm tra xem primaryColor có phải là một trong các màu mặc định không
     bool isDefaultColor =
         defaultColors.any((c) => c.value == primaryColor.value);
 
     if (!isDefaultColor) {
-      // Nếu không phải màu mặc định -> Người dùng đang dùng màu tuỳ chỉnh (nút cầu vồng)
       _customColor = primaryColor;
       _isCustomActive = true;
     } else {
@@ -67,101 +61,112 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // --- HÀM CẬP NHẬT FIREBASE ---
   Future<void> _updateUserData(String field, String newValue) async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     try {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
           .update({field: newValue});
       if (mounted) {
-        _showSnackBar(context, "Cập nhật thành công!");
+        _showSnackBar(
+            context, isVN ? "Cập nhật thành công!" : "Update successful!");
       }
     } catch (e) {
       if (mounted) {
-        _showSnackBar(context, "Lỗi cập nhật: $e");
+        _showSnackBar(context, isVN ? "Lỗi cập nhật: $e" : "Update error: $e");
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "Cài đặt",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        elevation: 0,
-      ),
-      body: Container(
-        color: Colors.grey.shade50,
-        child: RefreshIndicator(
-          color: primaryColor,
-          backgroundColor: Colors.white,
-          onRefresh: () async {
-            await Future.delayed(const Duration(seconds: 1));
-          },
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            children: [
-              _buildSectionHeader("Thông tin cá nhân"),
-              // 🔥 ĐÃ SỬA: Thêm sự kiện onTap để sửa Tên
-              _buildInfoTile(
-                Icons.person,
-                "Họ và tên",
-                _currentUserName,
-                onTap: () => _showEditNameDialog(context),
-              ),
-              // 🔥 ĐÃ SỬA: Thêm sự kiện onTap để sửa Lớp
-              _buildInfoTile(
-                Icons.school,
-                "Lớp",
-                _currentClass,
-                onTap: () => _showEditClassDialog(context),
-              ),
-              _buildInfoTile(
-                Icons.email,
-                "Email",
-                widget.email,
-              ), // Email thường không cho sửa
-              _buildPasswordTile(context),
-              const SizedBox(height: 10),
+    // 🔥 BỌC TÒAN BỘ BẰNG ValueListenableBuilder
+    return ValueListenableBuilder<String>(
+      valueListenable: languageNotifier,
+      builder: (context, lang, child) {
+        bool isVN = lang == "Tiếng Việt";
 
-              _buildSectionHeader("Cài đặt giao diện"),
-              _buildThemeSelector(),
-              _buildActionTile(
-                Icons.language,
-                "Ngôn ngữ",
-                _selectedLanguage,
-                onTap: () => _showLanguageDialog(context),
-              ),
-              const SizedBox(height: 10),
-
-              _buildSectionHeader("Ứng dụng"),
-              _buildActionTile(
-                Icons.privacy_tip,
-                "Chính sách bảo mật",
-                "",
-                onTap: () => _showPrivacyPolicyDialog(context),
-              ),
-              _buildActionTile(
-                Icons.info,
-                "Thông tin phiên bản",
-                "V 1.1.1",
-                onTap: () => _showVersionInfoDialog(context),
-              ),
-              const SizedBox(height: 30),
-              _buildLogoutButton(context),
-              const SizedBox(height: 30),
-            ],
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(
+              isVN ? "Cài đặt" : "Settings",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+            centerTitle: true,
+            elevation: 0,
           ),
-        ),
-      ),
+          body: Container(
+            color: Colors.grey.shade50,
+            child: RefreshIndicator(
+              color: primaryColor,
+              backgroundColor: Colors.white,
+              onRefresh: () async {
+                await Future.delayed(const Duration(seconds: 1));
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                children: [
+                  _buildSectionHeader(
+                      isVN ? "Thông tin cá nhân" : "Personal Information"),
+                  _buildInfoTile(
+                    Icons.person,
+                    isVN ? "Họ và tên" : "Full Name",
+                    _currentUserName,
+                    onTap: () => _showEditNameDialog(context),
+                  ),
+                  _buildInfoTile(
+                    Icons.school,
+                    isVN ? "Lớp" : "Class",
+                    isVN
+                        ? _currentClass
+                        : _currentClass.replaceFirst('Lớp', 'Class'),
+                    onTap: () => _showEditClassDialog(context),
+                  ),
+                  _buildInfoTile(
+                    Icons.email,
+                    "Email",
+                    widget.email,
+                  ),
+                  _buildPasswordTile(context, isVN),
+                  const SizedBox(height: 10),
+                  _buildSectionHeader(
+                      isVN ? "Cài đặt giao diện" : "Appearance Settings"),
+                  _buildThemeSelector(isVN),
+                  _buildActionTile(
+                    Icons.language,
+                    isVN ? "Ngôn ngữ" : "Language",
+                    _selectedLanguage == "Tiếng Việt"
+                        ? "Tiếng Việt"
+                        : "English",
+                    onTap: () => _showLanguageDialog(context),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildSectionHeader(isVN ? "Ứng dụng" : "App"),
+                  _buildActionTile(
+                    Icons.privacy_tip,
+                    isVN ? "Chính sách bảo mật" : "Privacy Policy",
+                    "",
+                    onTap: () => _showPrivacyPolicyDialog(context),
+                  ),
+                  _buildActionTile(
+                    Icons.info,
+                    isVN ? "Thông tin phiên bản" : "Version Info",
+                    "V 1.1.1",
+                    onTap: () => _showVersionInfoDialog(context),
+                  ),
+                  const SizedBox(height: 30),
+                  _buildLogoutButton(context, isVN),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -181,7 +186,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // 🔥 ĐÃ SỬA: Thêm onTap và Icon chỉnh sửa
   Widget _buildInfoTile(
     IconData icon,
     String title,
@@ -209,12 +213,13 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildPasswordTile(BuildContext context) {
+  Widget _buildPasswordTile(BuildContext context, bool isVN) {
     return Container(
       color: Colors.white,
       child: ListTile(
         leading: Icon(Icons.lock, color: primaryColor),
-        title: const Text("Mật khẩu", style: TextStyle(fontSize: 15)),
+        title: Text(isVN ? "Mật khẩu" : "Password",
+            style: const TextStyle(fontSize: 15)),
         subtitle: const Text(
           "********",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
@@ -222,7 +227,7 @@ class _SettingsPageState extends State<SettingsPage> {
         trailing: TextButton(
           onPressed: () => _showChangePasswordDialog(context),
           child: Text(
-            "Đổi mật khẩu",
+            isVN ? "Đổi mật khẩu" : "Change Password",
             style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
           ),
         ),
@@ -259,32 +264,28 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showColorPickerDialog() {
-    // Tạo một biến tạm để lưu màu trong lúc đang kéo (không trigger setState toàn app)
     Color tempColor = _customColor;
+    bool isVN = languageNotifier.value == "Tiếng Việt";
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        // Dùng StatefulBuilder để chỉ update nội dung trong Dialog
         builder: (context, setDialogState) {
           return AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-            ), // Bo góc Dialog
-            title: const Text('Chọn màu sắc'),
+            ),
+            title: Text(isVN ? 'Chọn màu sắc' : 'Select Color'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // --- KHUNG TEST MÀU (PREVIEW BOX) ---
                 Container(
                   width: double.infinity,
                   height: 50,
                   margin: const EdgeInsets.only(bottom: 15),
                   decoration: BoxDecoration(
                     color: tempColor,
-                    borderRadius: BorderRadius.circular(
-                      12,
-                    ), // Bo góc khung test
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.grey.shade300),
                     boxShadow: [
                       BoxShadow(
@@ -294,10 +295,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ],
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
-                      "Màu hiển thị thử",
-                      style: TextStyle(
+                      isVN ? "Màu hiển thị thử" : "Preview Color",
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         shadows: [Shadow(blurRadius: 2, color: Colors.black45)],
@@ -305,8 +306,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ),
                 ),
-
-                // --- BẢNG CHỌN MÀU ---
                 SizedBox(
                   width: double.maxFinite,
                   height: MediaQuery.of(context).size.height * 0.4,
@@ -314,13 +313,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ColorPicker(
                       pickerColor: tempColor,
                       onColorChanged: (color) {
-                        // Chỉ cập nhật trạng thái bên trong Dialog, không gây lag App ngoài
                         setDialogState(() => tempColor = color);
                       },
                       pickerAreaHeightPercent: 0.7,
                       enableAlpha: false,
                       displayThumbColor: true,
-                      // Bo góc cho vùng chọn màu (tùy thuộc vào phiên bản thư viện)
                       pickerAreaBorderRadius: BorderRadius.circular(15),
                     ),
                   ),
@@ -330,19 +327,18 @@ class _SettingsPageState extends State<SettingsPage> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Hủy', style: TextStyle(color: Colors.grey)),
+                child: Text(isVN ? 'Hủy' : 'Cancel',
+                    style: const TextStyle(color: Colors.grey)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      tempColor, // Nút "Xong" có màu đang chọn luôn
+                  backgroundColor: tempColor,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 onPressed: () {
-                  // CHỈ ĐỒNG BỘ KHI CLICK "XONG"
                   _applyNewColor(tempColor);
                   setState(() {
                     _customColor = tempColor;
@@ -350,7 +346,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   });
                   Navigator.pop(context);
                 },
-                child: const Text('Xong'),
+                child: Text(isVN ? 'Xong' : 'Done'),
               ),
             ],
           );
@@ -362,20 +358,15 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _applyNewColor(Color color) async {
     setState(() {
       _selectedColor = color;
-      primaryColor = color; // Biến global của ông
-
-      // Đã bỏ dòng if (themeNotifier != null) đi vì nó luôn đúng
-      themeNotifier.value =
-          color; // Báo cho ValueListenableBuilder đổi màu toàn app
+      primaryColor = color;
+      themeNotifier.value = color;
     });
 
-    // Lưu vào máy để lần sau mở app vẫn còn
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('theme_color', color.value);
   }
 
   Widget _buildColorOption(Color color, {bool isRainbow = false}) {
-    // Check xem màu này có đang được chọn không
     bool isSelected = (_selectedColor.value == color.value) && !isRainbow;
     if (isRainbow) isSelected = _isCustomActive;
 
@@ -396,9 +387,7 @@ class _SettingsPageState extends State<SettingsPage> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(
-            color: isSelected
-                ? primaryColor
-                : Colors.transparent, // Dùng primaryColor làm viền
+            color: isSelected ? primaryColor : Colors.transparent,
             width: 2,
           ),
         ),
@@ -430,23 +419,23 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildThemeSelector() {
+  Widget _buildThemeSelector(bool isVN) {
     return Container(
       color: Colors.white,
       margin: const EdgeInsets.only(bottom: 1),
       child: ListTile(
         leading: const Icon(Icons.color_lens, color: Colors.black54),
-        title: const Text("Màu sắc chủ đề", style: TextStyle(fontSize: 15)),
+        title: Text(isVN ? "Màu sắc chủ đề" : "Theme Color",
+            style: const TextStyle(fontSize: 15)),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8.0),
           child: Row(
             children: [
-              _buildColorOption(const Color(0xFF87CEFA)), // Xanh dương nhạt
-              _buildColorOption(Colors.black), // Đen
-              _buildColorOption(Colors.green), // Xanh lá
-              _buildColorOption(
-                  const Color.fromARGB(255, 255, 125, 165)), // Hồng
-              _buildColorOption(_customColor, isRainbow: true), // Nút cầu vồng
+              _buildColorOption(const Color(0xFF87CEFA)),
+              _buildColorOption(Colors.black),
+              _buildColorOption(Colors.green),
+              _buildColorOption(const Color.fromARGB(255, 255, 125, 165)),
+              _buildColorOption(_customColor, isRainbow: true),
             ],
           ),
         ),
@@ -454,7 +443,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildLogoutButton(BuildContext context) {
+  Widget _buildLogoutButton(BuildContext context, bool isVN) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: ElevatedButton(
@@ -469,14 +458,14 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         onPressed: () => _showLogoutDialog(context),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.logout),
-            SizedBox(width: 8),
+            const Icon(Icons.logout),
+            const SizedBox(width: 8),
             Text(
-              "Đăng xuất",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              isVN ? "Đăng xuất" : "Logout",
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -484,10 +473,8 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // --- CÁC HỘP THOẠI ĐỔI THÔNG TIN CÁ NHÂN ---
-
-  // 🔥 ĐÃ THÊM: Hộp thoại sửa tên
   void _showEditNameDialog(BuildContext context) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     final TextEditingController controller = TextEditingController(
       text: _currentUserName,
     );
@@ -495,19 +482,20 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text("Đổi Họ và tên"),
+        title: Text(isVN ? "Đổi Họ và tên" : "Change Full Name"),
         content: TextField(
           controller: controller,
           autofocus: true,
           decoration: InputDecoration(
-            hintText: "Nhập tên mới",
+            hintText: isVN ? "Nhập tên mới" : "Enter new name",
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text("Hủy", style: TextStyle(color: Colors.grey)),
+            child: Text(isVN ? "Hủy" : "Cancel",
+                style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -525,15 +513,15 @@ class _SettingsPageState extends State<SettingsPage> {
               }
               if (mounted) Navigator.pop(dialogContext);
             },
-            child: const Text("Lưu"),
+            child: Text(isVN ? "Lưu" : "Save"),
           ),
         ],
       ),
     );
   }
 
-  // 🔥 ĐÃ THÊM: Hộp thoại chọn Lớp giống hệt trang Đăng ký
   void _showEditClassDialog(BuildContext context) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     String tempClass = _currentClass;
     final List<String> classes = List.generate(
       12,
@@ -548,7 +536,7 @@ class _SettingsPageState extends State<SettingsPage> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(15),
             ),
-            title: const Text("Chọn Lớp"),
+            title: Text(isVN ? "Chọn Lớp" : "Select Class"),
             content: DropdownButtonFormField<String>(
               decoration: InputDecoration(
                 filled: true,
@@ -559,9 +547,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               value: classes.contains(tempClass) ? tempClass : classes.first,
-              items: classes
-                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                  .toList(),
+              items: classes.map((c) {
+                String displayTxt = isVN ? c : c.replaceFirst('Lớp', 'Class');
+                return DropdownMenuItem(value: c, child: Text(displayTxt));
+              }).toList(),
               onChanged: (val) {
                 if (val != null) {
                   setDialogState(() => tempClass = val);
@@ -571,7 +560,8 @@ class _SettingsPageState extends State<SettingsPage> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
-                child: const Text("Hủy", style: TextStyle(color: Colors.grey)),
+                child: Text(isVN ? "Hủy" : "Cancel",
+                    style: const TextStyle(color: Colors.grey)),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -586,7 +576,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   setState(() => _currentClass = tempClass);
                   if (mounted) Navigator.pop(dialogContext);
                 },
-                child: const Text("Lưu"),
+                child: Text(isVN ? "Lưu" : "Save"),
               ),
             ],
           );
@@ -595,9 +585,10 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // --- CÁC HỘP THOẠI KHÁC ---
   void _showLanguageDialog(BuildContext context) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     final List<String> options = ["Tiếng Việt", "Tiếng Anh"];
+
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -609,22 +600,39 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               Icon(Icons.language, color: primaryColor),
               const SizedBox(width: 10),
-              const Text("Chọn ngôn ngữ"),
+              // 🔥 Tự động đổi tiêu đề Dialog: "Chọn ngôn ngữ" hoặc "Select Language"
+              Text(isVN ? "Chọn ngôn ngữ" : "Select Language"),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: options.map((lang) {
+              // 🔥 ĐÂY LÀ CHỖ XỬ LÝ THEO Ý BẠN:
+              // Nếu đang ở giao diện Tiếng Việt (isVN == true): hiển thị "Tiếng Việt" / "Tiếng Anh"
+              // Nếu đang ở giao diện Tiếng Anh (isVN == false): hiển thị "Vietnamese" / "English"
+              String displayName;
+              if (lang == "Tiếng Việt") {
+                displayName = isVN ? "Tiếng Việt" : "Vietnamese";
+              } else {
+                displayName = isVN ? "Tiếng Anh" : "English";
+              }
+
               return RadioListTile<String>(
-                title: Text(lang),
-                value: lang,
+                title: Text(displayName), // Hiển thị tên đã được xử lý
+                value:
+                    lang, // Giá trị lõi "Tiếng Việt" / "Tiếng Anh" giữ nguyên để không lỗi logic
                 groupValue: _selectedLanguage,
                 activeColor: primaryColor,
                 contentPadding: EdgeInsets.zero,
-                onChanged: (value) {
+                onChanged: (value) async {
                   if (value != null) {
                     setState(() => _selectedLanguage = value);
-                    Navigator.pop(dialogContext);
+
+                    languageNotifier.value = value;
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('app_language', value);
+
+                    if (context.mounted) Navigator.pop(dialogContext);
                   }
                 },
               );
@@ -636,6 +644,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showPrivacyPolicyDialog(BuildContext context) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -647,41 +656,49 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               Icon(Icons.privacy_tip, color: primaryColor),
               const SizedBox(width: 10),
-              const Text("Chính sách bảo mật"),
+              Text(isVN ? "Chính sách bảo mật" : "Privacy Policy"),
             ],
           ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Text(
-                  "1. Thu thập dữ liệu",
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  isVN ? "1. Thu thập dữ liệu" : "1. Data Collection",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  "Ứng dụng chỉ lưu trữ các thông tin cơ bản như họ tên, email, lớp và lịch sử học tập của bạn để phục vụ việc đồng bộ tiến trình.\n",
+                  isVN
+                      ? "Ứng dụng chỉ lưu trữ các thông tin cơ bản như họ tên, email, lớp và lịch sử học tập của bạn để phục vụ việc đồng bộ tiến trình.\n"
+                      : "The app only stores basic information such as your name, email, class, and study history to synchronize your progress.\n",
                 ),
                 Text(
-                  "2. Sử dụng thông tin",
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  isVN ? "2. Sử dụng thông tin" : "2. Information Usage",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  "Dữ liệu của bạn được sử dụng để xếp hạng trên leaderboard, cập nhật thống kê và cá nhân hóa trải nghiệm trợ lý ảo AI.\n",
+                  isVN
+                      ? "Dữ liệu của bạn được sử dụng để xếp hạng trên leaderboard, cập nhật thống kê và cá nhân hóa trải nghiệm trợ lý ảo AI.\n"
+                      : "Your data is used to rank on the leaderboard, update statistics, and personalize the AI assistant experience.\n",
                 ),
                 Text(
-                  "3. Chia sẻ dữ liệu",
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  isVN ? "3. Chia sẻ dữ liệu" : "3. Data Sharing",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  "Chúng tôi cam kết KHÔNG bán, cho thuê hay chia sẻ thông tin cá nhân của bạn cho bất kỳ bên thứ ba nào với mục đích thương mại.\n",
+                  isVN
+                      ? "Chúng tôi cam kết KHÔNG bán, cho thuê hay chia sẻ thông tin cá nhân của bạn cho bất kỳ bên thứ ba nào với mục đích thương mại.\n"
+                      : "We are committed to NOT selling, renting, or sharing your personal information with any third party for commercial purposes.\n",
                 ),
                 Text(
-                  "4. Quyền của người dùng",
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  isVN ? "4. Quyền của người dùng" : "4. User Rights",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  "Bạn hoàn toàn có quyền xóa tài khoản và mọi dữ liệu liên quan bất cứ lúc nào.",
+                  isVN
+                      ? "Bạn hoàn toàn có quyền xóa tài khoản và mọi dữ liệu liên quan bất cứ lúc nào."
+                      : "You have the full right to delete your account and all related data at any time.",
                 ),
               ],
             ),
@@ -696,7 +713,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text("Đã hiểu"),
+              child: Text(isVN ? "Đã hiểu" : "Understood"),
             ),
           ],
         );
@@ -705,10 +722,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showVersionInfoDialog(BuildContext context) {
-    // final DateTime now = DateTime.now();
-    // final String todayStr =
-    //     "${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}";
-
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     showDialog(
       context: context,
       builder: (context) {
@@ -720,16 +734,16 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               Icon(Icons.info_outline, color: primaryColor, size: 28),
               const SizedBox(width: 10),
-              const Text("Thông tin ứng dụng"),
+              Text(isVN ? "Thông tin ứng dụng" : "App Information"),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Phiên bản: V 1.1.1",
-                style: TextStyle(
+              Text(
+                isVN ? "Phiên bản: V 1.1.1" : "Version: V 1.1.1",
+                style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                   color: Colors.black87,
@@ -737,13 +751,17 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                "Cập nhật lần cuối: 18/05/2026",
+                isVN
+                    ? "Cập nhật lần cuối: 18/05/2026"
+                    : "Last updated: 18/05/2026",
                 style: TextStyle(color: Colors.grey.shade700, fontSize: 15),
               ),
               const SizedBox(height: 15),
-              const Text(
-                "Sản phẩm được phát triển nhằm mang lại trải nghiệm học tập tốt nhất cho người dùng.",
-                style: TextStyle(
+              Text(
+                isVN
+                    ? "Sản phẩm được phát triển nhằm mang lại trải nghiệm học tập tốt nhất cho người dùng."
+                    : "This product was developed to provide the best study experience for users.",
+                style: const TextStyle(
                   fontStyle: FontStyle.italic,
                   color: Colors.grey,
                 ),
@@ -760,7 +778,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               onPressed: () => Navigator.pop(context),
-              child: const Text("Đóng"),
+              child: Text(isVN ? "Đóng" : "Close"),
             ),
           ],
         );
@@ -769,16 +787,18 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showLogoutDialog(BuildContext context) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text("Xác nhận"),
-        content: const Text("Bạn muốn đăng xuất?"),
+        title: Text(isVN ? "Xác nhận" : "Confirm"),
+        content: Text(isVN ? "Bạn muốn đăng xuất?" : "Do you want to logout?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text("Huỷ", style: TextStyle(color: Colors.grey)),
+            child: Text(isVN ? "Huỷ" : "Cancel",
+                style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -793,7 +813,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Navigator.of(context).popUntil((route) => route.isFirst);
               await FirebaseAuth.instance.signOut();
             },
-            child: const Text("Đăng xuất"),
+            child: Text(isVN ? "Đăng xuất" : "Logout"),
           ),
         ],
       ),
@@ -801,6 +821,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _showChangePasswordDialog(BuildContext context) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     final oldPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
@@ -815,7 +836,7 @@ class _SettingsPageState extends State<SettingsPage> {
         return StatefulBuilder(
           builder: (stateContext, setState) {
             return AlertDialog(
-              title: const Text("Đổi mật khẩu"),
+              title: Text(isVN ? "Đổi mật khẩu" : "Change Password"),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -824,7 +845,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       controller: oldPasswordController,
                       obscureText: obscureOld,
                       decoration: InputDecoration(
-                        labelText: "Mật khẩu cũ",
+                        labelText: isVN ? "Mật khẩu cũ" : "Old password",
                         suffixIcon: IconButton(
                           icon: Icon(
                             obscureOld
@@ -840,7 +861,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       controller: newPasswordController,
                       obscureText: obscureNew,
                       decoration: InputDecoration(
-                        labelText: "Mật khẩu mới",
+                        labelText: isVN ? "Mật khẩu mới" : "New password",
                         suffixIcon: IconButton(
                           icon: Icon(
                             obscureNew
@@ -856,7 +877,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       controller: confirmPasswordController,
                       obscureText: obscureConfirm,
                       decoration: InputDecoration(
-                        labelText: "Xác nhận mật khẩu",
+                        labelText:
+                            isVN ? "Xác nhận mật khẩu" : "Confirm password",
                         suffixIcon: IconButton(
                           icon: Icon(
                             obscureConfirm
@@ -874,9 +896,9 @@ class _SettingsPageState extends State<SettingsPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text(
-                    "Hủy",
-                    style: TextStyle(color: Colors.grey),
+                  child: Text(
+                    isVN ? "Hủy" : "Cancel",
+                    style: const TextStyle(color: Colors.grey),
                   ),
                 ),
                 ElevatedButton(
@@ -897,14 +919,18 @@ class _SettingsPageState extends State<SettingsPage> {
                               confirmP.isEmpty) {
                             _showSnackBar(
                               context,
-                              "Vui lòng nhập đủ thông tin!",
+                              isVN
+                                  ? "Vui lòng nhập đủ thông tin!"
+                                  : "Please enter all information!",
                             );
                             return;
                           }
                           if (newP != confirmP) {
                             _showSnackBar(
                               context,
-                              "Mật khẩu xác nhận không khớp!",
+                              isVN
+                                  ? "Mật khẩu xác nhận không khớp!"
+                                  : "Passwords do not match!",
                             );
                             return;
                           }
@@ -929,14 +955,18 @@ class _SettingsPageState extends State<SettingsPage> {
                               if (!context.mounted) return;
                               _showSnackBar(
                                 context,
-                                "Đổi mật khẩu thành công!",
+                                isVN
+                                    ? "Đổi mật khẩu thành công!"
+                                    : "Password changed successfully!",
                               );
                             }
                           } on FirebaseAuthException catch (e) {
-                            String msg = "Lỗi: ${e.message}";
+                            String msg = "Error: ${e.message}";
                             if (e.code == 'wrong-password' ||
                                 e.code == 'invalid-credential') {
-                              msg = "Mật khẩu cũ không đúng!";
+                              msg = isVN
+                                  ? "Mật khẩu cũ không đúng!"
+                                  : "Incorrect old password!";
                             }
                             if (!context.mounted) return;
                             _showSnackBar(context, msg);
@@ -955,7 +985,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text("Xác nhận"),
+                      : Text(isVN ? "Xác nhận" : "Confirm"),
                 ),
               ],
             );

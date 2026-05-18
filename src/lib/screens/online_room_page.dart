@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:esstudy/constants/var.dart';
 
 class OnlineRoomPage extends StatefulWidget {
   final bool isHost;
@@ -202,7 +203,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         'participantStates.${widget.userId}': myInitialState,
       });
     }
-    _sendSystemMessage("${widget.userName} đã vào phòng.");
+    _sendSystemMessage(languageNotifier.value == "Tiếng Việt"
+        ? "${widget.userName} đã vào phòng."
+        : "${widget.userName} joined the room.");
 
     // Lắng nghe tín hiệu Signaling NGAY TỪ ĐẦU (Để không lỡ Offer)
     _signalingSub = FirebaseFirestore.instance
@@ -295,6 +298,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   }
 
   void _showHostLeftDialogAndExit() {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     _timer?.cancel();
     for (var id in _peers.keys) {
       _peers[id]?.close();
@@ -305,15 +309,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
             Icon(Icons.info_outline, color: Colors.blue),
             SizedBox(width: 8),
-            Text("Phòng đã đóng"),
+            Text(isVN ? "Phòng đã đóng" : "Room closed"),
           ],
         ),
-        content: const Text(
-          "Chủ phòng (Host) đã rời đi. Phòng học đã bị giải tán, hẹn gặp lại bạn lần sau nhé!",
+        content: Text(
+          isVN
+              ? "Chủ phòng (Host) đã rời đi. Phòng học đã bị giải tán, hẹn gặp lại bạn lần sau nhé!"
+              : "The Host has left. The study room is dismissed, see you next time!",
         ),
         actions: [
           Center(
@@ -328,8 +334,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 Navigator.pop(context);
                 Navigator.pop(context);
               },
-              child: const Text(
-                "Đã hiểu",
+              child: Text(
+                isVN ? "Đã hiểu" : "Got it",
                 style: TextStyle(color: Colors.white),
               ),
             ),
@@ -355,6 +361,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   }
 
   void _failAfkCheck() {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     if (_isAfkDialogOpen) Navigator.pop(context);
     _leaveRoomLogic(isFailedAFK: true, isFinishedNatural: false);
 
@@ -363,15 +370,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.red),
             SizedBox(width: 8),
-            Text("Phiên học bị hủy"),
+            Text(isVN ? "Phiên học bị hủy" : "Session Cancelled"),
           ],
         ),
-        content: const Text(
-          "Bạn đã treo máy quá 5 phút mà không phản hồi bong bóng điểm danh. Phiên học đã bị hủy và không được tính điểm.",
+        content: Text(
+          isVN
+              ? "Bạn đã treo máy quá 5 phút mà không phản hồi bong bóng điểm danh. Phiên học đã bị hủy và không được lưu lại để đảm bảo tính công bằng."
+              : "You have been AFK for over 5 minutes without responding to the check-in bubble. The session has been cancelled and will not be saved to ensure fairness.",
         ),
         actions: [
           Center(
@@ -386,8 +395,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 Navigator.pop(context);
                 Navigator.pop(context);
               },
-              child: const Text(
-                "Đã hiểu",
+              child: Text(
+                isVN ? "Đã hiểu" : "Got it",
                 style: TextStyle(color: Colors.white),
               ),
             ),
@@ -398,6 +407,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   }
 
   void _onBubbleTap() {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     final TextEditingController afkController = TextEditingController();
     _isAfkDialogOpen = true;
 
@@ -410,9 +420,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           children: [
             Icon(Icons.mark_chat_unread, color: primaryColor),
             const SizedBox(width: 8),
-            const Expanded(
+            Expanded(
               child: Text(
-                "Báo cáo tiến độ!",
+                isVN ? "Báo cáo tiến độ!" : "Progress Report!",
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
@@ -422,8 +432,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Chào bạn! Bạn đang học gì thế? Ghi chú lại một chút nhé để chứng minh bạn vẫn đang tập trung!",
+            Text(
+              isVN
+                  ? "Chào bạn! Bạn đang học gì thế? Ghi chú lại một chút nhé để chứng minh bạn vẫn đang tập trung!"
+                  : "Hi there! What are you studying? Leave a quick note to prove you're still focused!",
             ),
             const SizedBox(height: 15),
             TextField(
@@ -431,7 +443,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
               autofocus: true,
               maxLines: 2,
               decoration: InputDecoration(
-                hintText: "Ví dụ: Đang giải toán...",
+                hintText: isVN
+                    ? "Ví dụ: Đang giải toán..."
+                    : "Example: Solving math...",
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -456,16 +470,18 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 setState(() => _showAfkBubble = false);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
+                  SnackBar(
                     content: Text(
-                      "Ôi chúa ơi! Bạn lười quá, gõ ít nhất 1 chữ đi nào!",
+                      isVN
+                          ? "Ôi chúa ơi! Bạn lười quá, gõ ít nhất 1 chữ đi nào!"
+                          : "Oh my! You're so lazy, type at least one word!",
                     ),
                   ),
                 );
               }
             },
-            child: const Text(
-              "Tiếp tục học",
+            child: Text(
+              isVN ? "Tiếp tục học" : "Continue Studying",
               style: TextStyle(color: Colors.white),
             ),
           ),
@@ -612,6 +628,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   }
 
   Future<void> _leaveRoom({required bool isFinishedNatural}) async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     if (!isFinishedNatural) {
       final confirm = await showDialog<bool>(
         context: context,
@@ -619,29 +636,31 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
-          title: const Row(
+          title: Row(
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.red),
               SizedBox(width: 8),
-              Text("Thoát giữa chừng?"),
+              Text(isVN ? "Thoát giữa chừng?" : "Exit session?"),
             ],
           ),
-          content: const Text(
-            "Bạn có chắc muốn rời đi? Rời phòng lúc này sẽ KHÔNG được cộng điểm và tiến trình không được lưu.",
+          content: Text(
+            isVN
+                ? "Bạn có chắc muốn rời đi? Rời phòng lúc này sẽ KHÔNG được cộng điểm và tiến trình không được lưu."
+                : "Are you sure you want to leave? Exiting now will NOT save your progress and points.",
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text(
-                "Tiếp tục học",
+              child: Text(
+                isVN ? "Tiếp tục học" : "Stay",
                 style: TextStyle(color: Colors.grey),
               ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text(
-                "Thoát ra",
+              child: Text(
+                isVN ? "Thoát ra" : "Exit",
                 style: TextStyle(color: Colors.white),
               ),
             ),
@@ -665,7 +684,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     for (var id in _peers.keys) {
       _peers[id]?.close();
     }
-
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     final roomRef =
         FirebaseFirestore.instance.collection('study_rooms').doc(widget.roomId);
     final roomSnap = await roomRef.get();
@@ -683,7 +702,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           'participantNames.${widget.userId}': FieldValue.delete(),
           'participantStates.${widget.userId}': FieldValue.delete(),
         });
-        await _sendSystemMessage("${widget.userName} đã rời phòng.");
+        await _sendSystemMessage(languageNotifier.value == "Tiếng Việt"
+            ? "${widget.userName} đã rời phòng."
+            : "${widget.userName} left the room.");
       }
     }
 
@@ -705,7 +726,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     await FirebaseFirestore.instance.collection('study_history').add({
       'userId': widget.userId,
       'time': DateTime.now(),
-      'planTitle': "${widget.planTitle} (Học Online)",
+      'planTitle':
+          "${widget.planTitle} (${languageNotifier.value == "Tiếng Việt" ? "Học Online" : "Online Study"})",
       'goals': widget.goals,
       'completedGoalsList': finishedTasks,
       'completed': finishedTasks.length,
@@ -754,9 +776,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text("Xuất sắc! 🎉", textAlign: TextAlign.center),
+          title: Text(isVN ? "Xuất sắc! 🎉" : "Excellent! 🎉",
+              textAlign: TextAlign.center),
           content: Text(
-            "Bạn đã kiên trì suốt $actualMinutes phút!\nSố người cùng học: $currentParticipants người\n\n🎁 Thưởng: +$earnedPoints điểm",
+            isVN
+                ? "Bạn đã kiên trì suốt $actualMinutes phút!\nSố người cùng học: $currentParticipants người\n\n🎁 Thưởng: +$earnedPoints điểm"
+                : "You persevered for $actualMinutes minutes!\nStudy buddies: $currentParticipants\n\n🎁 Reward: +$earnedPoints points",
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 16),
           ),
@@ -770,8 +795,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                   ),
                 ),
                 onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  "Nhận thưởng",
+                child: Text(
+                  isVN ? "Nhận thưởng" : "Claim reward",
                   style: TextStyle(color: Colors.white),
                 ),
               ),
@@ -785,15 +810,19 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
   void _showRoomCodeDialog() {
     if (!mounted) return;
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text("Phòng Riêng Tư", textAlign: TextAlign.center),
+        title: Text(isVN ? "Phòng Riêng Tư" : "Private Room",
+            textAlign: TextAlign.center),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Gửi mã này cho bạn bè để tham gia:"),
+            Text(isVN
+                ? "Gửi mã này cho bạn bè để tham gia:"
+                : "Share this code with friends to join:"),
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(15),
@@ -819,11 +848,14 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
             onPressed: () {
               Clipboard.setData(ClipboardData(text: widget.roomCode!));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Đã sao chép mã phòng!")),
+                SnackBar(
+                    content: Text(
+                        isVN ? "Đã sao chép mã phòng!" : "Room code copied!")),
               );
               Navigator.pop(ctx);
             },
-            label: const Text("Copy", style: TextStyle(color: Colors.white)),
+            label: Text(isVN ? "Sao chép" : "Copy",
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -831,13 +863,14 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   }
 
   Future<void> _sendSystemMessage(String text) async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     await FirebaseFirestore.instance
         .collection('study_rooms')
         .doc(widget.roomId)
         .collection('messages')
         .add({
       'senderId': 'system',
-      'senderName': 'Hệ thống',
+      'senderName': isVN ? 'Hệ thống' : 'System',
       'text': text,
       'timestamp': FieldValue.serverTimestamp(),
       'isSystem': true,
@@ -896,150 +929,281 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
   @override
   Widget build(BuildContext context) {
-    List<Widget> videoWidgets = [];
-    videoWidgets.add(
-      _buildVideoView(
-        _localRenderer,
-        "${widget.userName} (Bạn)",
-        _isVideoOff,
-        _isMuted,
-      ),
-    );
-    _remoteRenderers.forEach((peerId, renderer) {
-      bool isRemoteCamOff = _remoteStates[peerId]?['camOff'] ?? false;
-      bool isRemoteMicOff = _remoteStates[peerId]?['micOff'] ?? false;
-      videoWidgets.add(
-        _buildVideoView(
-          renderer,
-          _remoteNames[peerId] ?? "Người dùng",
-          isRemoteCamOff,
-          isRemoteMicOff,
-        ),
-      );
-    });
+    return ValueListenableBuilder<String>(
+        valueListenable: languageNotifier,
+        builder: (context, lang, child) {
+          bool isVN = lang == "Tiếng Việt";
+          List<Widget> videoWidgets = [];
+          videoWidgets.add(
+            _buildVideoView(
+              _localRenderer,
+              isVN ? "${widget.userName} (Bạn)" : "${widget.userName} (You)",
+              _isVideoOff,
+              _isMuted,
+            ),
+          );
+          _remoteRenderers.forEach((peerId, renderer) {
+            bool isRemoteCamOff = _remoteStates[peerId]?['camOff'] ?? false;
+            bool isRemoteMicOff = _remoteStates[peerId]?['micOff'] ?? false;
+            videoWidgets.add(
+              _buildVideoView(
+                renderer,
+                _remoteNames[peerId] ?? (isVN ? "Người dùng" : "User"),
+                isRemoteCamOff,
+                isRemoteMicOff,
+              ),
+            );
+          });
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-    final double safeLeft = 20 + _bubbleX * (screenWidth - 100);
-    final double safeTop = 100 + _bubbleY * (screenHeight - 250);
+          final screenWidth = MediaQuery.of(context).size.width;
+          final screenHeight = MediaQuery.of(context).size.height;
+          final double safeLeft = 20 + _bubbleX * (screenWidth - 100);
+          final double safeTop = 100 + _bubbleY * (screenHeight - 250);
 
-    Widget mainBody = Column(
-      children: [
-        Expanded(
-          child: Row(
+          Widget mainBody = Column(
             children: [
               Expanded(
-                flex: 3,
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: GridView.count(
-                    crossAxisCount: videoWidgets.length <= 2 ? 1 : 2,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: videoWidgets.length <= 2 ? 1.5 : 1.0,
-                    children: videoWidgets,
-                  ),
-                ),
-              ),
-              if (_isChatOpen)
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    color: Colors.white,
-                    child: Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          color: primaryColor.withOpacity(0.1),
-                          width: double.infinity,
-                          child: const Text(
-                            "Khung Chat",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: GridView.count(
+                          crossAxisCount: videoWidgets.length <= 2 ? 1 : 2,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: 8,
+                          childAspectRatio:
+                              videoWidgets.length <= 2 ? 1.5 : 1.0,
+                          children: videoWidgets,
                         ),
-                        Expanded(
-                          child: StreamBuilder<QuerySnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('study_rooms')
-                                .doc(widget.roomId)
-                                .collection('messages')
-                                .orderBy('timestamp', descending: true)
-                                .snapshots(),
-                            builder: (context, snapshot) {
-                              if (!snapshot.hasData)
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              final docs = snapshot.data!.docs;
-                              return ListView.builder(
-                                reverse: true,
-                                controller: _scrollController,
-                                padding: const EdgeInsets.all(8),
-                                itemCount: docs.length,
-                                itemBuilder: (context, index) {
-                                  final msg = docs[index].data()
-                                      as Map<String, dynamic>;
-                                  final isMe = msg['senderId'] == widget.userId;
-                                  final isSystem = msg['isSystem'] ?? false;
-                                  if (isSystem) {
-                                    return Center(
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 4,
-                                        ),
-                                        child: Text(
-                                          msg['text'],
-                                          style: const TextStyle(
-                                            color: Colors.grey,
-                                            fontSize: 12,
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                  return Align(
-                                    alignment: isMe
-                                        ? Alignment.centerRight
-                                        : Alignment.centerLeft,
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(
-                                        vertical: 4,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isMe
-                                            ? primaryColor.withOpacity(0.9)
-                                            : Colors.grey.shade200,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment: isMe
-                                            ? CrossAxisAlignment.end
-                                            : CrossAxisAlignment.start,
-                                        children: [
-                                          if (!isMe)
-                                            Text(
-                                              msg['senderName'],
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 10,
-                                                color: Colors.black54,
+                      ),
+                    ),
+                    if (_isChatOpen)
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          color: Colors.white,
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                color: primaryColor.withOpacity(0.1),
+                                width: double.infinity,
+                                child: Text(
+                                  isVN ? "Khung Chat" : "Chat Box",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: StreamBuilder<QuerySnapshot>(
+                                  stream: FirebaseFirestore.instance
+                                      .collection('study_rooms')
+                                      .doc(widget.roomId)
+                                      .collection('messages')
+                                      .orderBy('timestamp', descending: true)
+                                      .snapshots(),
+                                  builder: (context, snapshot) {
+                                    if (!snapshot.hasData)
+                                      return const Center(
+                                        child: CircularProgressIndicator(),
+                                      );
+                                    final docs = snapshot.data!.docs;
+                                    return ListView.builder(
+                                      reverse: true,
+                                      controller: _scrollController,
+                                      padding: const EdgeInsets.all(8),
+                                      itemCount: docs.length,
+                                      itemBuilder: (context, index) {
+                                        final msg = docs[index].data()
+                                            as Map<String, dynamic>;
+                                        final isMe =
+                                            msg['senderId'] == widget.userId;
+                                        final isSystem =
+                                            msg['isSystem'] ?? false;
+                                        if (isSystem) {
+                                          return Center(
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                vertical: 4,
+                                              ),
+                                              child: Text(
+                                                msg['text'],
+                                                style: const TextStyle(
+                                                  color: Colors.grey,
+                                                  fontSize: 12,
+                                                  fontStyle: FontStyle.italic,
+                                                ),
                                               ),
                                             ),
-                                          Text(
-                                            msg['text'],
-                                            style: TextStyle(
+                                          );
+                                        }
+                                        return Align(
+                                          alignment: isMe
+                                              ? Alignment.centerRight
+                                              : Alignment.centerLeft,
+                                          child: Container(
+                                            margin: const EdgeInsets.symmetric(
+                                              vertical: 4,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
                                               color: isMe
-                                                  ? Colors.white
-                                                  : Colors.black87,
-                                              fontSize: 14,
+                                                  ? primaryColor
+                                                      .withOpacity(0.9)
+                                                  : Colors.grey.shade200,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: isMe
+                                                  ? CrossAxisAlignment.end
+                                                  : CrossAxisAlignment.start,
+                                              children: [
+                                                if (!isMe)
+                                                  Text(
+                                                    msg['senderName'],
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 10,
+                                                      color: Colors.black54,
+                                                    ),
+                                                  ),
+                                                Text(
+                                                  msg['text'],
+                                                  style: TextStyle(
+                                                    color: isMe
+                                                        ? Colors.white
+                                                        : Colors.black87,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  border: Border(
+                                    top:
+                                        BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _chatController,
+                                        decoration: InputDecoration(
+                                          hintText: isVN
+                                              ? "Nhập tin nhắn..."
+                                              : "Type a message...",
+                                          border: InputBorder.none,
+                                        ),
+                                        onSubmitted: (_) => _sendMessage(),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon:
+                                          Icon(Icons.send, color: primaryColor),
+                                      onPressed: _sendMessage,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                color: Colors.black87,
+                child: SafeArea(
+                  // 🔥 FIX: Dùng LayoutBuilder để lấy chính xác chiều rộng của khung 500px thay vì toàn bộ màn hình
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints:
+                              BoxConstraints(minWidth: constraints.maxWidth),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildControlButton(
+                                icon: _isMuted ? Icons.mic_off : Icons.mic,
+                                label: "Mic",
+                                color: _isMuted ? Colors.red : Colors.white,
+                                onTap: _toggleMic,
+                              ),
+                              _buildControlButton(
+                                icon: _isVideoOff
+                                    ? Icons.videocam_off
+                                    : Icons.videocam,
+                                label: "Cam",
+                                color: _isVideoOff ? Colors.red : Colors.white,
+                                onTap: _toggleVideo,
+                              ),
+                              _buildControlButton(
+                                icon: Icons.checklist,
+                                label: isVN ? "Nhiệm vụ" : "Tasks",
+                                color: Colors.white,
+                                onTap: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    builder: (ctx) => Container(
+                                      padding: const EdgeInsets.all(16),
+                                      height: 300,
+                                      child: Column(
+                                        children: [
+                                          Text(
+                                            isVN
+                                                ? "Nhiệm vụ của bạn"
+                                                : "Your Tasks",
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: ListView.builder(
+                                              itemCount: widget.goals.length,
+                                              itemBuilder: (_, i) =>
+                                                  StatefulBuilder(
+                                                builder: (ctx, setState) =>
+                                                    CheckboxListTile(
+                                                  title: Text(widget.goals[i]),
+                                                  value: _personalTaskStatus[i],
+                                                  onChanged: (val) {
+                                                    setState(
+                                                      () => _personalTaskStatus[
+                                                          i] = val!,
+                                                    );
+                                                    this.setState(() {});
+                                                  },
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -1047,334 +1211,228 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                     ),
                                   );
                                 },
-                              );
-                            },
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            border: Border(
-                              top: BorderSide(color: Colors.grey.shade300),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _chatController,
-                                  decoration: const InputDecoration(
-                                    hintText: "Nhập tin nhắn...",
-                                    border: InputBorder.none,
-                                  ),
-                                  onSubmitted: (_) => _sendMessage(),
-                                ),
                               ),
-                              IconButton(
-                                icon: Icon(Icons.send, color: primaryColor),
-                                onPressed: _sendMessage,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          color: Colors.black87,
-          child: SafeArea(
-            // 🔥 FIX: Dùng LayoutBuilder để lấy chính xác chiều rộng của khung 500px thay vì toàn bộ màn hình
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildControlButton(
-                          icon: _isMuted ? Icons.mic_off : Icons.mic,
-                          label: "Mic",
-                          color: _isMuted ? Colors.red : Colors.white,
-                          onTap: _toggleMic,
-                        ),
-                        _buildControlButton(
-                          icon:
-                              _isVideoOff ? Icons.videocam_off : Icons.videocam,
-                          label: "Cam",
-                          color: _isVideoOff ? Colors.red : Colors.white,
-                          onTap: _toggleVideo,
-                        ),
-                        _buildControlButton(
-                          icon: Icons.checklist,
-                          label: "Nhiệm vụ",
-                          color: Colors.white,
-                          onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              builder: (ctx) => Container(
-                                padding: const EdgeInsets.all(16),
-                                height: 300,
-                                child: Column(
-                                  children: [
-                                    const Text(
-                                      "Nhiệm vụ của bạn",
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: ListView.builder(
-                                        itemCount: widget.goals.length,
-                                        itemBuilder: (_, i) => StatefulBuilder(
-                                          builder: (ctx, setState) =>
-                                              CheckboxListTile(
-                                            title: Text(widget.goals[i]),
-                                            value: _personalTaskStatus[i],
-                                            onChanged: (val) {
-                                              setState(
-                                                () => _personalTaskStatus[i] =
-                                                    val!,
-                                              );
-                                              this.setState(() {});
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        _buildControlButton(
-                          icon: Icons.people,
-                          label: "Nhóm",
-                          color: Colors.white,
-                          onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              builder: (ctx) => Container(
-                                padding: const EdgeInsets.all(16),
-                                height: 300,
-                                child: Column(
-                                  children: [
-                                    const Text(
-                                      "Người tham gia",
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: ListView(
+                              _buildControlButton(
+                                icon: Icons.people,
+                                label: isVN ? "Nhóm" : "Group",
+                                color: Colors.white,
+                                onTap: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    builder: (ctx) => Container(
+                                      padding: const EdgeInsets.all(16),
+                                      height: 300,
+                                      child: Column(
                                         children: [
-                                          ListTile(
-                                            title: Text(
-                                                "${widget.userName} (Bạn)"),
+                                          Text(
+                                            isVN
+                                                ? "Người tham gia"
+                                                : "Participants",
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
-                                          ..._remoteNames.values.map(
-                                            (name) =>
-                                                ListTile(title: Text(name)),
+                                          Expanded(
+                                            child: ListView(
+                                              children: [
+                                                ListTile(
+                                                  title: Text(isVN
+                                                      ? "${widget.userName} (Bạn)"
+                                                      : "${widget.userName} (You)"),
+                                                ),
+                                                ..._remoteNames.values.map(
+                                                  (name) => ListTile(
+                                                      title: Text(name)),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),
                                     ),
+                                  );
+                                },
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _isChatOpen = !_isChatOpen;
+                                    if (_isChatOpen) _unreadMessages = 0;
+                                  });
+                                },
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: _isChatOpen
+                                                ? Colors.white24
+                                                : Colors.transparent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            _isChatOpen
+                                                ? Icons.chat_bubble
+                                                : Icons.chat_bubble_outline,
+                                            color: Colors.white,
+                                            size: 28,
+                                          ),
+                                        ),
+                                        if (_unreadMessages > 0 && !_isChatOpen)
+                                          Positioned(
+                                            right: 0,
+                                            top: 0,
+                                            child: Container(
+                                              padding: const EdgeInsets.all(5),
+                                              decoration: const BoxDecoration(
+                                                color: Colors.red,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Text(
+                                                '$_unreadMessages',
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      "Chat",
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 12),
+                                    ),
                                   ],
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _isChatOpen = !_isChatOpen;
-                              if (_isChatOpen) _unreadMessages = 0;
-                            });
-                          },
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: _isChatOpen
-                                          ? Colors.white24
-                                          : Colors.transparent,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      _isChatOpen
-                                          ? Icons.chat_bubble
-                                          : Icons.chat_bubble_outline,
-                                      color: Colors.white,
-                                      size: 28,
-                                    ),
-                                  ),
-                                  if (_unreadMessages > 0 && !_isChatOpen)
-                                    Positioned(
-                                      right: 0,
-                                      top: 0,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(5),
-                                        decoration: const BoxDecoration(
-                                          color: Colors.red,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Text(
-                                          '$_unreadMessages',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                "Chat",
-                                style: TextStyle(
-                                    color: Colors.white, fontSize: 12),
+                              _buildControlButton(
+                                icon: Icons.call_end,
+                                label: isVN ? "Thoát" : "Exit",
+                                color: Colors.red,
+                                bgColor: Colors.red.withOpacity(0.2),
+                                onTap: () =>
+                                    _leaveRoom(isFinishedNatural: false),
                               ),
                             ],
                           ),
                         ),
-                        _buildControlButton(
-                          icon: Icons.call_end,
-                          label: "Thoát",
-                          color: Colors.red,
-                          bgColor: Colors.red.withOpacity(0.2),
-                          onTap: () => _leaveRoom(isFinishedNatural: false),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-
-    return WillPopScope(
-      onWillPop: () async {
-        _leaveRoom(isFinishedNatural: false);
-        return false;
-      },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black87,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.close, color: Colors.white),
-            onPressed: () => _leaveRoom(isFinishedNatural: false),
-          ),
-          title: Column(
-            children: [
-              Text(
-                widget.roomName,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold),
-              ),
-              Text(
-                "${(_remainingSeconds ~/ 60).toString().padLeft(2, '0')}:${(_remainingSeconds % 60).toString().padLeft(2, '0')}",
-                style: const TextStyle(
-                  color: Colors.greenAccent,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
-          ),
-          centerTitle: true,
-        ),
-        body: Stack(
-          children: [
-            mainBody,
-            if (_showAfkBubble)
-              Positioned(
-                left: safeLeft,
-                top: safeTop,
-                child: GestureDetector(
-                  onTap: _onBubbleTap,
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red.withOpacity(0.4),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          "${_afkTimeoutSeconds ~/ 60}:${(_afkTimeoutSeconds % 60).toString().padLeft(2, '0')}",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Container(
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: primaryColor,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: primaryColor.withOpacity(0.5),
-                              blurRadius: 15,
-                              spreadRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.mark_chat_unread,
-                          color: Colors.white,
-                          size: 35,
-                        ),
-                      ),
-                    ],
-                  ),
+          );
+
+          return WillPopScope(
+            onWillPop: () async {
+              _leaveRoom(isFinishedNatural: false);
+              return false;
+            },
+            child: Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                backgroundColor: Colors.black87,
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => _leaveRoom(isFinishedNatural: false),
                 ),
+                title: Column(
+                  children: [
+                    Text(
+                      widget.roomName,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      "${(_remainingSeconds ~/ 60).toString().padLeft(2, '0')}:${(_remainingSeconds % 60).toString().padLeft(2, '0')}",
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                centerTitle: true,
               ),
-          ],
-        ),
-      ),
-    );
+              body: Stack(
+                children: [
+                  mainBody,
+                  if (_showAfkBubble)
+                    Positioned(
+                      left: safeLeft,
+                      top: safeTop,
+                      child: GestureDetector(
+                        onTap: _onBubbleTap,
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.red.withOpacity(0.4),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                "${_afkTimeoutSeconds ~/ 60}:${(_afkTimeoutSeconds % 60).toString().padLeft(2, '0')}",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Container(
+                              padding: const EdgeInsets.all(15),
+                              decoration: BoxDecoration(
+                                color: primaryColor,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryColor.withOpacity(0.5),
+                                    blurRadius: 15,
+                                    spreadRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.mark_chat_unread,
+                                color: Colors.white,
+                                size: 35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        });
   }
 
   Widget _buildVideoView(

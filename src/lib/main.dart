@@ -11,10 +11,13 @@ import 'package:esstudy/screens/home_page.dart';
 // Đã gỡ import ai_assistant_fab.dart
 import 'package:esstudy/constants/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:esstudy/constants/var.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
+  String savedLanguage = prefs.getString('app_language') ?? "Tiếng Việt";
+  languageNotifier.value = savedLanguage;
   int? savedColorValue = prefs.getInt('theme_color');
 
   if (savedColorValue != null) {

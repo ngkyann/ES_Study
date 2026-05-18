@@ -4,6 +4,7 @@ import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/models/study_room.dart';
 import 'package:esstudy/widgets/room_card.dart';
 import 'package:esstudy/screens/online_room_page.dart';
+import 'package:esstudy/constants/var.dart';
 
 class RoomSearchPage extends StatefulWidget {
   final String currentUserId;
@@ -28,28 +29,21 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
     ...List.generate(12, (index) => 'Lớp ${index + 1}'),
   ];
 
-  // String _getRank(int points) {
-  //   if (points < 500) return "Tân binh";
-  //   if (points < 1500) return "Đồng";
-  //   if (points < 3000) return "Bạc";
-  //   if (points < 5000) return "Vàng";
-  //   return "Kim cương";
-  // }
-
   void _showJoinByCodeDialog(BuildContext context) {
+    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 THÊM NGÔN NGỮ
     final TextEditingController codeController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text("Vào phòng riêng tư"),
+        title: Text(isVN ? "Vào phòng riêng tư" : "Join private room"),
         content: TextField(
           controller: codeController,
           keyboardType: TextInputType.number,
           maxLength: 6,
           decoration: InputDecoration(
-            hintText: "Nhập mã 6 chữ số",
+            hintText: isVN ? "Nhập mã 6 chữ số" : "Enter 6-digit code",
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             filled: true,
             fillColor: Colors.grey.shade100,
@@ -58,7 +52,8 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Hủy", style: TextStyle(color: Colors.grey)),
+            child: Text(isVN ? "Hủy" : "Cancel",
+                style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
@@ -66,7 +61,10 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
               final code = codeController.text.trim();
               if (code.length != 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Mã phòng phải có 6 chữ số!")),
+                  SnackBar(
+                      content: Text(isVN
+                          ? "Mã phòng phải có 6 chữ số!"
+                          : "Room code must be 6 digits!")),
                 );
                 return;
               }
@@ -77,8 +75,10 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                   .get();
               if (snap.docs.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Không tìm thấy phòng hoặc mã sai!"),
+                  SnackBar(
+                    content: Text(isVN
+                        ? "Không tìm thấy phòng hoặc mã sai!"
+                        : "Room not found or incorrect code!"),
                   ),
                 );
                 return;
@@ -86,12 +86,13 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
 
               final roomDoc = snap.docs.first;
               final data = roomDoc.data();
+              if (!ctx.mounted) return;
               Navigator.pop(ctx);
               _showJoinRoomDialog(context, data, roomDoc.id);
             },
-            child: const Text(
-              "Tìm kiếm",
-              style: TextStyle(color: Colors.white),
+            child: Text(
+              isVN ? "Tìm kiếm" : "Search",
+              style: const TextStyle(color: Colors.white),
             ),
           ),
         ],
@@ -104,19 +105,24 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
     Map<String, dynamic> roomData,
     String roomId,
   ) {
+    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 THÊM NGÔN NGỮ
     int maxMembers = roomData['maxMembers'] ?? 4;
     int currentMembers = List.from(roomData['participants'] ?? []).length;
-    String roomName = roomData['roomName'] ?? "Phòng học online";
+    String roomName = roomData['roomName'] ??
+        (isVN ? "Phòng học online" : "Online study room");
 
     if (currentMembers >= maxMembers) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Phòng đã đạt giới hạn thành viên!")),
+        SnackBar(
+            content: Text(isVN
+                ? "Phòng đã đạt giới hạn thành viên!"
+                : "Room has reached its member limit!")),
       );
       return;
     }
 
     String? selectedPlanId;
-    String selectedPlanTitle = "Học tự do";
+    String selectedPlanTitle = isVN ? "Học tự do" : "Free Study";
     List<String> goalsForRoom = [];
 
     showModalBottomSheet(
@@ -133,13 +139,16 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Chuẩn bị vào phòng",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  Text(
+                    isVN ? "Chuẩn bị vào phòng" : "Get ready to join",
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    "Hãy chọn kế hoạch cá nhân bạn muốn thực hiện trong phòng này:",
+                  Text(
+                    isVN
+                        ? "Hãy chọn kế hoạch cá nhân bạn muốn thực hiện trong phòng này:"
+                        : "Select your personal plan to accomplish in this room:",
                   ),
                   const SizedBox(height: 15),
                   StreamBuilder<QuerySnapshot>(
@@ -161,7 +170,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                       return DropdownButtonFormField<String?>(
                         value: selectedPlanId,
                         isExpanded: true,
-                        hint: const Text("Học tự do"),
+                        hint: Text(isVN ? "Học tự do" : "Free Study"),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.grey.shade100,
@@ -171,9 +180,9 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                           ),
                         ),
                         items: [
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: null,
-                            child: Text("Học tự do"),
+                            child: Text(isVN ? "Học tự do" : "Free Study"),
                           ),
                           ...validDocs.map(
                             (doc) => DropdownMenuItem(
@@ -209,7 +218,8 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                                 }
                               }
                             } else {
-                              selectedPlanTitle = "Học tự do";
+                              selectedPlanTitle =
+                                  isVN ? "Học tự do" : "Free Study";
                             }
                           });
                         },
@@ -245,9 +255,9 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                         ),
                       );
                     },
-                    child: const Text(
-                      "Vào học ngay",
-                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    child: Text(
+                      isVN ? "Vào học ngay" : "Join now",
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ),
                 ],
@@ -261,204 +271,220 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      appBar: AppBar(
-        title: const Text(
-          "Tìm phòng học",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.orangeAccent,
-        icon: const Icon(Icons.vpn_key, color: Colors.white),
-        label: const Text(
-          "Nhập mã",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        onPressed: () => _showJoinByCodeDialog(context),
-      ),
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 5,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+    // 🔥 BỌC TÒAN BỘ ValueListenableBuilder
+    return ValueListenableBuilder<String>(
+      valueListenable: languageNotifier,
+      builder: (context, lang, child) {
+        bool isVN = lang == "Tiếng Việt";
+
+        return Scaffold(
+          backgroundColor: Colors.grey.shade50,
+          appBar: AppBar(
+            title: Text(
+              isVN ? "Tìm phòng học" : "Search Room",
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            child: Column(
-              children: [
-                TextField(
-                  onChanged: (value) =>
-                      setState(() => _searchId = value.trim()),
-                  decoration: InputDecoration(
-                    hintText: "Tìm kiếm theo @ID...(@tên_phòng)",
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(15),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    labelText: 'Lọc theo lớp',
-                    prefixIcon: const Icon(Icons.filter_list),
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(15),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  value: _selectedFilterGrade,
-                  items: _grades
-                      .map(
-                        (grade) =>
-                            DropdownMenuItem(value: grade, child: Text(grade)),
-                      )
-                      .toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedFilterGrade = val);
-                  },
-                ),
-              ],
-            ),
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+            centerTitle: true,
           ),
-
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('study_rooms')
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: CircularProgressIndicator(color: primaryColor),
-                  );
-                }
-
-                // 🔥 ĐÃ THÊM: Bọc state trống bằng RefreshIndicator
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return RefreshIndicator(
-                    color: primaryColor,
-                    backgroundColor: Colors.white,
-                    onRefresh: () async {
-                      await Future.delayed(const Duration(seconds: 1));
-                      setState(() {});
-                    },
-                    child: _buildEmptyState("Chưa có phòng học nào đang mở."),
-                  );
-                }
-
-                final docs = snapshot.data!.docs;
-                final List<DocumentSnapshot> filteredDocs = docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-
-                  if (data['isPrivate'] == true) return false;
-
-                  final roomGrade = data['hostClass'] ?? "";
-                  final hostId = data['hostId'] ?? "";
-
-                  bool matchesGrade =
-                      _selectedFilterGrade == "Tất cả" ||
-                      roomGrade == _selectedFilterGrade;
-
-                  final cleanSearchId = _searchId
-                      .replaceAll('@', '')
-                      .toLowerCase();
-                  bool matchesId =
-                      cleanSearchId.isEmpty ||
-                      hostId.toLowerCase().contains(cleanSearchId);
-
-                  return matchesGrade && matchesId;
-                }).toList();
-
-                // 🔥 ĐÃ THÊM: Bọc state trống (sau khi lọc) bằng RefreshIndicator
-                if (filteredDocs.isEmpty) {
-                  return RefreshIndicator(
-                    color: primaryColor,
-                    backgroundColor: Colors.white,
-                    onRefresh: () async {
-                      await Future.delayed(const Duration(seconds: 1));
-                      setState(() {});
-                    },
-                    child: _buildEmptyState(
-                      "Không tìm thấy phòng công khai phù hợp.",
+          floatingActionButton: FloatingActionButton.extended(
+            backgroundColor: Colors.orangeAccent,
+            icon: const Icon(Icons.vpn_key, color: Colors.white),
+            label: Text(
+              isVN ? "Nhập mã" : "Enter code",
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+            onPressed: () => _showJoinByCodeDialog(context),
+          ),
+          body: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 5,
+                      offset: const Offset(0, 3),
                     ),
-                  );
-                }
-
-                // 🔥 ĐÃ THÊM: Bọc ListView bằng RefreshIndicator
-                return RefreshIndicator(
-                  color: primaryColor,
-                  backgroundColor: Colors.white,
-                  onRefresh: () async {
-                    // Cố tình delay 1 giây để hiệu ứng load xoay xoay nhìn rõ ràng, mượt mà
-                    await Future.delayed(const Duration(seconds: 1));
-                    setState(() {});
-                  },
-                  child: ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredDocs.length,
-                    itemBuilder: (context, index) {
-                      final data =
-                          filteredDocs[index].data() as Map<String, dynamic>;
-
-                      int hostPoints = data['hostPoints'] ?? 0;
-
-                      StudyRoom room = StudyRoom(
-                        hostName: data['roomName'] ?? data['hostName'] ?? "Ẩn danh",
-                        hostId: "@${data['hostId']}",
-                        points: hostPoints,
-                        // rank: _getRank(hostPoints),
-                        currentMembers: List.from(
-                          data['participants'] ?? [],
-                        ).length,
-                        maxMembers: data['maxMembers'] ?? 4,
-                        startTime: "Đang diễn ra",
-                        endTime: "${data['duration'] ?? 30} phút",
-                        grade: data['hostClass'] ?? "Lớp ?",
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    TextField(
+                      onChanged: (value) =>
+                          setState(() => _searchId = value.trim()),
+                      decoration: InputDecoration(
+                        hintText: isVN
+                            ? "Tìm kiếm theo @ID...(@id_chủ_phòng)"
+                            : "Search by @ID...(@host_id)",
+                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: isVN ? 'Lọc theo lớp' : 'Filter by class',
+                        prefixIcon: const Icon(Icons.filter_list),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(15),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      value: _selectedFilterGrade,
+                      items: _grades.map((grade) {
+                        String displayTxt = isVN
+                            ? grade
+                            : grade
+                                .replaceFirst('Lớp', 'Class')
+                                .replaceFirst('Tất cả', 'All');
+                        return DropdownMenuItem(
+                            value: grade, child: Text(displayTxt));
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null)
+                          setState(() => _selectedFilterGrade = val);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('study_rooms')
+                      .orderBy('createdAt', descending: true)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Center(
+                        child: CircularProgressIndicator(color: primaryColor),
                       );
+                    }
 
-                      return RoomCard(
-                        room: room,
-                        onJoin: () => _showJoinRoomDialog(
-                          context,
-                          data,
-                          filteredDocs[index].id,
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return RefreshIndicator(
+                        color: primaryColor,
+                        backgroundColor: Colors.white,
+                        onRefresh: () async {
+                          await Future.delayed(const Duration(seconds: 1));
+                          setState(() {});
+                        },
+                        child: _buildEmptyState(isVN
+                            ? "Chưa có phòng học nào đang mở."
+                            : "No active study rooms currently."),
+                      );
+                    }
+
+                    final docs = snapshot.data!.docs;
+                    final List<DocumentSnapshot> filteredDocs =
+                        docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+
+                      if (data['isPrivate'] == true) return false;
+
+                      final roomGrade = data['hostClass'] ?? "";
+                      final hostId = data['hostId'] ?? "";
+
+                      bool matchesGrade = _selectedFilterGrade == "Tất cả" ||
+                          roomGrade == _selectedFilterGrade;
+
+                      final cleanSearchId =
+                          _searchId.replaceAll('@', '').toLowerCase();
+                      bool matchesId = cleanSearchId.isEmpty ||
+                          hostId.toLowerCase().contains(cleanSearchId);
+
+                      return matchesGrade && matchesId;
+                    }).toList();
+
+                    if (filteredDocs.isEmpty) {
+                      return RefreshIndicator(
+                        color: primaryColor,
+                        backgroundColor: Colors.white,
+                        onRefresh: () async {
+                          await Future.delayed(const Duration(seconds: 1));
+                          setState(() {});
+                        },
+                        child: _buildEmptyState(
+                          isVN
+                              ? "Không tìm thấy phòng công khai phù hợp."
+                              : "No matching public rooms found.",
                         ),
                       );
-                    },
-                  ),
-                );
-              },
-            ),
+                    }
+
+                    return RefreshIndicator(
+                      color: primaryColor,
+                      backgroundColor: Colors.white,
+                      onRefresh: () async {
+                        await Future.delayed(const Duration(seconds: 1));
+                        setState(() {});
+                      },
+                      child: ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        itemCount: filteredDocs.length,
+                        itemBuilder: (context, index) {
+                          final data = filteredDocs[index].data()
+                              as Map<String, dynamic>;
+
+                          int hostPoints = data['hostPoints'] ?? 0;
+                          String originalClass = data['hostClass'] ?? "Lớp ?";
+
+                          StudyRoom room = StudyRoom(
+                            hostName: data['roomName'] ??
+                                data['hostName'] ??
+                                (isVN ? "Ẩn danh" : "Anonymous"),
+                            hostId: "@${data['hostId']}",
+                            points: hostPoints,
+                            currentMembers: List.from(
+                              data['participants'] ?? [],
+                            ).length,
+                            maxMembers: data['maxMembers'] ?? 4,
+                            startTime: isVN ? "Đang diễn ra" : "Ongoing",
+                            endTime:
+                                "${data['duration'] ?? 30} ${isVN ? 'phút' : 'mins'}",
+                            grade: isVN
+                                ? originalClass
+                                : originalClass.replaceFirst('Lớp', 'Class'),
+                          );
+
+                          return RoomCard(
+                            room: room,
+                            onJoin: () => _showJoinRoomDialog(
+                              context,
+                              data,
+                              filteredDocs[index].id,
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildEmptyState(String message) {
     return ListView(
-      // Bắt buộc phải có physics này thì ListView dù trống vẫn có thể vuốt pull-to-refresh
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(top: 80),
       children: [

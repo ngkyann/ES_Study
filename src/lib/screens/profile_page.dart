@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // Mới thêm
-import 'package:image_picker/image_picker.dart'; // Mới thêm
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:esstudy/constants/colors.dart';
-// import 'package:esstudy/screens/settings_page.dart';
-import 'package:dio/dio.dart'; // Thêm để dùng cho chức năng tải ảnh, nếu chưa có hãy chạy: flutter pub add dio path_provider gallery_saver
-import 'package:path_provider/path_provider.dart'; // Thư viện để lưu ảnh vào bộ sưu tập
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:gal/gal.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-// import 'package:universal_html/html.dart' as html;
+import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
 
 class ProfilePage extends StatefulWidget {
   final String userName;
@@ -34,10 +33,12 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final ImagePicker _picker = ImagePicker();
-  bool _isUploading = false; // Trạng thái loading khi upload ảnh
+  bool _isUploading = false;
 
   // --- HÀM 1: CHỌN VÀ UPLOAD ẢNH ---
   Future<void> _pickAndUploadImage() async {
+    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 Lấy ngôn ngữ
+
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -54,17 +55,14 @@ class _ProfilePageState extends State<ProfilePage> {
           .child('avatars')
           .child('${widget.userId}.jpg');
 
-      // Upload dùng Bytes để chạy được cả Web và Android
       final bytes = await image.readAsBytes();
       await storageRef.putData(
         bytes,
         SettableMetadata(contentType: 'image/jpeg'),
       );
 
-      // Lấy URL sau khi upload thành công
       String downloadUrl = await storageRef.getDownloadURL();
 
-      // Lưu URL vào Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
@@ -72,15 +70,18 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Đã đổi ảnh đại diện thành công!")),
+          SnackBar(
+              content: Text(isVN
+                  ? "Đã đổi ảnh đại diện thành công!"
+                  : "Avatar changed successfully!")),
         );
       }
     } catch (e) {
       debugPrint("Lỗi upload: $e");
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Lỗi upload: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(isVN ? "Lỗi upload: $e" : "Upload error: $e")),
+        );
       }
     } finally {
       if (mounted) setState(() => _isUploading = false);
@@ -89,12 +90,15 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // --- HÀM 2: DOWNLOAD (CHỈ CHẠY KHI CÓ URL) ---
   Future<void> _saveImageUrlToGallery(String? url) async {
-    // 1. Kiểm tra xem user đã có ảnh trên server chưa
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+
     if (url == null || url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            "Bạn chưa có ảnh đại diện để tải về. Hãy đổi ảnh trước nhé!",
+            isVN
+                ? "Bạn chưa có ảnh đại diện để tải về. Hãy đổi ảnh trước nhé!"
+                : "You don't have an avatar to download. Please set one first!",
           ),
           backgroundColor: Colors.orange,
         ),
@@ -103,42 +107,39 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     try {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Đang chuẩn bị tải ảnh...")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(isVN
+                ? "Đang chuẩn bị tải ảnh..."
+                : "Preparing to download...")),
+      );
 
       if (kIsWeb) {
-        // --- XỬ LÝ CHO WEB (LAPTOP) ---
-        // Sử dụng universal_html để tạo lệnh tải xuống của trình duyệt
-        // final anchor = html.AnchorElement(href: url)
-        // ..setAttribute("download", "avatar_${widget.userId}.jpg")
-        // ..click();
-
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Ảnh đang được tải xuống trình duyệt!")),
+          SnackBar(
+              content: Text(isVN
+                  ? "Ảnh đang được tải xuống trình duyệt!"
+                  : "Image is downloading in browser!")),
         );
       } else {
-        // --- XỬ LÝ CHO MOBILE (ANDROID/IOS) ---
-        // 1. Lấy đường dẫn thư mục tạm
         final tempDir = await getTemporaryDirectory();
         final path = '${tempDir.path}/avatar_download.jpg';
 
-        // 2. Dùng Dio tải ảnh từ URL về file tạm đó
         await Dio().download(url, path);
 
-        // 3. Kiểm tra quyền truy cập thư viện ảnh
         final hasAccess = await Gal.hasAccess();
         if (!hasAccess) {
           await Gal.requestAccess();
         }
 
-        // 4. Lưu file đó vào Bộ sưu tập (Gallery)
         await Gal.putImage(path);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Đã lưu ảnh thành công vào bộ sưu tập!"),
+            SnackBar(
+              content: Text(isVN
+                  ? "Đã lưu ảnh thành công vào bộ sưu tập!"
+                  : "Image saved to gallery successfully!"),
               backgroundColor: Colors.green,
             ),
           );
@@ -147,15 +148,20 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       debugPrint("Lỗi tải ảnh: $e");
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Không thể tải ảnh: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(isVN
+                  ? "Không thể tải ảnh: $e"
+                  : "Cannot download image: $e")),
+        );
       }
     }
   }
 
   // --- HÀM 3: HIỂN THỊ MENU OPTION KHI CLICK VÀO AVA ---
   void _showAvatarOptionsMenu(BuildContext context, String? currentAvatarUrl) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -165,46 +171,46 @@ class _ProfilePageState extends State<ProfilePage> {
         return SafeArea(
           child: Wrap(
             children: <Widget>[
-              const Padding(
-                padding: EdgeInsets.all(16.0),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  "Tùy chọn ảnh đại diện",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  isVN ? "Tùy chọn ảnh đại diện" : "Avatar Options",
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
               ListTile(
                 leading: const Icon(Icons.download, color: Colors.blue),
-                title: const Text('Lưu ảnh về máy'),
+                title: Text(isVN ? 'Lưu ảnh về máy' : 'Save to device'),
                 onTap: () {
-                  Navigator.of(context).pop(); // Đóng menu
-                  _saveImageUrlToGallery(currentAvatarUrl); // Gọi hàm lưu ảnh
+                  Navigator.of(context).pop();
+                  _saveImageUrlToGallery(currentAvatarUrl);
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library, color: Colors.orange),
-                title: const Text('Đổi ảnh đại diện mới'),
+                title: Text(isVN ? 'Đổi ảnh đại diện mới' : 'Change avatar'),
                 onTap: () {
-                  Navigator.of(context).pop(); // Đóng menu
-                  _pickAndUploadImage(); // Gọi hàm đổi ảnh
+                  Navigator.of(context).pop();
+                  _pickAndUploadImage();
                 },
               ),
-              // Thêm option xóa ảnh nếu cần
               if (currentAvatarUrl != null && currentAvatarUrl.isNotEmpty)
                 ListTile(
                   leading: const Icon(Icons.delete_forever, color: Colors.red),
-                  title: const Text('Xóa ảnh hiện tại (về mặc định)'),
+                  title: Text(isVN
+                      ? 'Xóa ảnh hiện tại (về mặc định)'
+                      : 'Remove current avatar (default)'),
                   onTap: () async {
                     Navigator.of(context).pop();
                     try {
                       setState(() => _isUploading = true);
-                      // Xóa file trên Storage
                       await FirebaseStorage.instance
                           .ref()
                           .child('avatars')
                           .child('${widget.userId}.jpg')
                           .delete();
 
-                      // Cập nhật Firestore về null
                       await FirebaseFirestore.instance
                           .collection('users')
                           .doc(widget.userId)
@@ -212,11 +218,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Đã xóa ảnh đại diện.")),
+                          SnackBar(
+                              content: Text(isVN
+                                  ? "Đã xóa ảnh đại diện."
+                                  : "Avatar removed.")),
                         );
                       }
                     } catch (e) {
-                      // Nếu file không tồn tại trên storage thì chỉ cần cập nhật firestore
                       await FirebaseFirestore.instance
                           .collection('users')
                           .doc(widget.userId)
@@ -236,305 +244,297 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "Hồ sơ cá nhân",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        // actions: [
-        //   Padding(
-        //     padding: const EdgeInsets.only(right: 12),
-        //     child: IconButton(
-        //       icon: const Icon(Icons.settings),
-        //       onPressed: () {
-        //         Navigator.push(
-        //           context,
-        //           MaterialPageRoute(
-        //             builder: (context) => SettingsPage(
-        //               userName: widget.userName,
-        //               selectedClass: widget.selectedClass,
-        //               userId: widget.userId,
-        //               email: widget.email,
-        //             ),
-        //           ),
-        //         );
-        //       },
-        //     ),
-        //   ),
-        // ],
-      ),
-      body: RefreshIndicator(
-        color: primaryColor,
-        backgroundColor: Colors.white,
-        onRefresh: () async {
-          await Future.delayed(const Duration(seconds: 1));
-          if (mounted) setState(() {});
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 30),
-                decoration: BoxDecoration(
-                  color: primaryColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.25),
-                      blurRadius: 25,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: StreamBuilder<DocumentSnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(widget.userId)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    String currentName = widget.userName;
-                    String? avatarUrl;
+    // 🔥 BỌC TÒAN BỘ BẰNG ValueListenableBuilder
+    return ValueListenableBuilder<String>(
+      valueListenable: languageNotifier,
+      builder: (context, lang, child) {
+        bool isVN = lang == "Tiếng Việt";
 
-                    if (snapshot.hasData && snapshot.data!.exists) {
-                      final data =
-                          snapshot.data!.data() as Map<String, dynamic>;
-                      currentName = data['name'] ?? widget.userName;
-                      avatarUrl = data['avatarUrl']; // Lấy URL ảnh từ Firestore
-                    }
-
-                    return Column(
-                      children: [
-                        // --- PHẦN CẬP NHẬT CHÍNH: HIỂN THỊ AVATAR VÀ XỬ LÝ CLICK ---
-                        GestureDetector(
-                          onTap: () => _showAvatarOptionsMenu(
-                            context,
-                            avatarUrl,
-                          ), // Click mở menu
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              // Vòng tròn chứa ảnh
-                              Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 3,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.2),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 5),
-                                    ),
-                                  ],
-                                ),
-                                child: CircleAvatar(
-                                  radius: 50,
-                                  backgroundColor: Colors.white,
-                                  // Kiểm tra và hiển thị ảnh mạng hoặc ảnh mặc định
-                                  backgroundImage: (avatarUrl != null &&
-                                          avatarUrl.isNotEmpty)
-                                      ? NetworkImage(
-                                          avatarUrl,
-                                        ) // Dùng ảnh từ Firebase
-                                      : null,
-                                  child: (avatarUrl == null ||
-                                          avatarUrl.isEmpty)
-                                      ? Icon(
-                                          Icons.person,
-                                          color: primaryColor,
-                                          size: 50,
-                                        ) // Hiển thị icon mặc định nếu không có ảnh
-                                      : null,
-                                ),
-                              ),
-                              // Hiển thị vòng loading khi đang upload
-                              if (_isUploading)
-                                const Positioned.fill(
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              // Icon nhỏ báo hiệu có thể đổi ảnh
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orangeAccent,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 15),
-
-                        Text(
-                          currentName,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-
-                        Text(
-                          "@${widget.userId}",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 15),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.local_fire_department,
-                                color: Colors.orangeAccent,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                "Chuỗi ${widget.userStreak} ngày học",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(
+              isVN ? "Hồ sơ cá nhân" : "Profile",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+            centerTitle: true,
+          ),
+          body: RefreshIndicator(
+            color: primaryColor,
+            backgroundColor: Colors.white,
+            onRefresh: () async {
+              await Future.delayed(const Duration(seconds: 1));
+              if (mounted) setState(() {});
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 30),
+                    decoration: BoxDecoration(
+                      color: primaryColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.25),
+                          blurRadius: 25,
+                          offset: const Offset(0, 10),
                         ),
                       ],
-                    );
-                  },
-                ),
-              ),
-              // ... Giữ nguyên phần body bên dưới (các thẻ infoCard) ...
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    _infoCard(
-                      Icons.alternate_email,
-                      "ID người dùng",
-                      "@${widget.userId}",
                     ),
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('users')
-                          .orderBy('points', descending: true)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        String rankText = "Đang tải...";
-                        if (snapshot.hasData) {
-                          final docs = snapshot.data!.docs;
-                          int myRank = 0;
-                          for (int i = 0; i < docs.length; i++) {
-                            if (docs[i].id == widget.userId) {
-                              myRank = i + 1;
-                              break;
-                            }
-                          }
-
-                          if (myRank == 1) {
-                            rankText = "🥇 Hạng 1 (Quán quân)";
-                          } else if (myRank >= 2 && myRank <= 10) {
-                            rankText = "🥈 Hạng $myRank (Top 10)";
-                          } else if (myRank >= 11 && myRank <= 50) {
-                            rankText = "🥉 Hạng $myRank (Top 50)";
-                          } else if (myRank > 50) {
-                            rankText = "Hạng $myRank";
-                          } else {
-                            rankText = "Chưa xếp hạng";
-                          }
-                        }
-                        return _infoCard(
-                          Icons.military_tech,
-                          "Xếp hạng",
-                          rankText,
-                        );
-                      },
-                    ),
-                    _infoCard(
-                      Icons.workspace_premium,
-                      "Tổng điểm",
-                      "${widget.userPoints}",
-                    ),
-                    StreamBuilder<DocumentSnapshot>(
+                    child: StreamBuilder<DocumentSnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
                           .doc(widget.userId)
                           .snapshots(),
                       builder: (context, snapshot) {
-                        String joinDateText = "Đang tải...";
+                        String currentName = widget.userName;
+                        String? avatarUrl;
+
                         if (snapshot.hasData && snapshot.data!.exists) {
                           final data =
                               snapshot.data!.data() as Map<String, dynamic>;
-                          if (data['createdAt'] != null) {
-                            DateTime date =
-                                (data['createdAt'] as Timestamp).toDate();
-                            joinDateText =
-                                "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
-                          }
+                          currentName = data['name'] ?? widget.userName;
+                          avatarUrl = data['avatarUrl'];
                         }
-                        return _infoCard(
-                          Icons.calendar_month,
-                          "Ngày gia nhập",
-                          joinDateText,
+
+                        return Column(
+                          children: [
+                            GestureDetector(
+                              onTap: () => _showAvatarOptionsMenu(
+                                context,
+                                avatarUrl,
+                              ),
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 3,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.2),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
+                                    ),
+                                    child: CircleAvatar(
+                                      radius: 50,
+                                      backgroundColor: Colors.white,
+                                      backgroundImage: (avatarUrl != null &&
+                                              avatarUrl.isNotEmpty)
+                                          ? NetworkImage(avatarUrl)
+                                          : null,
+                                      child: (avatarUrl == null ||
+                                              avatarUrl.isEmpty)
+                                          ? Icon(
+                                              Icons.person,
+                                              color: primaryColor,
+                                              size: 50,
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                  if (_isUploading)
+                                    const Positioned.fill(
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  Positioned(
+                                    bottom: 0,
+                                    right: 0,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orangeAccent,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.camera_alt,
+                                        color: Colors.white,
+                                        size: 16,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 15),
+                            Text(
+                              currentName,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              "@${widget.userId}",
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.white70,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 15),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.local_fire_department,
+                                    color: Colors.orangeAccent,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isVN
+                                        ? "Chuỗi ${widget.userStreak} ngày học"
+                                        : "${widget.userStreak}-day streak",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
-                    StreamBuilder<DocumentSnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(widget.userId)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        String currentClass = widget.selectedClass;
-                        if (snapshot.hasData && snapshot.data!.exists) {
-                          currentClass = snapshot.data!.get('class') ??
-                              widget.selectedClass;
-                        }
-                        return _infoCard(Icons.school, "Lớp", currentClass);
-                      },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        _infoCard(
+                          Icons.alternate_email,
+                          isVN ? "ID người dùng" : "User ID",
+                          "@${widget.userId}",
+                        ),
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('users')
+                              .orderBy('points', descending: true)
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            String rankText =
+                                isVN ? "Đang tải..." : "Loading...";
+                            if (snapshot.hasData) {
+                              final docs = snapshot.data!.docs;
+                              int myRank = 0;
+                              for (int i = 0; i < docs.length; i++) {
+                                if (docs[i].id == widget.userId) {
+                                  myRank = i + 1;
+                                  break;
+                                }
+                              }
+
+                              if (myRank == 1) {
+                                rankText = isVN
+                                    ? "🥇 Hạng 1 (Quán quân)"
+                                    : "🥇 Rank 1 (Champion)";
+                              } else if (myRank >= 2 && myRank <= 10) {
+                                rankText = isVN
+                                    ? "🥈 Hạng $myRank (Top 10)"
+                                    : "🥈 Rank $myRank (Top 10)";
+                              } else if (myRank >= 11 && myRank <= 50) {
+                                rankText = isVN
+                                    ? "🥉 Hạng $myRank (Top 50)"
+                                    : "🥉 Rank $myRank (Top 50)";
+                              } else if (myRank > 50) {
+                                rankText =
+                                    isVN ? "Hạng $myRank" : "Rank $myRank";
+                              } else {
+                                rankText = isVN ? "Chưa xếp hạng" : "Unranked";
+                              }
+                            }
+                            return _infoCard(
+                              Icons.military_tech,
+                              isVN ? "Xếp hạng" : "Rank",
+                              rankText,
+                            );
+                          },
+                        ),
+                        _infoCard(
+                          Icons.workspace_premium,
+                          isVN ? "Tổng điểm" : "Total Points",
+                          "${widget.userPoints}",
+                        ),
+                        StreamBuilder<DocumentSnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(widget.userId)
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            String joinDateText =
+                                isVN ? "Đang tải..." : "Loading...";
+                            if (snapshot.hasData && snapshot.data!.exists) {
+                              final data =
+                                  snapshot.data!.data() as Map<String, dynamic>;
+                              if (data['createdAt'] != null) {
+                                DateTime date =
+                                    (data['createdAt'] as Timestamp).toDate();
+                                joinDateText =
+                                    "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
+                              }
+                            }
+                            return _infoCard(
+                              Icons.calendar_month,
+                              isVN ? "Ngày gia nhập" : "Joined Date",
+                              joinDateText,
+                            );
+                          },
+                        ),
+                        StreamBuilder<DocumentSnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(widget.userId)
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            String currentClass = widget.selectedClass;
+                            if (snapshot.hasData && snapshot.data!.exists) {
+                              currentClass = snapshot.data!.get('class') ??
+                                  widget.selectedClass;
+                            }
+                            String displayClass = isVN
+                                ? currentClass
+                                : currentClass.replaceFirst('Lớp', 'Class');
+                            return _infoCard(Icons.school,
+                                isVN ? "Lớp" : "Class", displayClass);
+                          },
+                        ),
+                        const SizedBox(height: 30),
+                      ],
                     ),
-                    const SizedBox(height: 30),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

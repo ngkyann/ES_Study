@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/constants/colors.dart';
+import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
 
 class LeaderboardPage extends StatelessWidget {
   final String currentUserId;
@@ -9,87 +10,97 @@ class LeaderboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "Bảng xếp hạng",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      // Thanh hiển thị thứ hạng của bạn cố định ở dưới cùng
-      bottomNavigationBar: _buildMyRankSection(),
-      body: Container(
-        color: Colors.white,
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .orderBy('points', descending: true)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Center(
-                child: CircularProgressIndicator(color: primaryColor),
-              );
-            }
+    // 🔥 BỌC ValueListenableBuilder
+    return ValueListenableBuilder<String>(
+      valueListenable: languageNotifier,
+      builder: (context, lang, child) {
+        bool isVN = lang == "Tiếng Việt";
 
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-              return const Center(
-                child: Text(
-                  "Chưa có dữ liệu.",
-                  style: TextStyle(color: Colors.black54),
-                ),
-              );
-            }
-
-            final users = snapshot.data!.docs;
-
-            // 🔥 ĐÃ THÊM: RefreshIndicator để vuốt tải lại trang
-            return RefreshIndicator(
-              color: primaryColor,
-              backgroundColor: Colors.white,
-              onRefresh: () async {
-                // Giả lập thời gian load 1 giây để hiện vòng xoay cho mượt
-                await Future.delayed(const Duration(seconds: 1));
-              },
-              child: ListView.builder(
-                // 🔥 BẮT BUỘC: Thêm physics để nội dung ngắn vẫn vuốt được
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  100,
-                ), // Cách đáy để không bị đè bởi thanh bottom
-                itemCount: users.length,
-                itemBuilder: (context, index) {
-                  final userData = users[index].data() as Map<String, dynamic>;
-                  final String userId = users[index].id;
-                  final int rank = index + 1;
-                  bool isMe = userId == currentUserId;
-
-                  return _buildLeaderboardItem(
-                    rank,
-                    userData['name'] ?? 'Ẩn danh',
-                    userId, // 🔥 TRUYỀN THÊM USER ID VÀO ĐÂY
-                    userData['class'] ?? 'Lớp ?',
-                    userData['points'] ?? 0,
-                    isMe,
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(
+              // 🔥 Bỏ const
+              isVN ? "Bảng xếp hạng" : "Leaderboard", // 🔥 Đã dịch
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            centerTitle: true,
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+            elevation: 0,
+          ),
+          // Thanh hiển thị thứ hạng của bạn cố định ở dưới cùng
+          bottomNavigationBar:
+              _buildMyRankSection(isVN), // 🔥 Truyền isVN vào hàm
+          body: Container(
+            color: Colors.white,
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .orderBy('points', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: CircularProgressIndicator(color: primaryColor),
                   );
-                },
-              ),
-            );
-          },
-        ),
-      ),
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    // 🔥 Bỏ const
+                    child: Text(
+                      isVN
+                          ? "Chưa có dữ liệu."
+                          : "No data available.", // 🔥 Đã dịch
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                  );
+                }
+
+                final users = snapshot.data!.docs;
+
+                return RefreshIndicator(
+                  color: primaryColor,
+                  backgroundColor: Colors.white,
+                  onRefresh: () async {
+                    await Future.delayed(const Duration(seconds: 1));
+                  },
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                    itemCount: users.length,
+                    itemBuilder: (context, index) {
+                      final userData =
+                          users[index].data() as Map<String, dynamic>;
+                      final String userId = users[index].id;
+                      final int rank = index + 1;
+                      bool isMe = userId == currentUserId;
+
+                      return _buildLeaderboardItem(
+                        rank,
+                        userData['name'] ??
+                            (isVN ? 'Ẩn danh' : 'Anonymous'), // 🔥 Đã dịch
+                        userId,
+                        userData['class'] ??
+                            (isVN ? 'Lớp ?' : 'Class ?'), // 🔥 Đã dịch
+                        userData['points'] ?? 0,
+                        isMe,
+                        isVN, // 🔥 Truyền isVN vào hàm
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 
   // --- THANH "HẠNG CỦA TÔI" (CỐ ĐỊNH) ---
-  Widget _buildMyRankSection() {
+  Widget _buildMyRankSection(bool isVN) {
+    // 🔥 NHẬN BIẾN isVN
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
@@ -138,9 +149,11 @@ class LeaderboardPage extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        "Hạng của bạn",
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      Text(
+                        // 🔥 Bỏ const
+                        isVN ? "Hạng của bạn" : "Your Rank", // 🔥 Đã dịch
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12),
                       ),
                       Text(
                         myData['name'] ?? '',
@@ -152,7 +165,6 @@ class LeaderboardPage extends StatelessWidget {
                           fontSize: 16,
                         ),
                       ),
-                      // 🔥 HIỂN THỊ ID Ở THANH CÁ NHÂN
                       Text(
                         "@$currentUserId",
                         maxLines: 1,
@@ -185,10 +197,11 @@ class LeaderboardPage extends StatelessWidget {
   Widget _buildLeaderboardItem(
     int rank,
     String name,
-    String userId, // 🔥 THÊM THAM SỐ USER ID
+    String userId,
     String className,
     int points,
     bool isMe,
+    bool isVN, // 🔥 NHẬN BIẾN isVN
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -218,7 +231,10 @@ class LeaderboardPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    name + (isMe ? " (Bạn)" : ""),
+                    name +
+                        (isMe
+                            ? (isVN ? " (Bạn)" : " (You)")
+                            : ""), // 🔥 Dịch chữ (Bạn)
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -228,7 +244,6 @@ class LeaderboardPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  // 🔥 HIỂN THỊ ID (@userid) VÀ LỚP HỌC TRÊN 1 DÒNG
                   Text(
                     "@$userId • $className",
                     maxLines: 1,
@@ -303,9 +318,8 @@ class LeaderboardPage extends StatelessWidget {
     } else {
       return CircleAvatar(
         radius: 16,
-        backgroundColor: isInsideBottomBar
-            ? Colors.white24
-            : Colors.grey.shade100,
+        backgroundColor:
+            isInsideBottomBar ? Colors.white24 : Colors.grey.shade100,
         child: Text(
           "$rank",
           style: TextStyle(

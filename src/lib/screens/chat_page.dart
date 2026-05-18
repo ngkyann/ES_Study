@@ -8,6 +8,7 @@ import 'package:esstudy/constants/colors.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
+import 'package:esstudy/constants/var.dart';
 
 class ChatPage extends StatefulWidget {
   final String chatId;
@@ -42,12 +43,17 @@ class _ChatPageState extends State<ChatPage> {
           mode: LaunchMode.externalApplication,
         );
       } else {
-        throw 'Không thể mở liên kết tải file.';
+        throw languageNotifier.value == "Tiếng Việt"
+            ? 'Không thể mở liên kết tải file.'
+            : 'Cannot open the download link.';
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Lỗi khi tải file: $e")),
+          SnackBar(
+              content: Text(languageNotifier.value == "Tiếng Việt"
+                  ? "Lỗi khi tải file: $e"
+                  : "Error downloading file: $e")),
         );
       }
     }
@@ -102,7 +108,10 @@ class _ChatPageState extends State<ChatPage> {
       debugPrint("Lỗi chọn file: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Không thể chọn file")),
+          SnackBar(
+              content: Text(languageNotifier.value == "Tiếng Việt"
+                  ? "Không thể chọn file"
+                  : "Cannot pick file")),
         );
       }
     }
@@ -120,7 +129,9 @@ class _ChatPageState extends State<ChatPage> {
             children: [
               ListTile(
                 leading: const Icon(Icons.image, color: Colors.lightBlue),
-                title: const Text('Gửi hình ảnh'),
+                title: Text(languageNotifier.value == "Tiếng Việt"
+                    ? 'Gửi hình ảnh'
+                    : 'Send image'),
                 onTap: () {
                   Navigator.pop(context);
                   _pickImage();
@@ -129,7 +140,9 @@ class _ChatPageState extends State<ChatPage> {
               ListTile(
                 leading:
                     const Icon(Icons.insert_drive_file, color: Colors.orange),
-                title: const Text('Gửi tài liệu'),
+                title: Text(languageNotifier.value == "Tiếng Việt"
+                    ? 'Gửi tài liệu'
+                    : 'Send document'),
                 onTap: () {
                   Navigator.pop(context);
                   _pickFile();
@@ -182,7 +195,9 @@ class _ChatPageState extends State<ChatPage> {
         }
 
         if (fileBytes == null)
-          throw Exception("Hệ thống không thể đọc tệp này.");
+          throw Exception(languageNotifier.value == "Tiếng Việt"
+              ? "Hệ thống không thể đọc tệp này."
+              : "System cannot read this file.");
 
         String uniqueFileName =
             '${DateTime.now().millisecondsSinceEpoch}_$fileName';
@@ -221,7 +236,9 @@ class _ChatPageState extends State<ChatPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Lỗi: ${e.toString().replaceAll('Exception: ', '')}"),
+            content: Text(languageNotifier.value == "Tiếng Việt"
+                ? "Lỗi: ${e.toString().replaceAll('Exception: ', '')}"
+                : "Error: ${e.toString().replaceAll('Exception: ', '')}"),
           ),
         );
       }
@@ -229,24 +246,28 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _clearChatHistory() async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     bool? confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.red),
             SizedBox(width: 8),
-            Text("Xoá trò chuyện?"),
+            Text(isVN ? "Xoá trò chuyện?" : "Delete chat?"),
           ],
         ),
-        content: const Text(
-          "Lịch sử trò chuyện chỉ bị xoá ở phía bạn, người kia vẫn sẽ nhìn thấy. Bạn có chắc chắn không?",
+        content: Text(
+          isVN
+              ? "Lịch sử trò chuyện chỉ bị xoá ở phía bạn, người kia vẫn sẽ nhìn thấy. Bạn có chắc chắn không?"
+              : "Chat history will only be deleted on your side, the other person will still see it. Are you sure?",
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text("Huỷ", style: TextStyle(color: Colors.grey)),
+            child: Text(isVN ? "Huỷ" : "Cancel",
+                style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -256,7 +277,8 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Xoá", style: TextStyle(color: Colors.white)),
+            child: Text(isVN ? "Xoá" : "Delete",
+                style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -280,353 +302,384 @@ class _ChatPageState extends State<ChatPage> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Đã xoá lịch sử trò chuyện!")),
+        SnackBar(
+            content: Text(
+                isVN ? "Đã xoá lịch sử trò chuyện!" : "Chat history deleted!")),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      appBar: AppBar(
-        title: Text(
-          widget.targetUserName,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            tooltip: "Xoá lịch sử trò chuyện",
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _clearChatHistory,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('chats')
-                  .doc(widget.chatId)
-                  .collection('messages')
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "Chưa có tin nhắn. Hãy nói xin chào!",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
-                }
-
-                final allMessages = snapshot.data!.docs;
-
-                final visibleMessages = allMessages.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final deletedBy = List<String>.from(data['deletedBy'] ?? []);
-                  return !deletedBy.contains(widget.currentUserId);
-                }).toList();
-
-                if (visibleMessages.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      "Chưa có tin nhắn. Hãy nói xin chào!",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  reverse: true,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 20,
-                  ),
-                  itemCount: visibleMessages.length,
-                  itemBuilder: (context, index) {
-                    final data =
-                        visibleMessages[index].data() as Map<String, dynamic>;
-                    bool isMe = data['senderId'] == widget.currentUserId;
-
-                    // 🔥 Đọc link gom chung để tương thích dữ liệu cũ và mới
-                    String linkUrl = data['fileUrl'] ?? data['imageUrl'] ?? '';
-
-                    bool isImage =
-                        data['type'] == 'image' && linkUrl.isNotEmpty;
-                    bool isFile = data['type'] == 'file' && linkUrl.isNotEmpty;
-
-                    return Align(
-                      alignment:
-                          isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: isImage &&
-                                (data['text'] == null ||
-                                    data['text'].toString().trim().isEmpty)
-                            ? const EdgeInsets.all(5)
-                            : const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                        constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.75),
-                        decoration: BoxDecoration(
-                          color: isMe
-                              ? primaryColor.withOpacity(0.2)
-                              : Colors.white,
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(20),
-                            topRight: const Radius.circular(20),
-                            bottomLeft: isMe
-                                ? const Radius.circular(20)
-                                : const Radius.circular(5),
-                            bottomRight: isMe
-                                ? const Radius.circular(5)
-                                : const Radius.circular(20),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // 1. HIỂN THỊ ẢNH
-                            if (isImage)
-                              GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          FullScreenImageViewer(
-                                              imageUrl: linkUrl),
-                                    ),
-                                  );
-                                },
-                                child: Container(
-                                  constraints: const BoxConstraints(
-                                    maxHeight: 300,
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(
-                                      isImage &&
-                                              (data['text'] == null ||
-                                                  data['text']
-                                                      .toString()
-                                                      .trim()
-                                                      .isEmpty)
-                                          ? 15
-                                          : 8,
-                                    ),
-                                    child: Image.network(
-                                      linkUrl,
-                                      fit: BoxFit.contain,
-                                      loadingBuilder:
-                                          (context, child, loadingProgress) {
-                                        if (loadingProgress == null)
-                                          return child;
-                                        return const Padding(
-                                            padding: EdgeInsets.all(20),
-                                            child: CircularProgressIndicator());
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                            // 2. HIỂN THỊ TÀI LIỆU (FILE)
-                            if (isFile)
-                              InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                // 🔥 SỰ KIỆN CLICK: Gọi hàm tải file về thiết bị
-                                onTap: () => _downloadFile(linkUrl),
-                                child: Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: isMe
-                                        ? Colors.black.withOpacity(0.05)
-                                        : Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.black12),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.insert_drive_file,
-                                        color: isMe
-                                            ? primaryColor
-                                            : Colors.orangeAccent,
-                                        size: 32,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Flexible(
-                                        child: Text(
-                                          data['fileName'] ??
-                                              'Tài liệu Văn phòng',
-                                          style: TextStyle(
-                                            color: isMe
-                                                ? Colors.black87
-                                                : Colors.black87,
-                                            fontWeight: FontWeight.bold,
-                                            decoration: TextDecoration
-                                                .underline, // Tạo gạch chân giống link tải
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Icon(
-                                        Icons
-                                            .download_for_offline_outlined, // Thêm icon download nhỏ cho trực quan
-                                        size: 20,
-                                        color:
-                                            isMe ? primaryColor : Colors.grey,
-                                      )
-                                    ],
-                                  ),
-                                ),
-                              ),
-
-                            // 3. HIỂN THỊ CHỮ CHAT
-                            if (data['text'] != null &&
-                                data['text'].toString().trim().isNotEmpty)
-                              Padding(
-                                padding: EdgeInsets.only(
-                                    top: (isImage || isFile) ? 8.0 : 0),
-                                child: Text(
-                                  data['text'],
-                                  style: TextStyle(
-                                      fontSize: 15,
-                                      color:
-                                          isMe ? Colors.black87 : Colors.black),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -3),
+    return ValueListenableBuilder<String>(
+        valueListenable: languageNotifier,
+        builder: (context, lang, child) {
+          bool isVN = lang == "Tiếng Việt";
+          return Scaffold(
+            backgroundColor: Colors.grey.shade100,
+            appBar: AppBar(
+              title: Text(
+                widget.targetUserName,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              actions: [
+                IconButton(
+                  tooltip:
+                      isVN ? "Xoá lịch sử trò chuyện" : "Delete chat history",
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _clearChatHistory,
                 ),
               ],
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            body: Column(
               children: [
-                if (_selectedFile != null)
-                  Padding(
-                    padding:
-                        const EdgeInsets.only(bottom: 8.0, left: 8, right: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.shade200),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('chats')
+                        .doc(widget.chatId)
+                        .collection('messages')
+                        .orderBy('timestamp', descending: true)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return Center(
+                          child: Text(
+                            isVN
+                                ? "Chưa có tin nhắn. Hãy nói xin chào!"
+                                : "No messages yet. Say hello!",
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        );
+                      }
+
+                      final allMessages = snapshot.data!.docs;
+
+                      final visibleMessages = allMessages.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final deletedBy =
+                            List<String>.from(data['deletedBy'] ?? []);
+                        return !deletedBy.contains(widget.currentUserId);
+                      }).toList();
+
+                      if (visibleMessages.isEmpty) {
+                        return Center(
+                          child: Text(
+                            isVN
+                                ? "Chưa có tin nhắn. Hãy nói xin chào!"
+                                : "No messages yet. Say hello!",
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        reverse: true,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 20,
+                        ),
+                        itemCount: visibleMessages.length,
+                        itemBuilder: (context, index) {
+                          final data = visibleMessages[index].data()
+                              as Map<String, dynamic>;
+                          bool isMe = data['senderId'] == widget.currentUserId;
+
+                          // 🔥 Đọc link gom chung để tương thích dữ liệu cũ và mới
+                          String linkUrl =
+                              data['fileUrl'] ?? data['imageUrl'] ?? '';
+
+                          bool isImage =
+                              data['type'] == 'image' && linkUrl.isNotEmpty;
+                          bool isFile =
+                              data['type'] == 'file' && linkUrl.isNotEmpty;
+
+                          return Align(
+                            alignment: isMe
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: isImage &&
+                                      (data['text'] == null ||
+                                          data['text']
+                                              .toString()
+                                              .trim()
+                                              .isEmpty)
+                                  ? const EdgeInsets.all(5)
+                                  : const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                              constraints: BoxConstraints(
+                                  maxWidth:
+                                      MediaQuery.of(context).size.width * 0.75),
+                              decoration: BoxDecoration(
+                                color: isMe
+                                    ? primaryColor.withOpacity(0.2)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(20),
+                                  topRight: const Radius.circular(20),
+                                  bottomLeft: isMe
+                                      ? const Radius.circular(20)
+                                      : const Radius.circular(5),
+                                  bottomRight: isMe
+                                      ? const Radius.circular(5)
+                                      : const Radius.circular(20),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // 1. HIỂN THỊ ẢNH
+                                  if (isImage)
+                                    GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                FullScreenImageViewer(
+                                                    imageUrl: linkUrl),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        constraints: const BoxConstraints(
+                                          maxHeight: 300,
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            isImage &&
+                                                    (data['text'] == null ||
+                                                        data['text']
+                                                            .toString()
+                                                            .trim()
+                                                            .isEmpty)
+                                                ? 15
+                                                : 8,
+                                          ),
+                                          child: Image.network(
+                                            linkUrl,
+                                            fit: BoxFit.contain,
+                                            loadingBuilder: (context, child,
+                                                loadingProgress) {
+                                              if (loadingProgress == null)
+                                                return child;
+                                              return const Padding(
+                                                  padding: EdgeInsets.all(20),
+                                                  child:
+                                                      CircularProgressIndicator());
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                  // 2. HIỂN THỊ TÀI LIỆU (FILE)
+                                  if (isFile)
+                                    InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      // 🔥 SỰ KIỆN CLICK: Gọi hàm tải file về thiết bị
+                                      onTap: () => _downloadFile(linkUrl),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: isMe
+                                              ? Colors.black.withOpacity(0.05)
+                                              : Colors.grey.shade100,
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          border:
+                                              Border.all(color: Colors.black12),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.insert_drive_file,
+                                              color: isMe
+                                                  ? primaryColor
+                                                  : Colors.orangeAccent,
+                                              size: 32,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Flexible(
+                                              child: Text(
+                                                data['fileName'] ??
+                                                    (isVN
+                                                        ? 'Tài liệu Văn phòng'
+                                                        : 'Office Document'),
+                                                style: TextStyle(
+                                                  color: isMe
+                                                      ? Colors.black87
+                                                      : Colors.black87,
+                                                  fontWeight: FontWeight.bold,
+                                                  decoration: TextDecoration
+                                                      .underline, // Tạo gạch chân giống link tải
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 5),
+                                            Icon(
+                                              Icons
+                                                  .download_for_offline_outlined, // Thêm icon download nhỏ cho trực quan
+                                              size: 20,
+                                              color: isMe
+                                                  ? primaryColor
+                                                  : Colors.grey,
+                                            )
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+
+                                  // 3. HIỂN THỊ CHỮ CHAT
+                                  if (data['text'] != null &&
+                                      data['text'].toString().trim().isNotEmpty)
+                                    Padding(
+                                      padding: EdgeInsets.only(
+                                          top: (isImage || isFile) ? 8.0 : 0),
+                                      child: Text(
+                                        data['text'],
+                                        style: TextStyle(
+                                            fontSize: 15,
+                                            color: isMe
+                                                ? Colors.black87
+                                                : Colors.black),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, -3),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.insert_drive_file,
-                              color: Colors.blue),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _selectedFile!.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w500),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_selectedFile != null)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                              bottom: 8.0, left: 8, right: 8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.shade200),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.insert_drive_file,
+                                    color: Colors.blue),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _selectedFile!.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.close,
+                                      color: Colors.red),
+                                  onPressed: () =>
+                                      setState(() => _selectedFile = null),
+                                ),
+                              ],
                             ),
                           ),
+                        ),
+                      Row(
+                        children: [
                           IconButton(
-                            icon: const Icon(Icons.close, color: Colors.red),
-                            onPressed: () =>
-                                setState(() => _selectedFile = null),
+                            icon: Icon(
+                              Icons.add_circle,
+                              color: primaryColor,
+                              size: 28,
+                            ),
+                            onPressed:
+                                _isUploading ? null : _showAttachmentMenu,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: TextField(
+                              controller: _msgController,
+                              decoration: InputDecoration(
+                                hintText: isVN
+                                    ? "Nhập tin nhắn..."
+                                    : "Type a message...",
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 10,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              onSubmitted: (_) => _sendMessage(),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          CircleAvatar(
+                            backgroundColor: primaryColor,
+                            child: _isUploading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : IconButton(
+                                    icon: const Icon(
+                                      Icons.send,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                    onPressed: _sendMessage,
+                                  ),
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.add_circle,
-                        color: primaryColor,
-                        size: 28,
-                      ),
-                      onPressed: _isUploading ? null : _showAttachmentMenu,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: TextField(
-                        controller: _msgController,
-                        decoration: InputDecoration(
-                          hintText: "Nhập tin nhắn...",
-                          filled: true,
-                          fillColor: Colors.grey.shade100,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 10,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(30),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onSubmitted: (_) => _sendMessage(),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    CircleAvatar(
-                      backgroundColor: primaryColor,
-                      child: _isUploading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : IconButton(
-                              icon: const Icon(
-                                Icons.send,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                              onPressed: _sendMessage,
-                            ),
-                    ),
-                  ],
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
+          );
+        });
   }
 }
 
