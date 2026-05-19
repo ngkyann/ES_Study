@@ -743,9 +743,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
                         // [2] Ô ID luôn hiện (Đăng nhập thì xài ID, Đăng ký thì tự tạo ID)
                         _buildClassicTextField(
-                          isVN
-                              ? "ID người dùng (Dùng để đăng nhập)"
-                              : "User ID (For login)",
+                          isVN ? "ID người dùng" : "User ID",
                           Icons.badge_outlined,
                           _idController,
                           focusNode: _idFocus,
