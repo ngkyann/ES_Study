@@ -16,7 +16,7 @@ Như đã nói, ES_Study hiện chỉ hỗ trợ trực tiếp 2 phiên bản l�
 2. Website
 
 Đối với Website, các bạn chỉ cần truy cập vào link mà chúng tôi đính kèm bên dưới. Để sử dụng trên Website, đây là một số lưu ý:
--	Dung lượng bộ nhớ cần trống tối thiểu 800MB. Tốt nhất nên trống hơn 1.5GB dung lượng bộ nhớ để hoạt động trơn tru nhất.
+-	Dung lượng bộ nhớ cần trống tối thiểu 600MB. Tốt nhất nên trống hơn 1GB dung lượng bộ nhớ để hoạt động trơn tru nhất.
 -	Một số tính năng cần quyền để sử dụng(như camera, micro,..) nên cần bật khi sử dụng.
 3. Các nền tảng khác
 

@@ -53,3 +53,4 @@ Thumbs.db
 # .env
 # .api_keys
 lib/constants/var.dart
+lib/constants/colors.dart

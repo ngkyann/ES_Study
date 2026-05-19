@@ -154,7 +154,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildActionTile(
                     Icons.info,
                     isVN ? "Thông tin phiên bản" : "Version Info",
-                    "V 1.2.3",
+                    "V 1.2.4",
                     onTap: () => _showVersionInfoDialog(context),
                   ),
                   const SizedBox(height: 30),
@@ -822,7 +822,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isVN ? "Phiên bản: V 1.2.3" : "Version: V 1.2.3",
+                isVN ? "Phiên bản: V 1.2.4" : "Version: V 1.2.4",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
