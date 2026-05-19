@@ -615,7 +615,7 @@ class OtherUserProfilePage extends StatelessWidget {
                 final streak = data['streakCount'] ?? 0;
                 final rank = data['rank'] ?? 0;
                 final className =
-                    data['class'] ?? isVN ? "Chưa có lớp" : "No class yet";
+                    data['class'] ?? (isVN ? "Chưa có lớp" : "No class yet");
                 final List<dynamic> medals = data['medals'] ?? [];
 
                 // Xử lý Ngày tham gia
