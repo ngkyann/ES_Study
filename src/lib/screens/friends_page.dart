@@ -178,7 +178,24 @@ class _FriendsPageState extends State<FriendsPage> {
                       unselectedLabelColor: Colors.white70,
                       tabs: [
                         Tab(text: isVN ? "Bạn bè" : "Friends"),
-                        Tab(text: isVN ? "Lời mời" : "Requests"),
+                        Tab(
+                          child: Badge(
+                            offset: const Offset(15,
+                                -6), // 🔥 Kéo chấm đỏ xích ra ngoài và lên trên 1 xíu
+                            isLabelVisible: requestsList
+                                .isNotEmpty, // Chỉ hiện khi có lời mời
+                            label: Text(
+                              '${requestsList.length}',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            backgroundColor: Colors.red,
+                            child: Text(isVN ? "Lời mời" : "Requests"),
+                          ),
+                        ),
                         Tab(text: isVN ? "Tìm kiếm" : "Search"),
                       ],
                     ),
