@@ -8,7 +8,6 @@ import 'package:esstudy/timezone_helper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/screens/home_page.dart';
-// Đã gỡ import ai_assistant_fab.dart
 import 'package:esstudy/constants/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:esstudy/constants/var.dart';
@@ -45,13 +44,11 @@ class MyApp extends StatelessWidget {
           builder: (context, child) {
             return Center(
               child: ConstrainedBox(
-                // Giới hạn chiều rộng tối đa là 500 pixel (chuẩn kích thước điện thoại to)
                 constraints: const BoxConstraints(maxWidth: 500),
                 child: child,
               ),
             );
           },
-          // --- ĐÃ DỌN DẸP builder: Không còn Stack và FAB ở đây nữa ---
           home: StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, authSnapshot) {
@@ -63,42 +60,81 @@ class MyApp extends StatelessWidget {
 
               if (authSnapshot.hasData && authSnapshot.data != null) {
                 final user = authSnapshot.data!;
-                if (user.email == null || !user.email!.contains('@')) {
-                  return LoginPage();
+
+                if (user.email == null) {
+                  FirebaseAuth.instance.signOut();
+                  return const LoginPage();
                 }
 
-                final String docId = user.email!.split('@')[0];
+                // --- 1. TÀI KHOẢN HỆ THỐNG CŨ (EMAIL ẢO) ---
+                if (user.email!.endsWith('@esstudy.com')) {
+                  final String docId = user.email!.split('@')[0];
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(docId)
+                        .get(),
+                    builder: (context, userSnapshot) {
+                      if (userSnapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Scaffold(
+                            body: Center(child: CircularProgressIndicator()));
+                      }
+                      if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
+                        FirebaseAuth.instance.signOut();
+                        return const LoginPage();
+                      }
+                      final data =
+                          userSnapshot.data!.data() as Map<String, dynamic>;
+                      return HomePage(
+                        userName: data['name'] ?? "",
+                        userId: data['id'] ?? docId,
+                        selectedClass: data['class'] ?? "",
+                        email: data['email'] ?? user.email!,
+                      );
+                    },
+                  );
+                }
 
-                return StreamBuilder<DocumentSnapshot>(
-                  stream: FirebaseFirestore.instance
+                // --- 2. TÀI KHOẢN MỚI (EMAIL THẬT) ---
+                if (!user.emailVerified) {
+                  // Đã đăng nhập nhưng chưa kích hoạt -> Giữ lại ở trang Login
+                  return const LoginPage();
+                }
+
+                return FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance
                       .collection('users')
-                      .doc(docId)
-                      .snapshots(),
-                  builder: (context, userSnapshot) {
-                    if (userSnapshot.connectionState ==
+                      .where('email', isEqualTo: user.email)
+                      .limit(1)
+                      .get(),
+                  builder: (context, querySnapshot) {
+                    if (querySnapshot.connectionState ==
                         ConnectionState.waiting) {
                       return const Scaffold(
-                        body: Center(child: CircularProgressIndicator()),
+                          body: Center(child: CircularProgressIndicator()));
+                    }
+
+                    if (querySnapshot.hasData &&
+                        querySnapshot.data!.docs.isNotEmpty) {
+                      final data = querySnapshot.data!.docs.first.data()
+                          as Map<String, dynamic>;
+                      final docId = querySnapshot.data!.docs.first.id;
+                      return HomePage(
+                        userName: data['name'] ?? "",
+                        userId: data['id'] ?? docId,
+                        selectedClass: data['class'] ?? "",
+                        email: data['email'] ?? user.email!,
                       );
                     }
 
-                    if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
-                      FirebaseAuth.instance.signOut();
-                      return LoginPage();
-                    }
-
-                    final data =
-                        userSnapshot.data!.data() as Map<String, dynamic>;
-                    return HomePage(
-                      userName: data['name'] ?? "",
-                      userId: data['id'] ?? docId,
-                      selectedClass: data['class'] ?? "",
-                      email: data['email'] ?? "",
-                    );
+                    // Không tìm thấy trong Database thì đăng xuất
+                    FirebaseAuth.instance.signOut();
+                    return const LoginPage();
                   },
                 );
               }
-              return LoginPage();
+              return const LoginPage();
             },
           ),
         );

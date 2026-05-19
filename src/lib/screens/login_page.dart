@@ -1,11 +1,11 @@
-import 'dart:ui'; // Dùng cho hiệu ứng Blur nếu cần
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
-import 'package:esstudy/screens/home_page.dart'; // 🔥 IMPORT HOME PAGE ĐỂ ĐIỀU HƯỚNG
+import 'package:esstudy/constants/var.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,17 +15,16 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
-  // --- CÁC BIẾN TRẠNG THÁI UI & LOGIC ---
   bool _obscureText = true;
-  bool _isLogin = true; // Trạng thái Đăng nhập / Đăng ký
+  bool _isLogin = true;
   bool _isLoading = false;
   String? _selectedClass;
 
-  // --- CONTROLLER CHO CÁC Ô NHẬP LIỆU ---
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _idController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
   final FocusNode _nameFocus = FocusNode();
   final FocusNode _idFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
@@ -37,26 +36,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   );
 
   @override
-  void initState() {
-    super.initState();
-    // 🔥 Thêm listener để cập nhật UI đổ bóng khi focus đổi ô nhập liệu
-    _nameFocus.addListener(_onFocusChange);
-    _idFocus.addListener(_onFocusChange);
-    _emailFocus.addListener(_onFocusChange);
-    _passwordFocus.addListener(_onFocusChange);
-  }
-
-  void _onFocusChange() {
-    if (mounted) setState(() {});
-  }
-
-  @override
   void dispose() {
-    _nameFocus.removeListener(_onFocusChange);
-    _idFocus.removeListener(_onFocusChange);
-    _emailFocus.removeListener(_onFocusChange);
-    _passwordFocus.removeListener(_onFocusChange);
-
     _nameController.dispose();
     _idController.dispose();
     _emailController.dispose();
@@ -68,7 +48,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // Hàm hiển thị thông báo SnackBar chuẩn UI mới
   void _showMessage(String message, {bool isError = true}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -92,23 +71,21 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(15),
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
 
-  // --- LOGIC XỬ LÝ QUÊN MẬT KHẨU (Chuẩn Firebase) ---
-  // --- LOGIC XỬ LÝ QUÊN MẬT KHẨU (Sử dụng Email Thật) ---
+  // ====================================================================
+  // LOGIC 1: QUÊN MẬT KHẨU (HỖ TRỢ ID HOẶC EMAIL)
+  // ====================================================================
   Future<void> _showForgotPasswordDialog() async {
-    final TextEditingController resetEmailController = TextEditingController();
+    final TextEditingController resetController = TextEditingController();
     bool isSending = false;
-    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 Lấy ngôn ngữ
+    bool isVN = languageNotifier.value == "Tiếng Việt";
 
-    // Tự động điền nếu ô nhập ID/Email hiện tại chứa kí tự hợp lệ
-    if (_idController.text.isNotEmpty && _idController.text.contains('@')) {
-      resetEmailController.text = _idController.text;
-    } else if (_emailController.text.isNotEmpty) {
-      resetEmailController.text = _emailController.text;
+    if (_idController.text.isNotEmpty) {
+      resetController.text = _idController.text;
     }
 
     await showDialog(
@@ -140,8 +117,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 children: [
                   Text(
                     isVN
-                        ? "Nhập User ID hoặc Email tài khoản của bạn. Hệ thống sẽ gửi một liên kết an toàn để đặt lại mật khẩu về Email thật của bạn."
-                        : "Enter your User ID or Email. We will send a secure link to reset your password to your real Email.",
+                        ? "Nhập ID hoặc Email tài khoản của bạn. Chúng tôi sẽ gửi một liên kết an toàn để bạn đặt lại mật khẩu mới."
+                        : "Enter your account ID or Email. We will send a secure link to reset your password.",
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                         color: Colors.black54, fontSize: 14, height: 1.4),
@@ -149,9 +126,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                   const SizedBox(height: 20),
                   _buildClassicTextField(
                     isVN ? "ID hoặc Email của bạn" : "Your ID or Email",
-                    Icons.alternate_email,
-                    resetEmailController,
-                    keyboardType: TextInputType.emailAddress,
+                    Icons.badge_outlined,
+                    resetController,
                   ),
                 ],
               ),
@@ -172,7 +148,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
                     elevation: 3,
-                    shadowColor: primaryColor.withOpacity(0.5),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
                     padding: const EdgeInsets.symmetric(
@@ -181,66 +156,50 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                   onPressed: isSending
                       ? null
                       : () async {
-                          final inputText = resetEmailController.text.trim();
-                          if (inputText.isEmpty) {
+                          final targetInput = resetController.text.trim();
+                          if (targetInput.isEmpty) {
                             _showMessage(isVN
-                                ? "Vui lòng nhập ID hoặc Email!"
-                                : "Please enter ID or Email!");
+                                ? "Vui lòng nhập thông tin!"
+                                : "Please enter information!");
                             return;
                           }
 
                           setStateDialog(() => isSending = true);
-                          String targetEmail = inputText;
+                          String targetEmail = targetInput;
 
                           try {
-                            // Nếu người dùng nhập vào là User ID (không chứa chữ @), tìm email thật trong Firestore
-                            if (!inputText.contains('@')) {
-                              DocumentSnapshot userDoc = await FirebaseFirestore
-                                  .instance
+                            if (!targetInput.contains('@')) {
+                              final doc = await FirebaseFirestore.instance
                                   .collection('users')
-                                  .doc(inputText)
+                                  .doc(targetInput)
                                   .get();
-
-                              if (userDoc.exists && userDoc.data() != null) {
-                                targetEmail = (userDoc.data()
-                                        as Map<String, dynamic>)['email'] ??
-                                    '';
+                              if (doc.exists) {
+                                targetEmail = doc.get('email');
                               } else {
                                 setStateDialog(() => isSending = false);
                                 _showMessage(isVN
-                                    ? "Không tìm thấy User ID này trên hệ thống!"
-                                    : "User ID not found!");
+                                    ? "Không tìm thấy tài khoản với ID này!"
+                                    : "Account not found with this ID!");
                                 return;
                               }
                             }
 
-                            // Kiểm tra tính hợp lệ của email tìm được
-                            if (targetEmail.isEmpty ||
-                                !targetEmail.contains('@')) {
-                              setStateDialog(() => isSending = false);
-                              _showMessage(isVN
-                                  ? "Tài khoản không tồn tại Email thật hợp lệ!"
-                                  : "Account does not have a valid real email!");
-                              return;
-                            }
-
-                            // Gửi link reset mật khẩu trực tiếp qua Firebase về mail thật
                             await FirebaseAuth.instance
                                 .sendPasswordResetEmail(email: targetEmail);
 
                             if (context.mounted) {
-                              Navigator.pop(context); // Đóng hộp thoại popup
+                              Navigator.pop(context);
                               _showMessage(
                                   isVN
-                                      ? "Đã gửi link khôi phục thành công. Vui lòng kiểm tra hộp thư Email thật của bạn!"
-                                      : "Password recovery link sent. Please check your real Email inbox!",
+                                      ? "Đã gửi link khôi phục. Vui lòng kiểm tra hộp thư Email của bạn!"
+                                      : "Password recovery link sent. Please check your Email inbox!",
                                   isError: false);
                             }
                           } catch (e) {
                             setStateDialog(() => isSending = false);
                             _showMessage(isVN
-                                ? "Lỗi gửi mail hoặc thông tin không chính xác."
-                                : "Failed to send email or incorrect info.");
+                                ? "Lỗi gửi thư khôi phục hoặc tài khoản không tồn tại."
+                                : "Error sending reset email or account doesn't exist.");
                           }
                         },
                   child: isSending
@@ -250,7 +209,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
                       : Text(
-                          isVN ? "Gửi khôi phục" : "Send Recovery",
+                          isVN ? "Gửi thư xác nhận" : "Send Recovery",
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                 ),
@@ -262,13 +221,244 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  // --- LOGIC XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ ---
-  // --- LOGIC XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ (SỬ DỤNG EMAIL THẬT) ---
+  // ====================================================================
+  // LOGIC 2: HỘP THOẠI HỎI GỬI LẠI EMAIL KÍCH HOẠT (KHI ĐĂNG NHẬP)
+  // ====================================================================
+  void _showResendVerificationDialog(User unverifiedUser, FirebaseApp tempApp) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+    bool isSending = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+              const SizedBox(width: 8),
+              Text(isVN ? "Chưa kích hoạt" : "Not Activated"),
+            ],
+          ),
+          content: Text(
+            isVN
+                ? "Tài khoản của bạn chưa được xác nhận Email. Bạn có muốn gửi lại thư xác nhận vào hòm thư không?"
+                : "Your account email is not verified. Do you want to resend the verification email?",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await tempApp.delete();
+                if (mounted) setState(() => _isLoading = false);
+              },
+              child: Text(isVN ? "Đóng" : "Close",
+                  style: const TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+              onPressed: isSending
+                  ? null
+                  : () async {
+                      setStateDialog(() => isSending = true);
+                      try {
+                        await unverifiedUser.sendEmailVerification();
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          _showMessage(
+                            isVN
+                                ? "Đã gửi lại thư xác nhận! Hãy kiểm tra hòm thư."
+                                : "Verification email resent! Check your inbox.",
+                            isError: false,
+                          );
+                        }
+                      } catch (e) {
+                        if (ctx.mounted)
+                          _showMessage(
+                              "Lỗi gửi thư: Vui lòng đợi 1 lát rồi thử lại.");
+                      }
+                      await tempApp.delete();
+                      if (mounted) setState(() => _isLoading = false);
+                    },
+              child: isSending
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : Text(isVN ? "Gửi lại" : "Resend",
+                      style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ====================================================================
+  // LOGIC 3: MÀN HÌNH CHỜ XÁC NHẬN EMAIL ĐĂNG KÝ (TỰ ĐỘNG VÀO APP)
+  // ====================================================================
+  void _showVerificationWaitingDialog(
+      FirebaseApp tempApp, String email, String password) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+    Timer? checkTimer;
+    bool isChecking = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            // Tự động quét trạng thái kích hoạt mỗi 3 giây
+            checkTimer ??=
+                Timer.periodic(const Duration(seconds: 3), (timer) async {
+              try {
+                final auth = FirebaseAuth.instanceFor(app: tempApp);
+                await auth.currentUser?.reload();
+
+                if (auth.currentUser?.emailVerified == true) {
+                  timer.cancel();
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  await tempApp.delete();
+
+                  // Tiến hành đăng nhập vào luồng chính (Main Auth) -> main.dart sẽ bắt tín hiệu và TỰ CHUYỂN TRANG
+                  await FirebaseAuth.instance.signInWithEmailAndPassword(
+                      email: email, password: password);
+                }
+              } catch (e) {
+                // Ignore errors like network drops
+              }
+            });
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: Column(
+                children: [
+                  Icon(Icons.mark_email_unread_outlined,
+                      size: 50, color: primaryColor),
+                  const SizedBox(height: 10),
+                  Text(isVN ? "Xác thực Email" : "Email Verification",
+                      textAlign: TextAlign.center),
+                ],
+              ),
+              content: Text(
+                isVN
+                    ? "Chúng tôi đã gửi thư kích hoạt đến:\n$email\n\nVui lòng kiểm tra hộp thư (hoặc mục Spam). Nhấn vào liên kết để xác nhận, hệ thống sẽ tự động đăng nhập ngay lập tức!"
+                    : "We have sent an activation email to:\n$email\n\nPlease check your inbox (or Spam folder). Click the link to verify, the system will auto-login immediately!",
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14, height: 1.5),
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actionsOverflowDirection: VerticalDirection.down,
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 12)),
+                    onPressed: isChecking
+                        ? null
+                        : () async {
+                            setStateDialog(() => isChecking = true);
+                            try {
+                              final auth =
+                                  FirebaseAuth.instanceFor(app: tempApp);
+                              await auth.currentUser?.reload();
+
+                              if (auth.currentUser?.emailVerified == true) {
+                                checkTimer?.cancel();
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                await tempApp.delete();
+
+                                // Đăng nhập luồng chính -> main.dart sẽ tự động bắt tín hiệu
+                                await FirebaseAuth.instance
+                                    .signInWithEmailAndPassword(
+                                        email: email, password: password);
+                              } else {
+                                setStateDialog(() => isChecking = false);
+                                _showMessage(isVN
+                                    ? "Bạn chưa xác nhận Email! Hãy kiểm tra hòm thư."
+                                    : "Email not verified yet! Check your inbox.");
+                              }
+                            } catch (e) {
+                              setStateDialog(() => isChecking = false);
+                              _showMessage("Lỗi: Vui lòng thử lại.");
+                            }
+                          },
+                    child: isChecking
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : Text(isVN ? "Tôi đã xác nhận" : "I have verified",
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: () async {
+                        checkTimer?.cancel();
+                        Navigator.pop(ctx);
+                        await tempApp.delete();
+                        setState(() {
+                          _isLogin = true;
+                          _passwordController.clear();
+                        });
+                      },
+                      child: Text(isVN ? "Để sau" : "Later",
+                          style: const TextStyle(color: Colors.grey)),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        try {
+                          final auth = FirebaseAuth.instanceFor(app: tempApp);
+                          await auth.currentUser?.sendEmailVerification();
+                          _showMessage(
+                            isVN
+                                ? "Đã gửi lại thư xác nhận mới!"
+                                : "Resent a new verification email!",
+                            isError: false,
+                          );
+                        } catch (e) {
+                          _showMessage(isVN
+                              ? "Vui lòng đợi 1 lát rồi gửi lại."
+                              : "Please wait a moment before resending.");
+                        }
+                      },
+                      child: Text(isVN ? "Gửi lại mã" : "Resend code",
+                          style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((_) {
+      checkTimer?.cancel();
+    });
+  }
+
+  // ====================================================================
+  // LOGIC 4: XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ CHÍNH
+  // ====================================================================
   Future<void> _handleAuth() async {
     final String id = _idController.text.trim();
     final String password = _passwordController.text.trim();
-    final String email = _emailController.text.trim();
-    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 Lấy ngôn ngữ
+    bool isVN = languageNotifier.value == "Tiếng Việt";
 
     if (id.isEmpty || password.isEmpty) {
       _showMessage(isVN
@@ -277,20 +467,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final auth = FirebaseAuth.instance;
-
       if (_isLogin) {
-        // ================= ĐĂNG NHẬP BẰNG ID -> DÙNG EMAIL THẬT =================
-        // Bước 1: Tìm kiếm Email thật trong Firestore dựa trên User ID nhập vào
-        DocumentSnapshot userDoc =
+        // ================= ĐĂNG NHẬP BẰNG ID =================
+        final userDoc =
             await FirebaseFirestore.instance.collection('users').doc(id).get();
-
-        if (!userDoc.exists || userDoc.data() == null) {
+        if (!userDoc.exists) {
           setState(() => _isLoading = false);
           _showMessage(isVN
               ? "ID người dùng không tồn tại!"
@@ -298,54 +482,70 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           return;
         }
 
-        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-        String realEmail = userData['email'] ?? '';
-
-        if (realEmail.isEmpty || !realEmail.contains('@')) {
-          setState(() => _isLoading = false);
-          _showMessage(isVN
-              ? "Tài khoản chưa được cấu hình Email thật!"
-              : "Account does not have a real email configured!");
-          return;
+        final data = userDoc.data() as Map<String, dynamic>;
+        String realEmail = "$id@esstudy.com"; // Support nick cũ
+        if (data.containsKey('email') && data['email'].toString().isNotEmpty) {
+          realEmail = data['email'];
         }
 
-        // Bước 2: Đăng nhập Firebase Auth bằng Email thật vừa lấy ra từ DB
-        await auth.signInWithEmailAndPassword(
-          email: realEmail,
-          password: password,
-        );
+        // Kiểm tra ngầm để chặn trường hợp chưa kích hoạt
+        final String tempAppName =
+            'tempLogin_${DateTime.now().millisecondsSinceEpoch}';
+        final FirebaseApp tempApp = await Firebase.initializeApp(
+            name: tempAppName, options: Firebase.app().options);
 
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+        try {
+          final tempAuth = FirebaseAuth.instanceFor(app: tempApp);
+          UserCredential tempCred;
 
-          // Chuyển sang HomePage đồng bộ Email thật
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => HomePage(
-                userId: id,
-                userName: userData['name'] ?? 'Người dùng',
-                selectedClass: userData['class'] ?? 'Lớp 10',
-                email: realEmail,
-              ),
-            ),
-          );
+          try {
+            tempCred = await tempAuth.signInWithEmailAndPassword(
+                email: realEmail, password: password);
+          } on FirebaseAuthException catch (fallbackErr) {
+            if (fallbackErr.code == 'user-not-found' ||
+                fallbackErr.code == 'invalid-credential' ||
+                fallbackErr.code == 'wrong-password') {
+              try {
+                tempCred = await tempAuth.signInWithEmailAndPassword(
+                    email: "$id@esstudy.com", password: password);
+                realEmail = "$id@esstudy.com";
+              } catch (_) {
+                rethrow; // Ném lỗi sai pass
+              }
+            } else {
+              rethrow;
+            }
+          }
+
+          if (!tempCred.user!.emailVerified &&
+              !tempCred.user!.email!.endsWith('@esstudy.com')) {
+            _showResendVerificationDialog(tempCred.user!, tempApp);
+            return;
+          }
+
+          // KHI ĐÃ HỢP LỆ -> XÓA TEMP VÀ LOGIN BẰNG MAIN AUTH
+          // Không cần tắt Loading hay pushRoute ở đây, main.dart sẽ tự động điều hướng hoàn hảo.
+          await tempApp.delete();
+          await FirebaseAuth.instance
+              .signInWithEmailAndPassword(email: realEmail, password: password);
+        } catch (e) {
+          await tempApp.delete();
+          rethrow;
         }
       } else {
-        // ================= ĐĂNG KÝ BẰNG EMAIL THẬT =================
-        if (_nameController.text.isEmpty ||
-            _selectedClass == null ||
-            email.isEmpty) {
+        // ================= ĐĂNG KÝ VỚI EMAIL THẬT =================
+        final String name = _nameController.text.trim();
+        final String email = _emailController.text.trim();
+
+        if (name.isEmpty || email.isEmpty || _selectedClass == null) {
           setState(() => _isLoading = false);
           _showMessage(isVN
-              ? "Vui lòng điền đầy đủ thông tin kể cả Email thật!"
-              : "Please fill in all information including real Email!");
+              ? "Vui lòng điền đầy đủ thông tin!"
+              : "Please fill in all information!");
           return;
         }
 
-        if (password.length < 6 && password.isNotEmpty) {
+        if (password.length < 6) {
           setState(() => _isLoading = false);
           _showMessage(isVN
               ? "Mật khẩu phải có ít nhất 6 ký tự!"
@@ -353,60 +553,50 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           return;
         }
 
-        // Kiểm tra chống trùng ID người dùng trong DB
-        DocumentSnapshot existingUser =
+        final idCheckDoc =
             await FirebaseFirestore.instance.collection('users').doc(id).get();
-        if (existingUser.exists) {
+        if (idCheckDoc.exists) {
           setState(() => _isLoading = false);
           _showMessage(isVN
-              ? "ID người dùng này đã tồn tại. Vui lòng chọn ID khác!"
-              : "This User ID already exists. Please choose another one!");
+              ? "ID này đã có người sử dụng. Vui lòng chọn ID khác!"
+              : "This ID is already taken. Please choose another one!");
           return;
         }
 
-        // Tạo FirebaseApp ngầm để đăng ký Firebase Auth sử dụng EMAIL THẬT
+        final String tempAppName =
+            'tempRegister_${DateTime.now().millisecondsSinceEpoch}';
         final FirebaseApp tempApp = await Firebase.initializeApp(
-          name: 'tempRegister',
+          name: tempAppName,
           options: Firebase.app().options,
         );
 
         try {
-          await FirebaseAuth.instanceFor(
-            app: tempApp,
-          ).createUserWithEmailAndPassword(
-            email: email, // 🔥 Sử dụng Email thật thay vì fakeEmail cũ
+          UserCredential cred = await FirebaseAuth.instanceFor(app: tempApp)
+              .createUserWithEmailAndPassword(
+            email: email,
             password: password,
           );
+
+          await cred.user!.sendEmailVerification();
+
+          await FirebaseFirestore.instance.collection('users').doc(id).set({
+            'name': name,
+            'id': id,
+            'email': email,
+            'class': _selectedClass,
+            'points': 100,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+
+          // Bật màn hình chờ kích hoạt
+          _showVerificationWaitingDialog(tempApp, email, password);
         } catch (e) {
           await tempApp.delete();
           rethrow;
         }
-
-        // Lưu thông tin người dùng vào Firestore với Document ID là User ID để duy trì cách đăng nhập qua ID
-        await FirebaseFirestore.instance.collection('users').doc(id).set({
-          'name': _nameController.text.trim(),
-          'id': id,
-          'email': email, // 🔥 Lưu Email thật
-          'class': _selectedClass,
-          'points': 100,
-          'streakCount': 0,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        if (!mounted) return;
-
-        setState(() {
-          _isLoading = false;
-          _isLogin = true;
-          _idController.text = id;
-          _passwordController.text = password;
-        });
-
-        _showMessage(
-            isVN
-                ? "Đăng ký thành công với Email thật! Vui lòng nhấn Đăng nhập."
-                : "Registration successful with real Email! Please tap Login.",
-            isError: false);
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
@@ -420,26 +610,23 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         case 'invalid-credential':
         case 'wrong-password':
         case 'user-not-found':
-          errorMessage =
-              isVN ? "Mật khẩu không chính xác!" : "Incorrect password!";
+          errorMessage = isVN
+              ? "ID hoặc mật khẩu không chính xác!"
+              : "Incorrect ID or Password!";
           break;
         case 'email-already-in-use':
           errorMessage = isVN
-              ? "Email thật này đã được đăng ký cho tài khoản khác!"
-              : "This email is already in use!";
-          break;
-        case 'weak-password':
-          errorMessage = isVN ? "Mật khẩu quá yếu!" : "Password is too weak!";
+              ? "Email này đã được đăng ký cho 1 ID khác!"
+              : "This Email is already associated with another ID!";
           break;
         case 'invalid-email':
-          errorMessage = isVN
-              ? "Định dạng Email thật không hợp lệ!"
-              : "Invalid email format!";
+          errorMessage =
+              isVN ? "Định dạng Email không hợp lệ!" : "Invalid Email format!";
           break;
         case 'too-many-requests':
           errorMessage = isVN
-              ? "Quá nhiều lần thử sai. Thử lại sau!"
-              : "Too many failed attempts. Try again later!";
+              ? "Thử lại quá nhiều. Vui lòng quay lại sau!"
+              : "Too many attempts. Try again later!";
           break;
         default:
           errorMessage = isVN ? "Lỗi: ${e.message}" : "Error: ${e.message}";
@@ -448,13 +635,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      _showMessage(isVN ? "Lỗi không xác định: $e" : "Unknown error: $e");
+      _showMessage(isVN ? "Lỗi hệ thống: $e" : "System error: $e");
     }
   }
 
-  // =========================================================================
-  // --- VẼ LẠI UI (BUILD) ---
-  // =========================================================================
+  // ====================================================================
+  // GIAO DIỆN CHÍNH
+  // ====================================================================
   @override
   Widget build(BuildContext context) {
     final double screenHeight = MediaQuery.of(context).size.height;
@@ -502,6 +689,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         SizedBox(height: screenHeight * 0.12),
+
                         Center(
                           child: Container(
                             padding: const EdgeInsets.all(15),
@@ -523,7 +711,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
+
                         const SizedBox(height: 18),
+
                         Center(
                           child: Text(
                             _isLogin
@@ -537,7 +727,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
+
                         const SizedBox(height: 35),
+
+                        // [1] Chỉ hiện Hỏi tên khi Đăng Ký
                         if (!_isLogin) ...[
                           _buildClassicTextField(
                             isVN ? "Họ và tên" : "Full Name",
@@ -547,22 +740,25 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 18),
                         ],
+
+                        // [2] Ô ID luôn hiện (Đăng nhập thì xài ID, Đăng ký thì tự tạo ID)
                         _buildClassicTextField(
-                          isVN ? "ID người dùng" : "User ID",
-                          Icons.alternate_email_rounded,
+                          isVN
+                              ? "ID người dùng (Dùng để đăng nhập)"
+                              : "User ID (For login)",
+                          Icons.badge_outlined,
                           _idController,
                           focusNode: _idFocus,
-                          keyboardType: TextInputType
-                              .text, // 🔥 ĐÃ SỬA: Sửa từ visiblePassword sang text
-                          textInputAction: _isLogin
-                              ? TextInputAction.done
-                              : TextInputAction.next,
-                          onSubmitted: (_) => _isLogin ? _handleAuth() : null,
+                          keyboardType: TextInputType.text,
                         ),
                         const SizedBox(height: 18),
+
+                        // [3] Chỉ hiện Email thật để kích hoạt khi Đăng ký
                         if (!_isLogin) ...[
                           _buildClassicTextField(
-                            isVN ? "Email/Gmail" : "Email/Gmail",
+                            isVN
+                                ? "Email (để nhận thư kích hoạt)"
+                                : "Email (for verification)",
                             Icons.email_outlined,
                             _emailController,
                             focusNode: _emailFocus,
@@ -570,6 +766,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 18),
                         ],
+
+                        // [4] Ô Mật khẩu luôn hiện
                         Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(30),
@@ -650,6 +848,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
+
+                        // Chỉ hiện quên mật khẩu ở trang Đăng Nhập
                         if (_isLogin)
                           Align(
                             alignment: Alignment.centerRight,
@@ -675,7 +875,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               ),
                             ),
                           ),
+
                         const SizedBox(height: 18),
+
+                        // [5] Chỉ hiện nút Chọn Lớp khi Đăng Ký
                         if (!_isLogin) ...[
                           Container(
                             decoration: BoxDecoration(
@@ -729,7 +932,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 35),
                         ],
+
                         if (_isLogin) const SizedBox(height: 35),
+
                         Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(30),
@@ -776,7 +981,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
+
                         const SizedBox(height: 30),
+
                         Center(
                           child: InkWell(
                             onTap: () {
@@ -805,6 +1012,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
+
                         SizedBox(height: screenHeight * 0.05),
                       ],
                     ),
