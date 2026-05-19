@@ -87,6 +87,56 @@ class _FriendsPageState extends State<FriendsPage> {
     await batch.commit();
   }
 
+  // 🔥 THÊM: HỘP THOẠI XÁC NHẬN KHI XÓA BẠN BÈ
+  void _showUnfriendConfirmDialog(String targetId, String targetName) {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: Row(
+          children: [
+            const Icon(Icons.person_remove, color: Colors.red),
+            const SizedBox(width: 8),
+            Text(isVN ? "Hủy kết bạn" : "Unfriend"),
+          ],
+        ),
+        content: Text(
+          isVN
+              ? "Bạn có chắc chắn muốn hủy kết bạn với $targetName không?"
+              : "Are you sure you want to unfriend $targetName?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(isVN ? "Hủy" : "Cancel",
+                style: const TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              Navigator.pop(ctx); // Đóng Dialog
+              _unfriend(targetId); // Tiến hành xóa
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    isVN
+                        ? "Đã hủy kết bạn với $targetName"
+                        : "Unfriended $targetName",
+                  ),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            },
+            child: Text(isVN ? "Xóa" : "Unfriend",
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Mở trang Hồ sơ người khác
   void _openUserProfile(String targetId, String targetName) {
     Navigator.push(
@@ -166,7 +216,7 @@ class _FriendsPageState extends State<FriendsPage> {
                   appBar: AppBar(
                     title: Text(
                       isVN ? "Bạn bè" : "Friends",
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     centerTitle: true,
                     backgroundColor: primaryColor,
@@ -180,10 +230,8 @@ class _FriendsPageState extends State<FriendsPage> {
                         Tab(text: isVN ? "Bạn bè" : "Friends"),
                         Tab(
                           child: Badge(
-                            offset: const Offset(15,
-                                -6), // 🔥 Kéo chấm đỏ xích ra ngoài và lên trên 1 xíu
-                            isLabelVisible: requestsList
-                                .isNotEmpty, // Chỉ hiện khi có lời mời
+                            offset: const Offset(15, -6),
+                            isLabelVisible: requestsList.isNotEmpty,
                             label: Text(
                               '${requestsList.length}',
                               style: const TextStyle(
@@ -223,7 +271,7 @@ class _FriendsPageState extends State<FriendsPage> {
                                   onTap: () => _openUserProfile(
                                     targetId,
                                     targetName,
-                                  ), // 🔥 Bấm để xem thông tin
+                                  ),
                                   leading: CircleAvatar(
                                     backgroundColor:
                                         primaryColor.withOpacity(0.2),
@@ -281,7 +329,10 @@ class _FriendsPageState extends State<FriendsPage> {
                                           Icons.person_remove,
                                           color: Colors.red,
                                         ),
-                                        onPressed: () => _unfriend(targetId),
+                                        // 🔥 GỌI HÀM CONFIRM DIALOG THAY VÌ XÓA TRỰC TIẾP
+                                        onPressed: () =>
+                                            _showUnfriendConfirmDialog(
+                                                targetId, targetName),
                                       ),
                                     ],
                                   ),
@@ -294,7 +345,7 @@ class _FriendsPageState extends State<FriendsPage> {
                           ? Center(
                               child: Text(
                                 isVN ? "Không có lời mời nào." : "No requests.",
-                                style: TextStyle(color: Colors.grey),
+                                style: const TextStyle(color: Colors.grey),
                               ),
                             )
                           : ListView.builder(
@@ -310,7 +361,7 @@ class _FriendsPageState extends State<FriendsPage> {
                                   onTap: () => _openUserProfile(
                                     targetId,
                                     targetName,
-                                  ), // 🔥 Bấm để xem thông tin
+                                  ),
                                   leading: CircleAvatar(
                                     backgroundColor:
                                         Colors.orange.withOpacity(0.2),
@@ -354,7 +405,7 @@ class _FriendsPageState extends State<FriendsPage> {
                                             _acceptFriendRequest(targetId),
                                         child: Text(
                                           isVN ? "Chấp nhận" : "Accept",
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 12,
                                           ),
@@ -372,7 +423,7 @@ class _FriendsPageState extends State<FriendsPage> {
                                             _declineFriendRequest(targetId),
                                         child: Text(
                                           isVN ? "Từ chối" : "Decline",
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             color: Colors.black87,
                                             fontSize: 12,
                                           ),
@@ -426,7 +477,7 @@ class _FriendsPageState extends State<FriendsPage> {
                                   _searchQuery = val.trim().replaceAll(
                                         '@',
                                         '',
-                                      ); // Tự động xóa @ nếu user nhập thừa
+                                      );
                                 });
                               },
                             ),
@@ -438,7 +489,8 @@ class _FriendsPageState extends State<FriendsPage> {
                                       isVN
                                           ? "Nhập ID để tìm kiếm..."
                                           : "Enter ID to search...",
-                                      style: TextStyle(color: Colors.grey),
+                                      style:
+                                          const TextStyle(color: Colors.grey),
                                     ),
                                   )
                                 : searchList.isEmpty
@@ -447,7 +499,8 @@ class _FriendsPageState extends State<FriendsPage> {
                                           isVN
                                               ? "Không tìm thấy người dùng với ID này"
                                               : "No user with this ID was found",
-                                          style: TextStyle(color: Colors.grey),
+                                          style: const TextStyle(
+                                              color: Colors.grey),
                                         ),
                                       )
                                     : ListView.builder(
@@ -475,11 +528,10 @@ class _FriendsPageState extends State<FriendsPage> {
                                             onTap: () => _openUserProfile(
                                               targetId,
                                               targetName,
-                                            ), // 🔥 Bấm để xem thông tin
+                                            ),
                                             leading: CircleAvatar(
                                               backgroundColor:
                                                   Colors.grey.shade200,
-                                              // 🔥 FIX: Hiển thị avatar kết quả tìm kiếm
                                               backgroundImage: (searchData[
                                                               'avatarUrl'] !=
                                                           null &&
@@ -508,7 +560,7 @@ class _FriendsPageState extends State<FriendsPage> {
                                             trailing: isFriend
                                                 ? Text(
                                                     isVN ? "Bạn bè" : "Friends",
-                                                    style: TextStyle(
+                                                    style: const TextStyle(
                                                       color: Colors.green,
                                                       fontWeight:
                                                           FontWeight.bold,
@@ -519,7 +571,7 @@ class _FriendsPageState extends State<FriendsPage> {
                                                         isVN
                                                             ? "Đã gửi lời mời"
                                                             : "Request sent",
-                                                        style: TextStyle(
+                                                        style: const TextStyle(
                                                           color: Colors.orange,
                                                           fontWeight:
                                                               FontWeight.bold,
@@ -538,7 +590,8 @@ class _FriendsPageState extends State<FriendsPage> {
                                                           isVN
                                                               ? "Kết bạn"
                                                               : "Add Friend",
-                                                          style: TextStyle(
+                                                          style:
+                                                              const TextStyle(
                                                             color: Colors.white,
                                                           ),
                                                         ),
@@ -560,10 +613,7 @@ class _FriendsPageState extends State<FriendsPage> {
 }
 
 // =====================================================================
-// TRANG XEM HỒ SƠ NGƯỜI KHÁC (TÍCH HỢP SẴN TRONG FILE NÀY)
-// =====================================================================
-// =====================================================================
-// TRANG XEM HỒ SƠ NGƯỜI KHÁC (ĐÃ CẬP NHẬT AVATAR VÀ BIO THỰC TẾ)
+// TRANG XEM HỒ SƠ NGƯỜI KHÁC
 // =====================================================================
 class OtherUserProfilePage extends StatelessWidget {
   final String userId;
@@ -578,11 +628,8 @@ class OtherUserProfilePage extends StatelessWidget {
   Future<Map<String, dynamic>> _fetchUserInfo() async {
     try {
       final userRef = FirebaseFirestore.instance.collection('users');
-
-      // 1. Tải dữ liệu của đúng người dùng này thôi
       final userDoc = await userRef.doc(userId).get();
 
-      // Check an toàn: Nếu user không tồn tại thì trả về Map rỗng để tránh crash
       if (!userDoc.exists || userDoc.data() == null) {
         return {};
       }
@@ -645,14 +692,12 @@ class OtherUserProfilePage extends StatelessWidget {
                     data['class'] ?? (isVN ? "Chưa có lớp" : "No class yet");
                 final List<dynamic> medals = data['medals'] ?? [];
 
-                // 🔥 1. BÓC TÁCH DỮ LIỆU AVATAR & BIO TỪ FIRESTORE
                 final String? avatarUrl = data['avatarUrl'];
                 final String bio = data['bio'] ??
                     (isVN
                         ? "Chưa có dòng giới thiệu nào."
                         : "No bio added yet.");
 
-                // Xử lý Ngày tham gia
                 String joinDateText = isVN ? "Chưa rõ" : "Unknown";
                 if (data['createdAt'] != null) {
                   DateTime date = (data['createdAt'] as Timestamp).toDate();
@@ -660,7 +705,6 @@ class OtherUserProfilePage extends StatelessWidget {
                       "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}";
                 }
 
-                // Xử lý Hiển thị Hạng
                 String rankText;
                 if (rank == 1) {
                   rankText =
@@ -681,7 +725,6 @@ class OtherUserProfilePage extends StatelessWidget {
                 return SingleChildScrollView(
                   child: Column(
                     children: [
-                      // Phần đầu: Avatar & Thông tin cơ bản
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 30),
@@ -701,7 +744,6 @@ class OtherUserProfilePage extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            // 🔥 2. CẬP NHẬT: HIỂN THỊ AVATAR ONLINE CỦA USER ĐÓ
                             CircleAvatar(
                               radius: 50,
                               backgroundColor: Colors.white,
@@ -734,8 +776,6 @@ class OtherUserProfilePage extends StatelessWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-
-                            // 🔥 3. CẬP NHẬT: HIỂN THỊ DÒNG BIO NGAY DƯỚI ID
                             const SizedBox(height: 10),
                             Padding(
                               padding:
@@ -750,7 +790,6 @@ class OtherUserProfilePage extends StatelessWidget {
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 15),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -784,8 +823,6 @@ class OtherUserProfilePage extends StatelessWidget {
                           ],
                         ),
                       ),
-
-                      // Phần dưới: Chỉ số và Huy chương
                       Padding(
                         padding: const EdgeInsets.all(20),
                         child: Column(

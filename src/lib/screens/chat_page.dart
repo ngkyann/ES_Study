@@ -31,8 +31,7 @@ class _ChatPageState extends State<ChatPage> {
   final ImagePicker _picker = ImagePicker();
 
   XFile? _selectedImage;
-  Uint8List?
-      _webImageBytes; // Lưu trữ byte ảnh phục vụ hiển thị preview mượt mà trên cả Web & Mobile
+  Uint8List? _webImageBytes;
   PlatformFile? _selectedFile;
   bool _isUploading = false;
 
@@ -44,7 +43,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // Chọn ảnh từ bộ sưu tập (Sửa lỗi hiển thị và load ảnh bằng cách đọc bytes trực tiếp)
+  // Chọn ảnh từ bộ sưu tập
   Future<void> _pickImage() async {
     if (_isUploading) return;
     try {
@@ -88,7 +87,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // Xử lý gửi tin nhắn (Bao gồm cả Chữ, Ảnh, File cho cả Web & Mobile)
+  // Xử lý gửi tin nhắn
   Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
     if (text.isEmpty && _selectedImage == null && _selectedFile == null) return;
@@ -100,7 +99,6 @@ class _ChatPageState extends State<ChatPage> {
     String? fileName;
 
     try {
-      // 1. Upload ảnh lên Firebase Storage nếu có ảnh được chọn (Sửa đổi dùng putData để chạy ổn định hơn)
       if (_selectedImage != null) {
         final storageRef = FirebaseStorage.instance
             .ref()
@@ -117,7 +115,6 @@ class _ChatPageState extends State<ChatPage> {
         imageUrl = await storageRef.getDownloadURL();
       }
 
-      // 2. Upload tài liệu/tập tin lên Firebase Storage nếu có file được chọn
       if (_selectedFile != null) {
         fileName = _selectedFile!.name;
         final storageRef = FirebaseStorage.instance
@@ -134,12 +131,12 @@ class _ChatPageState extends State<ChatPage> {
         fileUrl = await storageRef.getDownloadURL();
       }
 
-      // 3. Đẩy gói dữ liệu tin nhắn lên Firestore
       bool isVN = languageNotifier.value == "Tiếng Việt";
       String lastMsgDisplay = text;
       if (imageUrl != null) lastMsgDisplay = isVN ? '[Hình ảnh]' : '[Image]';
-      if (fileUrl != null)
+      if (fileUrl != null) {
         lastMsgDisplay = isVN ? '[Tập tin: $fileName]' : '[File: $fileName]';
+      }
 
       await FirebaseFirestore.instance
           .collection('chats')
@@ -152,9 +149,9 @@ class _ChatPageState extends State<ChatPage> {
         'fileUrl': fileUrl,
         'fileName': fileName,
         'timestamp': FieldValue.serverTimestamp(),
+        'deletedBy': [], // Khởi tạo mảng trống để sau này theo dõi việc xóa
       });
 
-      // Cập nhật dữ liệu tin nhắn cuối cùng để hiển thị ngoài danh sách chat nhóm/bạn bè
       await FirebaseFirestore.instance
           .collection('chats')
           .doc(widget.chatId)
@@ -163,7 +160,6 @@ class _ChatPageState extends State<ChatPage> {
         'lastTimestamp': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      // Dọn dẹp dữ liệu tạm thời sau khi gửi thành công
       setState(() {
         _msgController.clear();
         _selectedImage = null;
@@ -174,6 +170,95 @@ class _ChatPageState extends State<ChatPage> {
     } catch (e) {
       debugPrint("Lỗi gửi tin nhắn: $e");
       setState(() => _isUploading = false);
+    }
+  }
+
+  // 🔥 HÀM XÓA 1 TIN NHẮN (CHỈ XÓA BÊN MÌNH)
+  Future<void> _deleteMessageForMe(String messageId) async {
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatId)
+        .collection('messages')
+        .doc(messageId)
+        .update({
+      'deletedBy': FieldValue.arrayUnion([widget.currentUserId])
+    });
+  }
+
+  // 🔥 HÀM XÓA 1 TIN NHẮN (XÓA CẢ 2 PHÍA - CHỈ CHO NGƯỜI GỬI)
+  Future<void> _deleteMessageForEveryone(String messageId) async {
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatId)
+        .collection('messages')
+        .doc(messageId)
+        .delete();
+  }
+
+  // 🔥 HÀM XÓA TOÀN BỘ LỊCH SỬ TRÒ CHUYỆN (CHỈ XÓA BÊN MÌNH)
+  Future<void> _clearChatHistory() async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: Row(
+          children: [
+            const Icon(Icons.delete_sweep, color: Colors.red),
+            const SizedBox(width: 8),
+            Text(isVN ? "Xóa lịch sử" : "Clear History"),
+          ],
+        ),
+        content: Text(
+          isVN
+              ? "Bạn có chắc muốn xóa toàn bộ tin nhắn không? (Lịch sử chỉ bị xóa ở phía bạn, người kia vẫn có thể thấy)"
+              : "Are you sure you want to clear all messages? (Only deleted on your side)",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(isVN ? "Hủy" : "Cancel",
+                style: const TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isVN ? "Xóa" : "Clear",
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final msgs = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .collection('messages')
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (var doc in msgs.docs) {
+        batch.update(doc.reference, {
+          'deletedBy': FieldValue.arrayUnion([widget.currentUserId])
+        });
+      }
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                isVN ? "Đã xóa lịch sử trò chuyện" : "Chat history cleared"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Lỗi xóa lịch sử: $e");
     }
   }
 
@@ -194,10 +279,17 @@ class _ChatPageState extends State<ChatPage> {
             backgroundColor: primaryColor,
             foregroundColor: Colors.white,
             elevation: 1,
+            // 🔥 THÊM NÚT XÓA LỊCH SỬ TRÒ CHUYỆN TRÊN APPBAR
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: isVN ? "Xóa lịch sử trò chuyện" : "Clear chat history",
+                onPressed: _clearChatHistory,
+              ),
+            ],
           ),
           body: Column(
             children: [
-              // Khu vực hiển thị nội dung cuộc trò chuyện cuộc hội thoại
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
@@ -229,18 +321,26 @@ class _ChatPageState extends State<ChatPage> {
                       padding: const EdgeInsets.all(15),
                       itemCount: docs.length,
                       itemBuilder: (context, index) {
-                        final msg = docs[index].data() as Map<String, dynamic>;
+                        final doc = docs[index];
+                        final msg = doc.data() as Map<String, dynamic>;
+                        final messageId = doc.id;
                         final bool isMe =
                             msg['senderId'] == widget.currentUserId;
 
-                        return _buildMessageBubble(msg, isMe, context);
+                        // 🔥 KIỂM TRA XEM TIN NHẮN NÀY ĐÃ BỊ MÌNH XÓA CHƯA
+                        final deletedBy =
+                            List<String>.from(msg['deletedBy'] ?? []);
+                        if (deletedBy.contains(widget.currentUserId)) {
+                          return const SizedBox.shrink(); // Ẩn tin nhắn này đi
+                        }
+
+                        return _buildMessageBubble(
+                            messageId, msg, isMe, context, isVN);
                       },
                     );
                   },
                 ),
               ),
-
-              // --- KHU VỰC HIỂN THỊ XEM TRƯỚC HÌNH ẢNH HOẶC TẬP TIN ĐÃ CHỌN ---
               if (_selectedImage != null || _selectedFile != null)
                 Padding(
                   padding:
@@ -313,8 +413,6 @@ class _ChatPageState extends State<ChatPage> {
                     ],
                   ),
                 ),
-
-              // Thanh công cụ nhập nội dung và các nút gửi dữ liệu
               _buildInputArea(isVN),
             ],
           ),
@@ -323,9 +421,9 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  // Widget vẽ Bong bóng tin nhắn
-  Widget _buildMessageBubble(
-      Map<String, dynamic> msg, bool isMe, BuildContext context) {
+  // 🔥 ĐÃ CẬP NHẬT: Thêm chức năng Long Press (nhấn giữ) để xóa tin nhắn
+  Widget _buildMessageBubble(String messageId, Map<String, dynamic> msg,
+      bool isMe, BuildContext context, bool isVN) {
     final text = msg['text'] as String? ?? '';
     final imageUrl = msg['imageUrl'] as String?;
     final fileUrl = msg['fileUrl'] as String?;
@@ -333,105 +431,158 @@ class _ChatPageState extends State<ChatPage> {
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        decoration: BoxDecoration(
-          color: isMe ? primaryColor : Colors.white,
-          borderRadius: BorderRadius.circular(16).copyWith(
-            bottomRight:
-                isMe ? const Radius.circular(0) : const Radius.circular(16),
-            bottomLeft:
-                isMe ? const Radius.circular(16) : const Radius.circular(0),
+      child: GestureDetector(
+        onLongPress: () {
+          // Bật Menu chức năng khi nhấn giữ tin nhắn
+          showModalBottomSheet(
+            context: context,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            builder: (ctx) => SafeArea(
+              child: Wrap(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      isVN ? "Tùy chọn tin nhắn" : "Message Options",
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ListTile(
+                    leading:
+                        const Icon(Icons.delete_sweep, color: Colors.orange),
+                    title: Text(isVN ? "Xóa ở phía tôi" : "Delete for me"),
+                    subtitle: Text(
+                      isVN
+                          ? "Tin nhắn sẽ bị ẩn với bạn"
+                          : "Message will be hidden for you",
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _deleteMessageForMe(messageId);
+                    },
+                  ),
+                  // Chỉ cho phép xóa cả 2 phía nếu đó là tin nhắn do mình gửi
+                  if (isMe)
+                    ListTile(
+                      leading:
+                          const Icon(Icons.delete_forever, color: Colors.red),
+                      title: Text(
+                          isVN ? "Thu hồi tin nhắn" : "Delete for everyone"),
+                      subtitle: Text(
+                        isVN
+                            ? "Thu hồi hoàn toàn ở cả 2 bên"
+                            : "Remove completely for both sides",
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _deleteMessageForEveryone(messageId);
+                      },
+                    ),
+                  const SizedBox(height: 10),
+                ],
+              ),
+            ),
+          );
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.75),
+          decoration: BoxDecoration(
+            color: isMe ? primaryColor : Colors.white,
+            borderRadius: BorderRadius.circular(16).copyWith(
+              bottomRight:
+                  isMe ? const Radius.circular(0) : const Radius.circular(16),
+              bottomLeft:
+                  isMe ? const Radius.circular(16) : const Radius.circular(0),
+            ),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2)),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 4,
-                offset: const Offset(0, 2)),
-          ],
-        ),
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Hiển thị ảnh nếu có gửi ảnh
-            if (imageUrl != null && imageUrl.isNotEmpty)
-              GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          FullScreenImageViewer(imageUrl: imageUrl)),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 6.0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const Icon(
-                          Icons.broken_image,
-                          size: 50,
-                          color: Colors.grey),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (imageUrl != null && imageUrl.isNotEmpty)
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) =>
+                            FullScreenImageViewer(imageUrl: imageUrl)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 6.0),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.broken_image,
+                                size: 50, color: Colors.grey),
+                      ),
                     ),
                   ),
                 ),
-              ),
-
-            // Hiển thị tập tin nếu có gửi File tài liệu
-            if (fileUrl != null && fileUrl.isNotEmpty)
-              InkWell(
-                onTap: () => _downloadFile(fileUrl),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  margin: const EdgeInsets.only(bottom: 6.0),
-                  decoration: BoxDecoration(
-                    color: isMe
-                        ? Colors.white.withOpacity(0.2)
-                        : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.insert_drive_file,
-                          color: isMe ? Colors.white : primaryColor),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          fileName,
-                          style: TextStyle(
-                            color: isMe ? Colors.white : Colors.black87,
-                            fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.underline,
+              if (fileUrl != null && fileUrl.isNotEmpty)
+                InkWell(
+                  onTap: () => _downloadFile(fileUrl),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    margin: const EdgeInsets.only(bottom: 6.0),
+                    decoration: BoxDecoration(
+                      color: isMe
+                          ? Colors.white.withOpacity(0.2)
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.insert_drive_file,
+                            color: isMe ? Colors.white : primaryColor),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            fileName,
+                            style: TextStyle(
+                              color: isMe ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.bold,
+                              decoration: TextDecoration.underline,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-
-            // Hiển thị Văn bản chữ
-            if (text.isNotEmpty)
-              Text(
-                text,
-                style: TextStyle(
-                    color: isMe ? Colors.white : Colors.black87, fontSize: 15),
-              ),
-          ],
+              if (text.isNotEmpty)
+                Text(
+                  text,
+                  style: TextStyle(
+                      color: isMe ? Colors.white : Colors.black87,
+                      fontSize: 15),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // Giao diện Thanh nhập dữ liệu chat dưới cùng
   Widget _buildInputArea(bool isVN) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -485,7 +636,6 @@ class _ChatPageState extends State<ChatPage> {
   }
 }
 
-// Lớp xem hình ảnh phóng to toàn màn hình
 class FullScreenImageViewer extends StatelessWidget {
   final String imageUrl;
   const FullScreenImageViewer({super.key, required this.imageUrl});
