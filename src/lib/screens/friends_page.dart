@@ -545,6 +545,9 @@ class _FriendsPageState extends State<FriendsPage> {
 // =====================================================================
 // TRANG XEM HỒ SƠ NGƯỜI KHÁC (TÍCH HỢP SẴN TRONG FILE NÀY)
 // =====================================================================
+// =====================================================================
+// TRANG XEM HỒ SƠ NGƯỜI KHÁC (ĐÃ CẬP NHẬT AVATAR VÀ BIO THỰC TẾ)
+// =====================================================================
 class OtherUserProfilePage extends StatelessWidget {
   final String userId;
   final String userName;
@@ -556,26 +559,33 @@ class OtherUserProfilePage extends StatelessWidget {
   });
 
   Future<Map<String, dynamic>> _fetchUserInfo() async {
-    // Tải dữ liệu người dùng
-    final userDoc =
-        await FirebaseFirestore.instance.collection('users').doc(userId).get();
+    try {
+      final userRef = FirebaseFirestore.instance.collection('users');
 
-    // Tải toàn bộ user để tính hạng
-    final usersSnap = await FirebaseFirestore.instance
-        .collection('users')
-        .orderBy('points', descending: true)
-        .get();
-    int rank = 0;
-    for (int i = 0; i < usersSnap.docs.length; i++) {
-      if (usersSnap.docs[i].id == userId) {
-        rank = i + 1;
-        break;
+      // 1. Tải dữ liệu của đúng người dùng này thôi
+      final userDoc = await userRef.doc(userId).get();
+
+      // Check an toàn: Nếu user không tồn tại thì trả về Map rỗng để tránh crash
+      if (!userDoc.exists || userDoc.data() == null) {
+        return {};
       }
-    }
 
-    final data = userDoc.data() as Map<String, dynamic>;
-    data['rank'] = rank;
-    return data;
+      final data = Map<String, dynamic>.from(userDoc.data()!);
+      final userPoints = data['points'] ?? 0;
+
+      final higherScoreQuery = await userRef
+          .where('points', isGreaterThan: userPoints)
+          .count()
+          .get();
+
+      int rank = (higherScoreQuery.count ?? 0) + 1;
+      data['rank'] = rank;
+
+      return data;
+    } catch (e) {
+      debugPrint("Lỗi khi tải thông tin user: $e");
+      return {};
+    }
   }
 
   @override
@@ -604,7 +614,7 @@ class OtherUserProfilePage extends StatelessWidget {
                     child: CircularProgressIndicator(color: primaryColor),
                   );
                 }
-                if (!snapshot.hasData) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return Center(
                       child: Text(
                           isVN ? "Không thể tải dữ liệu" : "Cannot load data"));
@@ -615,8 +625,15 @@ class OtherUserProfilePage extends StatelessWidget {
                 final streak = data['streakCount'] ?? 0;
                 final rank = data['rank'] ?? 0;
                 final className =
-                    data['class'] ?? isVN ? "Chưa có lớp" : "No class yet";
+                    data['class'] ?? (isVN ? "Chưa có lớp" : "No class yet");
                 final List<dynamic> medals = data['medals'] ?? [];
+
+                // 🔥 1. BÓC TÁCH DỮ LIỆU AVATAR & BIO TỪ FIRESTORE
+                final String? avatarUrl = data['avatarUrl'];
+                final String bio = data['bio'] ??
+                    (isVN
+                        ? "Chưa có dòng giới thiệu nào."
+                        : "No bio added yet.");
 
                 // Xử lý Ngày tham gia
                 String joinDateText = isVN ? "Chưa rõ" : "Unknown";
@@ -667,14 +684,21 @@ class OtherUserProfilePage extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            const CircleAvatar(
+                            // 🔥 2. CẬP NHẬT: HIỂN THỊ AVATAR ONLINE CỦA USER ĐÓ
+                            CircleAvatar(
                               radius: 50,
                               backgroundColor: Colors.white,
-                              child: Icon(
-                                Icons.person,
-                                color: Colors.blueAccent,
-                                size: 50,
-                              ),
+                              backgroundImage:
+                                  (avatarUrl != null && avatarUrl.isNotEmpty)
+                                      ? NetworkImage(avatarUrl)
+                                      : null,
+                              child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                                  ? null
+                                  : Icon(
+                                      Icons.person,
+                                      color: primaryColor,
+                                      size: 50,
+                                    ),
                             ),
                             const SizedBox(height: 15),
                             Text(
@@ -693,6 +717,23 @@ class OtherUserProfilePage extends StatelessWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+
+                            // 🔥 3. CẬP NHẬT: HIỂN THỊ DÒNG BIO NGAY DƯỚI ID
+                            const SizedBox(height: 10),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 32),
+                              child: Text(
+                                "\"$bio\"",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white.withOpacity(0.85),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+
                             const SizedBox(height: 15),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -735,7 +776,7 @@ class OtherUserProfilePage extends StatelessWidget {
                           children: [
                             Text(
                               isVN ? "Thông tin học tập" : "Study Information",
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black87,
@@ -755,7 +796,7 @@ class OtherUserProfilePage extends StatelessWidget {
                             const SizedBox(height: 25),
                             Text(
                               isVN ? "Huy chương mùa giải" : "Season Medals",
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black87,
@@ -807,7 +848,6 @@ class OtherUserProfilePage extends StatelessWidget {
     );
   }
 
-  // 🔥 Thêm bool isVN vào đây
   Widget _buildMedalsSection(List<dynamic> medals, bool isVN) {
     if (medals.isEmpty) {
       return Container(
@@ -826,7 +866,6 @@ class OtherUserProfilePage extends StatelessWidget {
               color: Colors.grey.shade300,
             ),
             const SizedBox(height: 10),
-            // 🔥 Đã xóa chữ const ở đây
             Text(
               isVN ? "Chưa có thành tích nào" : "No achievements yet",
               style: const TextStyle(color: Colors.grey, fontSize: 14),
@@ -909,7 +948,6 @@ class OtherUserProfilePage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  // Biến isVN giờ đã có tác dụng
                   medal['season'] ?? (isVN ? "Mùa giải" : "Season"),
                   style: const TextStyle(
                     color: Colors.black54,
