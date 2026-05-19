@@ -2,14 +2,14 @@
 
 **I. ES_Study là gì?**
 
-- ES_Study là viết tắt của Effort & Success Study. ES_Study hứa hẹn sẽ là một phần mềm mang đến sự mới mẻ trong học tập và làm việc ES_Study có 2 phiên bản chính thức dành cho Android và Website, trong bài viết này chúng tôi sẽ giới thiệu về sản phẩm ở cả 2 phiên bản.
+ES_Study là viết tắt của Effort & Success Study. ES_Study hứa hẹn sẽ là một phần mềm mang đến sự mới mẻ trong học tập và làm việc ES_Study có 2 phiên bản chính thức dành cho Android và Website, trong bài viết này chúng tôi sẽ giới thiệu về sản phẩm ở cả 2 phiên bản.
 
 **II. Yêu cầu phần mềm**
 
 Như đã nói, ES_Study hiện chỉ hỗ trợ trực tiếp 2 phiên bản là Android và Website. Đầu tiên, chúng ta sẽ nói về Android.
 1. Android
 
--	Đối với Android, các bạn chỉ cần tải trực tiếp từ file apk từ link mà chúng tôi đính kèm ở dưới. Để tải ES_Study, đây là một số lưu ý:
+Đối với Android, các bạn chỉ cần tải trực tiếp từ file apk từ link mà chúng tôi đính kèm ở dưới. Để tải ES_Study, đây là một số lưu ý:
 -	Dung lượng ổ cứng cần trống tối thiểu 150MB để tải. Tốt nhất nên trống hơn 500MB dung lượng ổ cứng để hoạt động trơn tru nhất.
 -	Cần cho phép tải từ nguồn ngoài để tải về.
 -	Cấp phép các quyền đầy đủ để phần mềm hoạt động ổn định nhất.
