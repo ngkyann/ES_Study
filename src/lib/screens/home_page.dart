@@ -13,7 +13,7 @@ import 'package:esstudy/screens/ai_assistant_page.dart';
 import 'package:esstudy/screens/friends_page.dart';
 import 'package:esstudy/screens/statistics_page.dart';
 import 'package:esstudy/screens/create_room_page.dart';
-import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
+import 'package:esstudy/constants/var.dart';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -48,7 +48,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _checkTodayPlansAndShowPopup() async {
-    bool isVN = languageNotifier.value == "Tiếng Việt"; // Kiểm tra ngôn ngữ
+    bool isVN = languageNotifier.value == "Tiếng Việt";
 
     try {
       final now = DateTime.now();
@@ -177,16 +177,18 @@ class _HomePageState extends State<HomePage> {
           }
         }
 
-        setState(() {
-          userPoints = points;
-          userStreak = streak;
-          _isLoadingData = false;
-        });
+        if (mounted) {
+          setState(() {
+            userPoints = points;
+            userStreak = streak;
+            _isLoadingData = false;
+          });
+        }
       } else {
-        setState(() => _isLoadingData = false);
+        if (mounted) setState(() => _isLoadingData = false);
       }
     } catch (e) {
-      setState(() => _isLoadingData = false);
+      if (mounted) setState(() => _isLoadingData = false);
     }
   }
 
@@ -239,7 +241,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Cập nhật hàm chào dựa vào ngôn ngữ
   String getGreeting() {
     final vn = tz.getLocation('Asia/Ho_Chi_Minh');
     final now = tz.TZDateTime.now(vn);
@@ -247,12 +248,12 @@ class _HomePageState extends State<HomePage> {
     bool isVN = languageNotifier.value == "Tiếng Việt";
 
     if (hour >= 5 && hour < 12) return isVN ? "Chào buổi sáng" : "Good morning";
-    if (hour >= 12 && hour < 18)
+    if (hour >= 12 && hour < 18) {
       return isVN ? "Chào buổi chiều" : "Good afternoon";
+    }
     return isVN ? "Chào buổi tối" : "Good evening";
   }
 
-  // 🔥 Hàm dịch Text Menu mà không ảnh hưởng code logic
   String _getMenuTitle(String id, bool isVN) {
     if (isVN) return id;
     switch (id) {
@@ -281,7 +282,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 BỌC ValueListenableBuilder cho toàn bộ trang
     return ValueListenableBuilder<String>(
       valueListenable: languageNotifier,
       builder: (context, lang, child) {
@@ -298,62 +298,90 @@ class _HomePageState extends State<HomePage> {
               margin: const EdgeInsets.only(left: 16, top: 10),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () async {
-                      await Navigator.push(
-                        context,
-                        PageRouteBuilder(
-                          pageBuilder:
-                              (context, animation, secondaryAnimation) =>
-                                  ProfilePage(
-                            userName: widget.userName,
-                            userId: widget.userId,
-                            selectedClass: widget.selectedClass,
-                            userPoints: userPoints,
-                            email: widget.email,
-                            userStreak: userStreak,
-                          ),
-                          transitionsBuilder:
-                              (context, animation, secondaryAnimation, child) {
-                            const begin = Offset(-1.0, 0.0);
-                            const end = Offset.zero;
-                            const curve = Curves.easeInOut;
+                  // 🔥 CẬP NHẬT: Dùng StreamBuilder để ảnh đại diện tự động Sync ngay lập tức khi đổi ở Profile
+                  StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(widget.userId)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        String? currentAvatarUrl;
+                        if (snapshot.hasData && snapshot.data!.exists) {
+                          currentAvatarUrl = (snapshot.data!.data()
+                              as Map<String, dynamic>)['avatarUrl'];
+                        }
 
-                            var tween = Tween(begin: begin, end: end)
-                                .chain(CurveTween(curve: curve));
-                            var offsetAnimation = animation.drive(tween);
-
-                            return SlideTransition(
-                              position: offsetAnimation,
-                              child: child,
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder:
+                                    (context, animation, secondaryAnimation) =>
+                                        ProfilePage(
+                                  userName: widget.userName,
+                                  userId: widget.userId,
+                                  selectedClass: widget.selectedClass,
+                                  userPoints: userPoints,
+                                  email: widget.email,
+                                  userStreak: userStreak,
+                                ),
+                                transitionsBuilder: (context, animation,
+                                    secondaryAnimation, child) {
+                                  const begin = Offset(-1.0, 0.0);
+                                  const end = Offset.zero;
+                                  const curve = Curves.easeInOut;
+                                  var tween = Tween(begin: begin, end: end)
+                                      .chain(CurveTween(curve: curve));
+                                  return SlideTransition(
+                                    position: animation.drive(tween),
+                                    child: child,
+                                  );
+                                },
+                                transitionDuration:
+                                    const Duration(milliseconds: 500),
+                              ),
                             );
                           },
-                          transitionDuration: const Duration(milliseconds: 750),
-                        ),
-                      );
-                      if (mounted) setState(() {});
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                              ),
+                              child: ClipOval(
+                                child: (currentAvatarUrl != null &&
+                                        currentAvatarUrl.isNotEmpty)
+                                    ? Image.network(
+                                        currentAvatarUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                Icon(Icons.person,
+                                                    color: primaryColor,
+                                                    size: 20),
+                                      )
+                                    : Icon(Icons.person,
+                                        color: primaryColor, size: 20),
+                              ),
+                            ),
                           ),
-                        ],
-                      ),
-                      child: CircleAvatar(
-                        radius: 16,
-                        backgroundColor: Colors.white,
-                        child:
-                            Icon(Icons.person, color: primaryColor, size: 20),
-                      ),
-                    ),
-                  ),
+                        );
+                      }),
                   const SizedBox(width: 12),
                   const Icon(
                     Icons.local_fire_department,
@@ -431,10 +459,10 @@ class _HomePageState extends State<HomePage> {
                           child: child,
                         );
                       },
-                      transitionDuration: const Duration(milliseconds: 750),
+                      transitionDuration: const Duration(milliseconds: 500),
                     ),
                   );
-                  if (mounted) setState(() {});
+                  if (mounted) _fetchUserData();
                 },
               ),
               const SizedBox(width: 4),
@@ -552,7 +580,6 @@ class _HomePageState extends State<HomePage> {
                           fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  // Truyền thêm biến isVN vào hàm vẽ Menu
                   _buildGridMenu(
                       context,
                       [
@@ -601,7 +628,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // 🔥 Nhận thêm tham số isVN
   Widget _buildGridMenu(BuildContext context, List<MenuData> items, bool isVN) {
     return GridView.builder(
       shrinkWrap: true,
@@ -621,7 +647,6 @@ class _HomePageState extends State<HomePage> {
             await Future.delayed(const Duration(milliseconds: 50));
             if (!context.mounted) return;
 
-            // Logic chuyển trang sử dụng nguyên gốc Tiếng Việt để không bị lỗi
             if (item.title == "Tạo phòng học") {
               await Navigator.push(
                 context,
@@ -730,7 +755,6 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  // Dùng hàm dịch tại đây
                   _getMenuTitle(item.title, isVN),
                   textAlign: TextAlign.center,
                   style: const TextStyle(

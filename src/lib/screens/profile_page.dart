@@ -7,7 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:gal/gal.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
+import 'package:esstudy/constants/var.dart';
 
 class ProfilePage extends StatefulWidget {
   final String userName;
@@ -35,9 +35,8 @@ class _ProfilePageState extends State<ProfilePage> {
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
 
-  // --- HÀM 1: CHỌN VÀ UPLOAD ẢNH ---
   Future<void> _pickAndUploadImage() async {
-    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 Lấy ngôn ngữ
+    bool isVN = languageNotifier.value == "Tiếng Việt";
 
     try {
       final XFile? image = await _picker.pickImage(
@@ -88,7 +87,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // --- HÀM 2: DOWNLOAD (CHỈ CHẠY KHI CÓ URL) ---
   Future<void> _saveImageUrlToGallery(String? url) async {
     bool isVN = languageNotifier.value == "Tiếng Việt";
 
@@ -158,7 +156,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // --- HÀM 3: HIỂN THỊ MENU OPTION KHI CLICK VÀO AVA ---
   void _showAvatarOptionsMenu(BuildContext context, String? currentAvatarUrl) {
     bool isVN = languageNotifier.value == "Tiếng Việt";
 
@@ -244,7 +241,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 BỌC TÒAN BỘ BẰNG ValueListenableBuilder
     return ValueListenableBuilder<String>(
       valueListenable: languageNotifier,
       builder: (context, lang, child) {
@@ -311,8 +307,11 @@ class _ProfilePageState extends State<ProfilePage> {
                                 alignment: Alignment.center,
                                 children: [
                                   Container(
+                                    width: 100,
+                                    height: 100,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
+                                      color: Colors.white,
                                       border: Border.all(
                                         color: Colors.white,
                                         width: 3,
@@ -325,21 +324,32 @@ class _ProfilePageState extends State<ProfilePage> {
                                         ),
                                       ],
                                     ),
-                                    child: CircleAvatar(
-                                      radius: 50,
-                                      backgroundColor: Colors.white,
-                                      backgroundImage: (avatarUrl != null &&
+                                    child: ClipOval(
+                                      child: (avatarUrl != null &&
                                               avatarUrl.isNotEmpty)
-                                          ? NetworkImage(avatarUrl)
-                                          : null,
-                                      child: (avatarUrl == null ||
-                                              avatarUrl.isEmpty)
-                                          ? Icon(
-                                              Icons.person,
-                                              color: primaryColor,
-                                              size: 50,
+                                          ? Image.network(
+                                              avatarUrl,
+                                              width: 100,
+                                              height: 100,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                // Nếu gặp lỗi CORS trên Web, Image.network sẽ rớt vào đây và hiện Icon thay vì làm crash app
+                                                return Icon(Icons.person,
+                                                    color: primaryColor,
+                                                    size: 50);
+                                              },
+                                              loadingBuilder: (context, child,
+                                                  loadingProgress) {
+                                                if (loadingProgress == null)
+                                                  return child;
+                                                return const Center(
+                                                    child:
+                                                        CircularProgressIndicator());
+                                              },
                                             )
-                                          : null,
+                                          : Icon(Icons.person,
+                                              color: primaryColor, size: 50),
                                     ),
                                   ),
                                   if (_isUploading)
