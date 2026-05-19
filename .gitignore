@@ -42,6 +42,7 @@ build/web/
 .history
 *.sublime-project
 *.sublime-workspace
+.vs/
 
 # File log và rác hệ thống
 *.log
