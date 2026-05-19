@@ -51,8 +51,8 @@ class _ChatPageState extends State<ChatPage> {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 75,
-        maxWidth: 1024,
-        maxHeight: 1024,
+        maxWidth: 256,
+        maxHeight: 256,
       );
 
       if (image != null) {
