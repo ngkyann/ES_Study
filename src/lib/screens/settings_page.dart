@@ -742,7 +742,9 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isVN ? "Phiên bản: V 1.2.0" : "Version: V 1.2.0",
+                isVN
+                    ? "Phiên bản: V 1.2.0-42ncjfn3X"
+                    : "Version: V 1.2.0-42ncjfn3X",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
