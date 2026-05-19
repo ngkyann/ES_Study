@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
+import 'package:esstudy/screens/login_page.dart'; // 🔥 Thêm để điều hướng sạch sau khi thoát
 
 class SettingsPage extends StatefulWidget {
   final String userName;
@@ -155,7 +156,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildActionTile(
                     Icons.info,
                     isVN ? "Thông tin phiên bản" : "Version Info",
-                    "V 1.2.0",
+                    "V 1.2.1",
                     onTap: () => _showVersionInfoDialog(context),
                   ),
                   const SizedBox(height: 30),
@@ -473,6 +474,103 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  // --- HỘP THOẠI XÁC NHẬN VÀ XỬ LÝ ĐĂNG XUẤT AN TOÀN ---
+  void _showLogoutDialog(BuildContext context) {
+    bool isVN =
+        languageNotifier.value == "Tiếng Việt"; // 🔥 Kiểm tra ngôn ngữ hệ thống
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.logout, color: Colors.redAccent, size: 28),
+              const SizedBox(width: 10),
+              Text(
+                isVN ? "Đăng xuất" : "Logout",
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            isVN
+                ? "Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?"
+                : "Are you sure you want to log out of this account?",
+            style: const TextStyle(
+                color: Colors.black54, fontSize: 15, height: 1.4),
+          ),
+          actionsPadding:
+              const EdgeInsets.only(bottom: 15, right: 15, left: 15),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext), // Đóng popup nếu hủy
+              child: Text(
+                isVN ? "Hủy" : "Cancel",
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              ),
+              onPressed: () async {
+                try {
+                  // Đóng hộp thoại popup trước
+                  Navigator.pop(dialogContext);
+
+                  // 1. Thực hiện đăng xuất hoàn toàn khỏi Firebase Auth
+                  await FirebaseAuth.instance.signOut();
+
+                  if (!context.mounted) return;
+
+                  // 2. Xóa sạch toàn bộ Stack màn hình cũ (bao gồm HomePage đang chạy ngầm)
+                  // Điều này ngăn chặn lỗi bất đồng bộ dữ liệu Email Thật cũ-mới
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (Route<dynamic> route) =>
+                        false, // Xóa sạch tất cả các route trước đó
+                  );
+                } catch (e) {
+                  if (!context.mounted) return;
+                  _showSnackBar(
+                    context,
+                    isVN ? "Lỗi khi đăng xuất: $e" : "Logout error: $e",
+                  );
+                }
+              },
+              child: Text(
+                isVN ? "Đăng xuất" : "Logout",
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showEditNameDialog(BuildContext context) {
     bool isVN = languageNotifier.value == "Tiếng Việt";
     final TextEditingController controller = TextEditingController(
@@ -742,9 +840,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isVN
-                    ? "Phiên bản: V 1.2.0-42ncjfn3X"
-                    : "Version: V 1.2.0-42ncjfn3X",
+                isVN ? "Phiên bản: V 1.2.1" : "Version: V 1.2.1",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -785,40 +881,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         );
       },
-    );
-  }
-
-  void _showLogoutDialog(BuildContext context) {
-    bool isVN = languageNotifier.value == "Tiếng Việt";
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Text(isVN ? "Xác nhận" : "Confirm"),
-        content: Text(isVN ? "Bạn muốn đăng xuất?" : "Do you want to logout?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(isVN ? "Huỷ" : "Cancel",
-                style: const TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              Navigator.of(context).popUntil((route) => route.isFirst);
-              await FirebaseAuth.instance.signOut();
-            },
-            child: Text(isVN ? "Đăng xuất" : "Logout"),
-          ),
-        ],
-      ),
     );
   }
 

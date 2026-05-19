@@ -36,10 +36,16 @@ class _HomePageState extends State<HomePage> {
   int userPoints = 0;
   int userStreak = 0;
   bool _isLoadingData = true;
+  String _realEmail = '';
+  String _realName = ''; // 🔥 Đã thêm: Đồng bộ hóa Tên từ DB
+  String _realClass = ''; // 🔥 Đã thêm: Đồng bộ hóa Lớp từ DB
 
   @override
   void initState() {
     super.initState();
+    _realEmail = widget.email;
+    _realName = widget.userName; // Giá trị fallback mặc định ban đầu
+    _realClass = widget.selectedClass; // Giá trị fallback mặc định ban đầu
     _fetchUserData();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -94,8 +100,8 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Text(
                     isVN
-                        ? "Chào ${widget.userName}, bạn có các kế hoạch chưa hoàn thành:"
-                        : "Hi ${widget.userName}, you have uncompleted plans:",
+                        ? "Chào $_realName, bạn có các kế hoạch chưa hoàn thành:" // 🔥 Sử dụng tên cập nhật từ Firestore
+                        : "Hi $_realName, you have uncompleted plans:",
                   ),
                   const SizedBox(height: 15),
                   ...todayPlans.map((doc) {
@@ -156,6 +162,11 @@ class _HomePageState extends State<HomePage> {
         final data = doc.data()!;
         int points = data['points'] ?? 100;
         int streak = data['streakCount'] ?? 0;
+        String emailFromDb = data['email'] ?? widget.email;
+        String nameFromDb =
+            data['name'] ?? widget.userName; // 🔥 Đồng bộ Name từ Firestore
+        String classFromDb = data['class'] ??
+            widget.selectedClass; // 🔥 Đồng bộ Class từ Firestore
         Timestamp? lastStudyTs = data['lastStudyDate'];
 
         if (lastStudyTs != null && streak > 0) {
@@ -181,6 +192,9 @@ class _HomePageState extends State<HomePage> {
           setState(() {
             userPoints = points;
             userStreak = streak;
+            _realEmail = emailFromDb;
+            _realName = nameFromDb; // 🔥 Lưu tên thật từ DB vào State
+            _realClass = classFromDb; // 🔥 Lưu lớp thật từ DB vào State
             _isLoadingData = false;
           });
         }
@@ -298,7 +312,6 @@ class _HomePageState extends State<HomePage> {
               margin: const EdgeInsets.only(left: 16, top: 10),
               child: Row(
                 children: [
-                  // 🔥 CẬP NHẬT: Dùng StreamBuilder để ảnh đại diện tự động Sync ngay lập tức khi đổi ở Profile
                   StreamBuilder<DocumentSnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection('users')
@@ -319,11 +332,13 @@ class _HomePageState extends State<HomePage> {
                                 pageBuilder:
                                     (context, animation, secondaryAnimation) =>
                                         ProfilePage(
-                                  userName: widget.userName,
+                                  userName:
+                                      _realName, // 🔥 Đã thay đổi thành tên thực tế từ DB
                                   userId: widget.userId,
-                                  selectedClass: widget.selectedClass,
+                                  selectedClass:
+                                      _realClass, // 🔥 Đã thay đổi thành lớp thực tế từ DB
                                   userPoints: userPoints,
-                                  email: widget.email,
+                                  email: _realEmail,
                                   userStreak: userStreak,
                                 ),
                                 transitionsBuilder: (context, animation,
@@ -439,10 +454,12 @@ class _HomePageState extends State<HomePage> {
                     PageRouteBuilder(
                       pageBuilder: (context, animation, secondaryAnimation) =>
                           SettingsPage(
-                        userName: widget.userName,
-                        selectedClass: widget.selectedClass,
+                        userName:
+                            _realName, // 🔥 Đã thay đổi thành tên thực tế từ DB
+                        selectedClass:
+                            _realClass, // 🔥 Đã thay đổi thành lớp thực tế từ DB
                         userId: widget.userId,
-                        email: widget.email,
+                        email: _realEmail,
                       ),
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
@@ -556,7 +573,7 @@ class _HomePageState extends State<HomePage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      widget.userName,
+                                      _realName, // 🔥 Hiển thị tên thực tế thay vì widget.userName tĩnh
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 24,
@@ -653,12 +670,13 @@ class _HomePageState extends State<HomePage> {
                 MaterialPageRoute(
                   builder: (_) => CreateRoomPage(
                     userId: widget.userId,
-                    userName: widget.userName,
-                    userClass: widget.selectedClass,
+                    userName: _realName, // 🔥 Dùng tên thực tế
+                    userClass: _realClass, // 🔥 Dùng lớp thực tế
                   ),
                 ),
               );
-              if (mounted) setState(() {});
+              if (mounted)
+                _fetchUserData(); // Đồng bộ lại sau khi quay lại nếu cần
             } else if (item.title == "Học offline") {
               final result = await Navigator.push(
                 context,
@@ -667,24 +685,24 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
               if (result is int) await _updateStudyProgress(result);
-              if (mounted) setState(() {});
+              if (mounted) _fetchUserData();
             } else if (item.title == "Trợ lý học tập") {
               await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AIAssistantPage()),
               );
-              if (mounted) setState(() {});
+              if (mounted) _fetchUserData();
             } else if (item.isSearch) {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => RoomSearchPage(
                     currentUserId: widget.userId,
-                    currentUserName: widget.userName,
+                    currentUserName: _realName, // 🔥 Dùng tên thực tế
                   ),
                 ),
               );
-              if (mounted) setState(() {});
+              if (mounted) _fetchUserData();
             } else if (item.title == "Kế hoạch học tập") {
               await Navigator.push(
                 context,
@@ -692,7 +710,7 @@ class _HomePageState extends State<HomePage> {
                   builder: (_) => PlanPage(userId: widget.userId),
                 ),
               );
-              if (mounted) setState(() {});
+              if (mounted) _fetchUserData();
             } else if (item.title == "Bảng xếp hạng") {
               await Navigator.push(
                 context,
@@ -700,7 +718,7 @@ class _HomePageState extends State<HomePage> {
                   builder: (_) => LeaderboardPage(currentUserId: widget.userId),
                 ),
               );
-              if (mounted) setState(() {});
+              if (mounted) _fetchUserData();
             } else if (item.title == "Lịch sử học tập") {
               await Navigator.push(
                 context,
@@ -708,7 +726,7 @@ class _HomePageState extends State<HomePage> {
                   builder: (_) => HistoryPage(userId: widget.userId),
                 ),
               );
-              if (mounted) setState(() {});
+              if (mounted) _fetchUserData();
             } else if (item.title == "Thành tích học tập") {
               await Navigator.push(
                 context,
@@ -716,18 +734,18 @@ class _HomePageState extends State<HomePage> {
                   builder: (_) => StatisticsPage(userId: widget.userId),
                 ),
               );
-              if (mounted) setState(() {});
+              if (mounted) _fetchUserData();
             } else if (item.title == "Bạn bè") {
               await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => FriendsPage(
                     currentUserId: widget.userId,
-                    currentUserName: widget.userName,
+                    currentUserName: _realName, // 🔥 Dùng tên thực tế
                   ),
                 ),
               );
-              if (mounted) setState(() {});
+              if (mounted) _fetchUserData();
             }
           },
           child: Container(

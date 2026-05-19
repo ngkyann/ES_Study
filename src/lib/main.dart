@@ -64,7 +64,7 @@ class MyApp extends StatelessWidget {
               if (authSnapshot.hasData && authSnapshot.data != null) {
                 final user = authSnapshot.data!;
                 if (user.email == null || !user.email!.contains('@')) {
-                  return const LoginPage();
+                  return LoginPage();
                 }
 
                 final String docId = user.email!.split('@')[0];
@@ -84,7 +84,7 @@ class MyApp extends StatelessWidget {
 
                     if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
                       FirebaseAuth.instance.signOut();
-                      return const LoginPage();
+                      return LoginPage();
                     }
 
                     final data =
@@ -98,7 +98,7 @@ class MyApp extends StatelessWidget {
                   },
                 );
               }
-              return const LoginPage();
+              return LoginPage();
             },
           ),
         );
