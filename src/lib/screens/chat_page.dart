@@ -1,13 +1,13 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:esstudy/constants/colors.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'dart:io';
+import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/constants/var.dart';
 
 class ChatPage extends StatefulWidget {
@@ -29,36 +29,22 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _msgController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
+
   XFile? _selectedImage;
+  Uint8List?
+      _webImageBytes; // Lưu trữ byte ảnh phục vụ hiển thị preview mượt mà trên cả Web & Mobile
   PlatformFile? _selectedFile;
   bool _isUploading = false;
 
-  // 🔥 HÀM MỚI: Tự động mở link để tải file về máy
+  // Tự động mở link tải tài liệu/tập tin về máy
   Future<void> _downloadFile(String fileUrl) async {
     final Uri url = Uri.parse(fileUrl);
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(
-          url,
-          mode: LaunchMode.externalApplication,
-        );
-      } else {
-        throw languageNotifier.value == "Tiếng Việt"
-            ? 'Không thể mở liên kết tải file.'
-            : 'Cannot open the download link.';
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(languageNotifier.value == "Tiếng Việt"
-                  ? "Lỗi khi tải file: $e"
-                  : "Error downloading file: $e")),
-        );
-      }
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
     }
   }
 
+  // Chọn ảnh từ bộ sưu tập (Sửa lỗi hiển thị và load ảnh bằng cách đọc bytes trực tiếp)
   Future<void> _pickImage() async {
     if (_isUploading) return;
     try {
@@ -70,147 +56,90 @@ class _ChatPageState extends State<ChatPage> {
       );
 
       if (image != null) {
+        final bytes = await image.readAsBytes();
         setState(() {
+          _webImageBytes = bytes;
           _selectedImage = image;
-          _selectedFile = null; // Xóa file nếu chọn ảnh
+          _selectedFile = null;
         });
       }
     } catch (e) {
-      debugPrint("Lỗi chọn ảnh: $e");
+      debugPrint("Lỗi khi chọn ảnh: $e");
     }
   }
 
+  // Chọn tập tin/tài liệu khác từ máy
   Future<void> _pickFile() async {
     if (_isUploading) return;
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: [
-          'pdf',
-          'doc',
-          'docx',
-          'xls',
-          'xlsx',
-          'ppt',
-          'pptx',
-          'txt'
-        ],
-        withData: true, // 🔥 BẮT BUỘC THÊM DÒNG NÀY ĐỂ TRÁNH LỖI ĐỌC FILE
+        type: FileType.any,
       );
 
       if (result != null) {
         setState(() {
-          _selectedFile = result.files.first;
+          _selectedFile = result.files.single;
           _selectedImage = null;
+          _webImageBytes = null;
         });
       }
     } catch (e) {
-      debugPrint("Lỗi chọn file: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(languageNotifier.value == "Tiếng Việt"
-                  ? "Không thể chọn file"
-                  : "Cannot pick file")),
-        );
-      }
+      debugPrint("Lỗi khi chọn file: $e");
     }
   }
 
-  void _showAttachmentMenu() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.image, color: Colors.lightBlue),
-                title: Text(languageNotifier.value == "Tiếng Việt"
-                    ? 'Gửi hình ảnh'
-                    : 'Send image'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage();
-                },
-              ),
-              ListTile(
-                leading:
-                    const Icon(Icons.insert_drive_file, color: Colors.orange),
-                title: Text(languageNotifier.value == "Tiếng Việt"
-                    ? 'Gửi tài liệu'
-                    : 'Send document'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickFile();
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
+  // Xử lý gửi tin nhắn (Bao gồm cả Chữ, Ảnh, File cho cả Web & Mobile)
   Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
-
     if (text.isEmpty && _selectedImage == null && _selectedFile == null) return;
-    if (_isUploading) return;
 
     setState(() => _isUploading = true);
 
+    String? imageUrl;
+    String? fileUrl;
+    String? fileName;
+
     try {
-      String? fileUrl;
-      String? fileName;
-      String msgType = 'text';
-
+      // 1. Upload ảnh lên Firebase Storage nếu có ảnh được chọn (Sửa đổi dùng putData để chạy ổn định hơn)
       if (_selectedImage != null) {
-        final XFile imageToUpload = _selectedImage!;
-        setState(() => _selectedImage = null);
-
-        Uint8List imageData = await imageToUpload.readAsBytes();
-        fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-        Reference ref = FirebaseStorage.instance
+        final storageRef = FirebaseStorage.instance
             .ref()
-            .child('chat_images/${widget.chatId}/$fileName');
+            .child('chat_media')
+            .child(widget.chatId)
+            .child(
+                '${DateTime.now().millisecondsSinceEpoch}_${_selectedImage!.name}');
 
-        TaskSnapshot snapshot = await ref.putData(
-            imageData, SettableMetadata(contentType: 'image/jpeg'));
-        fileUrl = await snapshot.ref.getDownloadURL();
-        msgType = 'image';
-      } else if (_selectedFile != null) {
-        final PlatformFile fileToUpload = _selectedFile!;
-        setState(() => _selectedFile = null);
-
-        fileName = fileToUpload.name;
-
-        // 🔥 Đọc byte an toàn không dùng dấu !
-        Uint8List? fileBytes = fileToUpload.bytes;
-        if (fileBytes == null && !kIsWeb && fileToUpload.path != null) {
-          fileBytes = await File(fileToUpload.path!).readAsBytes();
+        if (_webImageBytes != null) {
+          await storageRef.putData(_webImageBytes!);
+        } else {
+          await storageRef.putFile(File(_selectedImage!.path));
         }
-
-        if (fileBytes == null)
-          throw Exception(languageNotifier.value == "Tiếng Việt"
-              ? "Hệ thống không thể đọc tệp này."
-              : "System cannot read this file.");
-
-        String uniqueFileName =
-            '${DateTime.now().millisecondsSinceEpoch}_$fileName';
-        Reference ref = FirebaseStorage.instance
-            .ref()
-            .child('chat_files/${widget.chatId}/$uniqueFileName');
-
-        TaskSnapshot snapshot = await ref.putData(fileBytes);
-        fileUrl = await snapshot.ref.getDownloadURL();
-        msgType = 'file';
+        imageUrl = await storageRef.getDownloadURL();
       }
 
-      _msgController.clear();
+      // 2. Upload tài liệu/tập tin lên Firebase Storage nếu có file được chọn
+      if (_selectedFile != null) {
+        fileName = _selectedFile!.name;
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('chat_media')
+            .child(widget.chatId)
+            .child('${DateTime.now().millisecondsSinceEpoch}_$fileName');
+
+        if (kIsWeb && _selectedFile!.bytes != null) {
+          await storageRef.putData(_selectedFile!.bytes!);
+        } else if (_selectedFile!.path != null) {
+          await storageRef.putFile(File(_selectedFile!.path!));
+        }
+        fileUrl = await storageRef.getDownloadURL();
+      }
+
+      // 3. Đẩy gói dữ liệu tin nhắn lên Firestore
+      bool isVN = languageNotifier.value == "Tiếng Việt";
+      String lastMsgDisplay = text;
+      if (imageUrl != null) lastMsgDisplay = isVN ? '[Hình ảnh]' : '[Image]';
+      if (fileUrl != null)
+        lastMsgDisplay = isVN ? '[Tập tin: $fileName]' : '[File: $fileName]';
 
       await FirebaseFirestore.instance
           .collection('chats')
@@ -219,471 +148,344 @@ class _ChatPageState extends State<ChatPage> {
           .add({
         'senderId': widget.currentUserId,
         'text': text,
-        'imageUrl':
-            msgType == 'image' ? (fileUrl ?? '') : '', // 🔥 Thêm lại dòng này
-        'fileUrl': fileUrl ?? '',
-        'fileName': fileName ?? '',
-        'type': msgType,
+        'imageUrl': imageUrl,
+        'fileUrl': fileUrl,
+        'fileName': fileName,
         'timestamp': FieldValue.serverTimestamp(),
-        'deletedBy': [],
       });
 
-      setState(() => _isUploading = false);
+      // Cập nhật dữ liệu tin nhắn cuối cùng để hiển thị ngoài danh sách chat nhóm/bạn bè
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .set({
+        'lastMessage': lastMsgDisplay,
+        'lastTimestamp': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Dọn dẹp dữ liệu tạm thời sau khi gửi thành công
+      setState(() {
+        _msgController.clear();
+        _selectedImage = null;
+        _webImageBytes = null;
+        _selectedFile = null;
+        _isUploading = false;
+      });
     } catch (e) {
-      debugPrint("Lỗi khi gửi tin nhắn: $e");
+      debugPrint("Lỗi gửi tin nhắn: $e");
       setState(() => _isUploading = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(languageNotifier.value == "Tiếng Việt"
-                ? "Lỗi: ${e.toString().replaceAll('Exception: ', '')}"
-                : "Error: ${e.toString().replaceAll('Exception: ', '')}"),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _clearChatHistory() async {
-    bool isVN = languageNotifier.value == "Tiếng Việt";
-    bool? confirm = await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red),
-            SizedBox(width: 8),
-            Text(isVN ? "Xoá trò chuyện?" : "Delete chat?"),
-          ],
-        ),
-        content: Text(
-          isVN
-              ? "Lịch sử trò chuyện chỉ bị xoá ở phía bạn, người kia vẫn sẽ nhìn thấy. Bạn có chắc chắn không?"
-              : "Chat history will only be deleted on your side, the other person will still see it. Are you sure?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(isVN ? "Huỷ" : "Cancel",
-                style: const TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(isVN ? "Xoá" : "Delete",
-                style: const TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    final messagesSnapshot = await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.chatId)
-        .collection('messages')
-        .get();
-
-    final batch = FirebaseFirestore.instance.batch();
-    for (var doc in messagesSnapshot.docs) {
-      batch.update(doc.reference, {
-        'deletedBy': FieldValue.arrayUnion([widget.currentUserId]),
-      });
-    }
-    await batch.commit();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                isVN ? "Đã xoá lịch sử trò chuyện!" : "Chat history deleted!")),
-      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<String>(
-        valueListenable: languageNotifier,
-        builder: (context, lang, child) {
-          bool isVN = lang == "Tiếng Việt";
-          return Scaffold(
-            backgroundColor: Colors.grey.shade100,
-            appBar: AppBar(
-              title: Text(
-                widget.targetUserName,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              backgroundColor: primaryColor,
-              foregroundColor: Colors.white,
-              actions: [
-                IconButton(
-                  tooltip:
-                      isVN ? "Xoá lịch sử trò chuyện" : "Delete chat history",
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: _clearChatHistory,
-                ),
-              ],
+      valueListenable: languageNotifier,
+      builder: (context, lang, child) {
+        bool isVN = lang == "Tiếng Việt";
+
+        return Scaffold(
+          backgroundColor: Colors.grey.shade100,
+          appBar: AppBar(
+            title: Text(
+              widget.targetUserName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            body: Column(
-              children: [
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('chats')
-                        .doc(widget.chatId)
-                        .collection('messages')
-                        .orderBy('timestamp', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                        return Center(
-                          child: Text(
-                            isVN
-                                ? "Chưa có tin nhắn. Hãy nói xin chào!"
-                                : "No messages yet. Say hello!",
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        );
-                      }
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+            elevation: 1,
+          ),
+          body: Column(
+            children: [
+              // Khu vực hiển thị nội dung cuộc trò chuyện cuộc hội thoại
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('chats')
+                      .doc(widget.chatId)
+                      .collection('messages')
+                      .orderBy('timestamp', descending: true)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                      final allMessages = snapshot.data!.docs;
+                    final docs = snapshot.data!.docs;
 
-                      final visibleMessages = allMessages.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final deletedBy =
-                            List<String>.from(data['deletedBy'] ?? []);
-                        return !deletedBy.contains(widget.currentUserId);
-                      }).toList();
-
-                      if (visibleMessages.isEmpty) {
-                        return Center(
-                          child: Text(
-                            isVN
-                                ? "Chưa có tin nhắn. Hãy nói xin chào!"
-                                : "No messages yet. Say hello!",
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        );
-                      }
-
-                      return ListView.builder(
-                        reverse: true,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 20,
+                    if (docs.isEmpty) {
+                      return Center(
+                        child: Text(
+                          isVN
+                              ? "Hãy bắt đầu cuộc trò chuyện!"
+                              : "Start the conversation!",
+                          style: const TextStyle(color: Colors.grey),
                         ),
-                        itemCount: visibleMessages.length,
-                        itemBuilder: (context, index) {
-                          final data = visibleMessages[index].data()
-                              as Map<String, dynamic>;
-                          bool isMe = data['senderId'] == widget.currentUserId;
-
-                          // 🔥 Đọc link gom chung để tương thích dữ liệu cũ và mới
-                          String linkUrl =
-                              data['fileUrl'] ?? data['imageUrl'] ?? '';
-
-                          bool isImage =
-                              data['type'] == 'image' && linkUrl.isNotEmpty;
-                          bool isFile =
-                              data['type'] == 'file' && linkUrl.isNotEmpty;
-
-                          return Align(
-                            alignment: isMe
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: isImage &&
-                                      (data['text'] == null ||
-                                          data['text']
-                                              .toString()
-                                              .trim()
-                                              .isEmpty)
-                                  ? const EdgeInsets.all(5)
-                                  : const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 12),
-                              constraints: BoxConstraints(
-                                  maxWidth:
-                                      MediaQuery.of(context).size.width * 0.75),
-                              decoration: BoxDecoration(
-                                color: isMe
-                                    ? primaryColor.withOpacity(0.2)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(20),
-                                  topRight: const Radius.circular(20),
-                                  bottomLeft: isMe
-                                      ? const Radius.circular(20)
-                                      : const Radius.circular(5),
-                                  bottomRight: isMe
-                                      ? const Radius.circular(5)
-                                      : const Radius.circular(20),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // 1. HIỂN THỊ ẢNH
-                                  if (isImage)
-                                    GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                FullScreenImageViewer(
-                                                    imageUrl: linkUrl),
-                                          ),
-                                        );
-                                      },
-                                      child: Container(
-                                        constraints: const BoxConstraints(
-                                          maxHeight: 300,
-                                        ),
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(
-                                            isImage &&
-                                                    (data['text'] == null ||
-                                                        data['text']
-                                                            .toString()
-                                                            .trim()
-                                                            .isEmpty)
-                                                ? 15
-                                                : 8,
-                                          ),
-                                          child: Image.network(
-                                            linkUrl,
-                                            fit: BoxFit.contain,
-                                            loadingBuilder: (context, child,
-                                                loadingProgress) {
-                                              if (loadingProgress == null)
-                                                return child;
-                                              return const Padding(
-                                                  padding: EdgeInsets.all(20),
-                                                  child:
-                                                      CircularProgressIndicator());
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-
-                                  // 2. HIỂN THỊ TÀI LIỆU (FILE)
-                                  if (isFile)
-                                    InkWell(
-                                      borderRadius: BorderRadius.circular(12),
-                                      // 🔥 SỰ KIỆN CLICK: Gọi hàm tải file về thiết bị
-                                      onTap: () => _downloadFile(linkUrl),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: isMe
-                                              ? Colors.black.withOpacity(0.05)
-                                              : Colors.grey.shade100,
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          border:
-                                              Border.all(color: Colors.black12),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.insert_drive_file,
-                                              color: isMe
-                                                  ? primaryColor
-                                                  : Colors.orangeAccent,
-                                              size: 32,
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Flexible(
-                                              child: Text(
-                                                data['fileName'] ??
-                                                    (isVN
-                                                        ? 'Tài liệu Văn phòng'
-                                                        : 'Office Document'),
-                                                style: TextStyle(
-                                                  color: isMe
-                                                      ? Colors.black87
-                                                      : Colors.black87,
-                                                  fontWeight: FontWeight.bold,
-                                                  decoration: TextDecoration
-                                                      .underline, // Tạo gạch chân giống link tải
-                                                ),
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 5),
-                                            Icon(
-                                              Icons
-                                                  .download_for_offline_outlined, // Thêm icon download nhỏ cho trực quan
-                                              size: 20,
-                                              color: isMe
-                                                  ? primaryColor
-                                                  : Colors.grey,
-                                            )
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-
-                                  // 3. HIỂN THỊ CHỮ CHAT
-                                  if (data['text'] != null &&
-                                      data['text'].toString().trim().isNotEmpty)
-                                    Padding(
-                                      padding: EdgeInsets.only(
-                                          top: (isImage || isFile) ? 8.0 : 0),
-                                      child: Text(
-                                        data['text'],
-                                        style: TextStyle(
-                                            fontSize: 15,
-                                            color: isMe
-                                                ? Colors.black87
-                                                : Colors.black),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
                       );
-                    },
-                  ),
+                    }
+
+                    return ListView.builder(
+                      reverse: true,
+                      padding: const EdgeInsets.all(15),
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final msg = docs[index].data() as Map<String, dynamic>;
+                        final bool isMe =
+                            msg['senderId'] == widget.currentUserId;
+
+                        return _buildMessageBubble(msg, isMe, context);
+                      },
+                    );
+                  },
                 ),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, -3),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+              ),
+
+              // --- KHU VỰC HIỂN THỊ XEM TRƯỚC HÌNH ẢNH HOẶC TẬP TIN ĐÃ CHỌN ---
+              if (_selectedImage != null || _selectedFile != null)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
                     children: [
-                      if (_selectedFile != null)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                              bottom: 8.0, left: 8, right: 8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.blue.shade200),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.insert_drive_file,
-                                    color: Colors.blue),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _selectedFile!.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w500),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.close,
-                                      color: Colors.red),
-                                  onPressed: () =>
-                                      setState(() => _selectedFile = null),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      Row(
+                      Stack(
+                        alignment: Alignment.topRight,
                         children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.add_circle,
-                              color: primaryColor,
-                              size: 28,
+                          Container(
+                            width: 80,
+                            height: 80,
+                            margin: const EdgeInsets.only(top: 5, right: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: Colors.grey.shade300, width: 1),
                             ),
-                            onPressed:
-                                _isUploading ? null : _showAttachmentMenu,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(11),
+                              child: _selectedImage != null
+                                  ? (_webImageBytes != null
+                                      ? Image.memory(_webImageBytes!,
+                                          fit: BoxFit.cover)
+                                      : Image.file(File(_selectedImage!.path),
+                                          fit: BoxFit.cover))
+                                  : const Icon(Icons.insert_drive_file,
+                                      size: 40, color: Colors.grey),
+                            ),
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: TextField(
-                              controller: _msgController,
-                              decoration: InputDecoration(
-                                hintText: isVN
-                                    ? "Nhập tin nhắn..."
-                                    : "Type a message...",
-                                filled: true,
-                                fillColor: Colors.grey.shade100,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 10,
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedImage = null;
+                                  _webImageBytes = null;
+                                  _selectedFile = null;
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
                                 ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                  borderSide: BorderSide.none,
-                                ),
+                                child: const Icon(Icons.close,
+                                    color: Colors.white, size: 14),
                               ),
-                              onSubmitted: (_) => _sendMessage(),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          CircleAvatar(
-                            backgroundColor: primaryColor,
-                            child: _isUploading
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : IconButton(
-                                    icon: const Icon(
-                                      Icons.send,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                    onPressed: _sendMessage,
-                                  ),
                           ),
                         ],
                       ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _selectedImage != null
+                              ? _selectedImage!.name
+                              : _selectedFile!.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ],
+
+              // Thanh công cụ nhập nội dung và các nút gửi dữ liệu
+              _buildInputArea(isVN),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Widget vẽ Bong bóng tin nhắn
+  Widget _buildMessageBubble(
+      Map<String, dynamic> msg, bool isMe, BuildContext context) {
+    final text = msg['text'] as String? ?? '';
+    final imageUrl = msg['imageUrl'] as String?;
+    final fileUrl = msg['fileUrl'] as String?;
+    final fileName = msg['fileName'] as String? ?? 'File';
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          color: isMe ? primaryColor : Colors.white,
+          borderRadius: BorderRadius.circular(16).copyWith(
+            bottomRight:
+                isMe ? const Radius.circular(0) : const Radius.circular(16),
+            bottomLeft:
+                isMe ? const Radius.circular(16) : const Radius.circular(0),
+          ),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 4,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Hiển thị ảnh nếu có gửi ảnh
+            if (imageUrl != null && imageUrl.isNotEmpty)
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          FullScreenImageViewer(imageUrl: imageUrl)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 6.0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.broken_image,
+                          size: 50,
+                          color: Colors.grey),
+                    ),
+                  ),
+                ),
+              ),
+
+            // Hiển thị tập tin nếu có gửi File tài liệu
+            if (fileUrl != null && fileUrl.isNotEmpty)
+              InkWell(
+                onTap: () => _downloadFile(fileUrl),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(bottom: 6.0),
+                  decoration: BoxDecoration(
+                    color: isMe
+                        ? Colors.white.withOpacity(0.2)
+                        : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.insert_drive_file,
+                          color: isMe ? Colors.white : primaryColor),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          fileName,
+                          style: TextStyle(
+                            color: isMe ? Colors.white : Colors.black87,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // Hiển thị Văn bản chữ
+            if (text.isNotEmpty)
+              Text(
+                text,
+                style: TextStyle(
+                    color: isMe ? Colors.white : Colors.black87, fontSize: 15),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Giao diện Thanh nhập dữ liệu chat dưới cùng
+  Widget _buildInputArea(bool isVN) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      color: Colors.white,
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(Icons.image, color: primaryColor),
+              onPressed: _pickImage,
             ),
-          );
-        });
+            IconButton(
+              icon: Icon(Icons.attach_file, color: primaryColor),
+              onPressed: _pickFile,
+            ),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextField(
+                  controller: _msgController,
+                  maxLines: null,
+                  decoration: InputDecoration(
+                    hintText: isVN ? "Nhập tin nhắn..." : "Type a message...",
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            _isUploading
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5)),
+                  )
+                : IconButton(
+                    icon: Icon(Icons.send, color: primaryColor),
+                    onPressed: _sendMessage,
+                  ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
-// 🔥 WIDGET MỚI: Xem ảnh toàn màn hình giống Zalo
+// Lớp xem hình ảnh phóng to toàn màn hình
 class FullScreenImageViewer extends StatelessWidget {
   final String imageUrl;
   const FullScreenImageViewer({super.key, required this.imageUrl});
@@ -699,7 +501,6 @@ class FullScreenImageViewer extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.download, color: Colors.white),
             onPressed: () async {
-              // Có thể tích hợp tải ảnh về máy ở đây nếu muốn, tạm thời mở bằng trình duyệt để tải
               final Uri url = Uri.parse(imageUrl);
               if (await canLaunchUrl(url)) {
                 await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -710,7 +511,6 @@ class FullScreenImageViewer extends StatelessWidget {
       ),
       body: Center(
         child: InteractiveViewer(
-          // Cho phép người dùng zoom bằng 2 ngón tay
           panEnabled: true,
           minScale: 0.5,
           maxScale: 4.0,
