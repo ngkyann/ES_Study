@@ -6,7 +6,7 @@
 
 **II. Yêu cầu phần mềm**
 
-- Như đã nói, ES_Study hiện chỉ hỗ trợ trực tiếp 2 phiên bản là Android và Website. Đầu tiên, chúng ta sẽ nói về Android.
+Như đã nói, ES_Study hiện chỉ hỗ trợ trực tiếp 2 phiên bản là Android và Website. Đầu tiên, chúng ta sẽ nói về Android.
 1. Android
 
 -	Đối với Android, các bạn chỉ cần tải trực tiếp từ file apk từ link mà chúng tôi đính kèm ở dưới. Để tải ES_Study, đây là một số lưu ý:
@@ -24,7 +24,7 @@
 
 **III. Lý do ra đời phần mềm**
 
--	Như chúng ta đã thấy, sự bùng nổ của công nghệ và trí tuệ nhân tạo (AI) đã mang lại những bước tiến khổng lồ, nhưng đồng thời cũng thay đổi thói quen học tập theo hướng tiêu cực. Nhiều học sinh đang coi AI là một "vị thần" vạn năng, phó mặc mọi bài toán và tư duy cho máy móc. Hệ quả là sự thoái hóa trong khả năng suy luận logic và tư duy phản biện độc lập. Phần mềm này được tạo ra không chỉ để hỗ trợ học tập, mà còn để định nghĩa lại kỷ luật trong môi trường số, tập trung giải quyết các vấn đề cốt lõi sau:
+Như chúng ta đã thấy, sự bùng nổ của công nghệ và trí tuệ nhân tạo (AI) đã mang lại những bước tiến khổng lồ, nhưng đồng thời cũng thay đổi thói quen học tập theo hướng tiêu cực. Nhiều học sinh đang coi AI là một "vị thần" vạn năng, phó mặc mọi bài toán và tư duy cho máy móc. Hệ quả là sự thoái hóa trong khả năng suy luận logic và tư duy phản biện độc lập. Phần mềm này được tạo ra không chỉ để hỗ trợ học tập, mà còn để định nghĩa lại kỷ luật trong môi trường số, tập trung giải quyết các vấn đề cốt lõi sau:
 -	Tổ chức học tập tập trung: Thay vì học đơn độc dễ gây chán nản, phần mềm cho phép người dùng tạo các phòng học ảo. Điều này tạo ra một cộng đồng cùng tiến, nơi mọi người giám sát lẫn nhau, thúc đẩy động lực học tập thông qua sự kết nối thực tế giữa người với người.
 -	Cơ chế chống xao nhãng: Đây là điểm khác biệt lớn nhất. Để ngăn chặn tình trạng "treo máy" hoặc chỉ mở app cho có lệ, hệ thống tích hợp linh thú giám sát. Linh thú sẽ xuất hiện ngẫu nhiên vào những thời điểm không cố định, yêu cầu người dùng phải tương tác vật lý (click/tap) để xác nhận sự hiện diện.
 -	Tạo môi trường học khép kín: Bằng việc tích hợp các tính năng cần thiết cho học tập, phần mềm tạo thành một môi trường học khép kín và khoa học.
@@ -32,7 +32,7 @@
 
 **IV. Tính năng độc đáo**
 
--	Phần mềm mang đến các tính năng độc đáo giúp hỗ trợ học tập người dùng nhằm nâng cao hiệu suất học tập, một số tính năng cốt lõi gồm:
+Phần mềm mang đến các tính năng độc đáo giúp hỗ trợ học tập người dùng nhằm nâng cao hiệu suất học tập, một số tính năng cốt lõi gồm:
 -	Tạo/Tìm phòng học online: Nơi giúp người dùng có thể kết nối, trao đổi kiến thức với nhau.
 -	Học offline: Nơi giúp người dùng rèn luyện tính tự học hoặc khi không có mạng.
 -	Kế hoạch: Nơi giúp người dùng lập kế hoạch cho bản thân, đồng thời có thông báo khi đến giờ đã đặt.
