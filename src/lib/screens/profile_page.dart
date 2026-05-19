@@ -35,6 +35,17 @@ class _ProfilePageState extends State<ProfilePage> {
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
 
+  // State cho phần Bio
+  bool _isEditingBio = false;
+  bool _isSavingBio = false;
+  final TextEditingController _bioController = TextEditingController();
+
+  @override
+  void dispose() {
+    _bioController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickAndUploadImage() async {
     bool isVN = languageNotifier.value == "Tiếng Việt";
 
@@ -239,6 +250,202 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // Hàm xử lý lưu Bio
+  Future<void> _saveBio() async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+    setState(() => _isSavingBio = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .update({'bio': _bioController.text.trim()});
+
+      if (mounted) {
+        setState(() {
+          _isEditingBio = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                isVN ? "Đã cập nhật tiểu sử!" : "Bio updated successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isVN ? "Lỗi cập nhật: $e" : "Update error: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingBio = false);
+    }
+  }
+
+  // Widget hiển thị khung Bio (Đã cập nhật UI & Logic mới)
+  Widget _buildBioSection(bool isVN) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        String bio = "";
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          bio = data['bio'] ?? "";
+        }
+
+        return Card(
+          elevation: 0,
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // HÀNG TIÊU ĐỀ + NÚT CHỈNH SỬA (ĐẶT NGANG NHAU)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: primaryColor),
+                        const SizedBox(width: 8),
+                        Text(
+                          isVN ? "Tiểu sử" : "Bio",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                      ],
+                    ),
+                    if (!_isEditingBio)
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _isEditingBio = true;
+                            // Gán text hiện tại vào TextField khi bắt đầu edit
+                            _bioController.text = bio;
+                          });
+                        },
+                        icon: const Icon(Icons.edit, size: 16),
+                        label: Text(isVN ? "Chỉnh sửa" : "Edit"),
+                        style: TextButton.styleFrom(
+                          foregroundColor: primaryColor,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // PHẦN HIỂN THỊ TEXT HOẶC KHUNG NHẬP LIỆU
+                if (!_isEditingBio)
+                  Text(
+                    bio.isNotEmpty
+                        ? bio
+                        : (isVN ? "Chưa có tiểu sử." : "No bio yet."),
+                    style: TextStyle(
+                      color: bio.isNotEmpty ? Colors.black87 : Colors.grey,
+                      fontSize: 14,
+                      fontStyle:
+                          bio.isNotEmpty ? FontStyle.normal : FontStyle.italic,
+                    ),
+                  )
+                else ...[
+                  TextField(
+                    controller: _bioController,
+                    maxLines: 3,
+                    maxLength: 150,
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: isVN
+                          ? "Nhập tiểu sử của bạn..."
+                          : "Enter your bio...",
+                      hintStyle:
+                          const TextStyle(fontSize: 14, color: Colors.grey),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: primaryColor),
+                      ),
+                      contentPadding: const EdgeInsets.all(12),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _isEditingBio = false;
+                          });
+                        },
+                        child: Text(
+                          isVN ? "Hủy" : "Cancel",
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _isSavingBio ? null : _saveBio,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                        child: _isSavingBio
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(isVN ? "Lưu" : "Save"),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<String>(
@@ -334,15 +541,15 @@ class _ProfilePageState extends State<ProfilePage> {
                                               fit: BoxFit.cover,
                                               errorBuilder:
                                                   (context, error, stackTrace) {
-                                                // Nếu gặp lỗi CORS trên Web, Image.network sẽ rớt vào đây và hiện Icon thay vì làm crash app
                                                 return Icon(Icons.person,
                                                     color: primaryColor,
                                                     size: 50);
                                               },
                                               loadingBuilder: (context, child,
                                                   loadingProgress) {
-                                                if (loadingProgress == null)
+                                                if (loadingProgress == null) {
                                                   return child;
+                                                }
                                                 return const Center(
                                                     child:
                                                         CircularProgressIndicator());
@@ -438,11 +645,15 @@ class _ProfilePageState extends State<ProfilePage> {
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
+                        // ĐÃ CHUYỂN BIO LÊN TRÊN ID NGƯỜI DÙNG
+                        _buildBioSection(isVN),
+
                         _infoCard(
                           Icons.alternate_email,
                           isVN ? "ID người dùng" : "User ID",
                           "@${widget.userId}",
                         ),
+
                         StreamBuilder<QuerySnapshot>(
                           stream: FirebaseFirestore.instance
                               .collection('users')
