@@ -109,9 +109,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 children: [
-                  _buildSectionHeader(isVN
-                      ? "ThôngConfig báo cá nhân"
-                      : "Personal Information"),
+                  _buildSectionHeader(
+                      isVN ? "Thông tin cá nhân" : "Personal Information"),
                   _buildInfoTile(
                     Icons.person,
                     isVN ? "Họ và tên" : "Full Name",
@@ -155,7 +154,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildActionTile(
                     Icons.info,
                     isVN ? "Thông tin phiên bản" : "Version Info",
-                    "V 1.2.2",
+                    "V 1.2.3",
                     onTap: () => _showVersionInfoDialog(context),
                   ),
                   const SizedBox(height: 30),
@@ -823,7 +822,7 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isVN ? "Phiên bản: V 1.2.2" : "Version: V 1.2.2",
+                isVN ? "Phiên bản: V 1.2.3" : "Version: V 1.2.3",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
