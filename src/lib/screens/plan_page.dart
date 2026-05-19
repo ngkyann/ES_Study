@@ -76,34 +76,58 @@ class _PlanPageState extends State<PlanPage> {
     );
   }
 
+  // 🔥 Hàm hỗ trợ tạo TextField nhập số nhỏ
+  Widget _buildTimeInputField(TextEditingController controller, String label,
+      {int flex = 1}) {
+    return Expanded(
+      flex: flex,
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(fontSize: 13),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        ),
+      ),
+    );
+  }
+
   Future<void> _addPlan() async {
     TextEditingController titleController = TextEditingController();
-    TextEditingController dateController =
-        TextEditingController(); // 🆕 Controller nhập ngày
-    TextEditingController timeController =
-        TextEditingController(); // 🆕 Controller nhập giờ
+    // 🆕 Tách thành 5 Controller riêng biệt
+    TextEditingController dayController = TextEditingController();
+    TextEditingController monthController = TextEditingController();
+    TextEditingController yearController = TextEditingController();
+    TextEditingController hourController = TextEditingController();
+    TextEditingController minuteController = TextEditingController();
     TextEditingController taskController = TextEditingController();
     List<String> tasks = [];
 
-    // Gợi ý ngày giờ hiện tại cho user dễ nhập
+    // Gợi ý ngày giờ hiện tại
     DateTime now = DateTime.now();
-    dateController.text =
-        "${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}";
-    timeController.text =
-        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    dayController.text = now.day.toString().padLeft(2, '0');
+    monthController.text = now.month.toString().padLeft(2, '0');
+    yearController.text = now.year.toString();
+    hourController.text = now.hour.toString().padLeft(2, '0');
+    minuteController.text = now.minute.toString().padLeft(2, '0');
 
     showDialog(
       context: context,
       builder: (_) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            bool isVN =
-                languageNotifier.value == "Tiếng Việt"; // 🔥 LẤY NGÔN NGỮ
+            bool isVN = languageNotifier.value == "Tiếng Việt";
 
             return AlertDialog(
               shape: RoundedRectangleBorder(
-                borderRadius:
-                    BorderRadius.circular(16), // 🆕 Bo góc Dialog cho đẹp
+                borderRadius: BorderRadius.circular(16),
               ),
               title: Text(isVN ? "Tạo kế hoạch" : "Create Plan"),
               content: SizedBox(
@@ -111,6 +135,7 @@ class _PlanPageState extends State<PlanPage> {
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       TextField(
                         controller: titleController,
@@ -126,50 +151,66 @@ class _PlanPageState extends State<PlanPage> {
                       ),
                       const SizedBox(height: 15),
 
-                      // 🆕 Khung nhập Ngày và Giờ
+                      // 🆕 Khung nhập Ngày Tháng Năm
+                      Text(
+                        isVN ? "Ngày / Tháng / Năm" : "Day / Month / Year",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.grey),
+                      ),
+                      const SizedBox(height: 5),
                       Row(
                         children: [
-                          Expanded(
-                            child: TextField(
-                              controller: dateController,
-                              keyboardType: TextInputType.datetime,
-                              decoration: InputDecoration(
-                                labelText: isVN
-                                    ? "Ngày (DD/MM/YYYY)"
-                                    : "Date (DD/MM/YYYY)",
-                                hintText: "VD: 25/12/2024",
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                isDense: true,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: TextField(
-                              controller: timeController,
-                              keyboardType: TextInputType.datetime,
-                              decoration: InputDecoration(
-                                labelText:
-                                    isVN ? "Giờ (HH:MM)" : "Time (HH:MM)",
-                                hintText: "VD: 14:30",
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                isDense: true,
-                              ),
-                            ),
-                          ),
+                          _buildTimeInputField(
+                              dayController, isVN ? "Ngày" : "DD"),
+                          const SizedBox(width: 8),
+                          const Text("/",
+                              style:
+                                  TextStyle(fontSize: 18, color: Colors.grey)),
+                          const SizedBox(width: 8),
+                          _buildTimeInputField(
+                              monthController, isVN ? "Tháng" : "MM"),
+                          const SizedBox(width: 8),
+                          const Text("/",
+                              style:
+                                  TextStyle(fontSize: 18, color: Colors.grey)),
+                          const SizedBox(width: 8),
+                          _buildTimeInputField(
+                              yearController, isVN ? "Năm" : "YYYY",
+                              flex: 2),
                         ],
                       ),
+                      const SizedBox(height: 15),
+
+                      // 🆕 Khung nhập Giờ Phút
+                      Text(
+                        isVN ? "Giờ : Phút" : "Hour : Minute",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.grey),
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          _buildTimeInputField(
+                              hourController, isVN ? "Giờ" : "HH"),
+                          const SizedBox(width: 8),
+                          const Text(":",
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 8),
+                          _buildTimeInputField(
+                              minuteController, isVN ? "Phút" : "MM"),
+                          const Spacer(), // Đẩy ô nhập sang trái cho gọn
+                        ],
+                      ),
+
                       const Divider(height: 30),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          isVN ? "Nhiệm vụ cần làm:" : "Tasks to do:",
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                      Text(
+                        isVN ? "Nhiệm vụ cần làm:" : "Tasks to do:",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -255,15 +296,12 @@ class _PlanPageState extends State<PlanPage> {
                         borderRadius: BorderRadius.circular(8),
                       )),
                   onPressed: () async {
-                    if (titleController.text.isEmpty ||
-                        dateController.text.isEmpty ||
-                        timeController.text.isEmpty ||
-                        tasks.isEmpty) {
+                    if (titleController.text.isEmpty || tasks.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(isVN
-                              ? "Vui lòng nhập đủ thông tin!"
-                              : "Please enter all information!"),
+                              ? "Vui lòng nhập tên và nhiệm vụ!"
+                              : "Please enter title and tasks!"),
                         ),
                       );
                       return;
@@ -271,23 +309,31 @@ class _PlanPageState extends State<PlanPage> {
 
                     DateTime parsedDate;
                     try {
-                      // 🆕 Xử lý parse chuỗi ngày (DD/MM/YYYY)
-                      List<String> dateParts =
-                          dateController.text.trim().split('/');
-                      if (dateParts.length != 3) throw Exception();
-                      int day = int.parse(dateParts[0]);
-                      int month = int.parse(dateParts[1]);
-                      int year = int.parse(dateParts[2]);
+                      // 🆕 Parse từng ô nhập liệu
+                      int? day = int.tryParse(dayController.text.trim());
+                      int? month = int.tryParse(monthController.text.trim());
+                      int? year = int.tryParse(yearController.text.trim());
+                      int? hour = int.tryParse(hourController.text.trim());
+                      int? minute = int.tryParse(minuteController.text.trim());
 
-                      // 🆕 Xử lý parse chuỗi giờ (HH:MM)
-                      List<String> timeParts =
-                          timeController.text.trim().split(':');
-                      if (timeParts.length != 2) throw Exception();
-                      int hour = int.parse(timeParts[0]);
-                      int minute = int.parse(timeParts[1]);
+                      if (day == null ||
+                          month == null ||
+                          year == null ||
+                          hour == null ||
+                          minute == null) {
+                        throw Exception("Dữ liệu trống");
+                      }
 
-                      if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-                        throw Exception();
+                      // Validate khoảng giá trị hợp lệ
+                      if (month < 1 ||
+                          month > 12 ||
+                          day < 1 ||
+                          day > 31 ||
+                          hour < 0 ||
+                          hour > 23 ||
+                          minute < 0 ||
+                          minute > 59) {
+                        throw Exception("Sai khoảng giá trị");
                       }
 
                       parsedDate = DateTime(year, month, day, hour, minute);
@@ -306,8 +352,8 @@ class _PlanPageState extends State<PlanPage> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(isVN
-                              ? "Định dạng ngày/giờ không hợp lệ!"
-                              : "Invalid date/time format!"),
+                              ? "Ngày hoặc giờ không hợp lệ!"
+                              : "Invalid date or time!"),
                         ),
                       );
                       return;

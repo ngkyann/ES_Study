@@ -4,8 +4,7 @@ import 'package:esstudy/constants/colors.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
-import 'package:esstudy/screens/login_page.dart'; // 🔥 Thêm để điều hướng sạch sau khi thoát
+import 'package:esstudy/constants/var.dart';
 
 class SettingsPage extends StatefulWidget {
   final String userName;
@@ -82,7 +81,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 BỌC TÒAN BỘ BẰNG ValueListenableBuilder
     return ValueListenableBuilder<String>(
       valueListenable: languageNotifier,
       builder: (context, lang, child) {
@@ -111,8 +109,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 children: [
-                  _buildSectionHeader(
-                      isVN ? "Thông tin cá nhân" : "Personal Information"),
+                  _buildSectionHeader(isVN
+                      ? "ThôngConfig báo cá nhân"
+                      : "Personal Information"),
                   _buildInfoTile(
                     Icons.person,
                     isVN ? "Họ và tên" : "Full Name",
@@ -171,7 +170,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // --- WIDGETS ---
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 15, 20, 10),
@@ -474,10 +472,9 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // --- HỘP THOẠI XÁC NHẬN VÀ XỬ LÝ ĐĂNG XUẤT AN TOÀN ---
+  // 🔥 ĐÃ SỬA LỖI ĐĂNG XUẤT TẠI ĐÂY
   void _showLogoutDialog(BuildContext context) {
-    bool isVN =
-        languageNotifier.value == "Tiếng Việt"; // 🔥 Kiểm tra ngôn ngữ hệ thống
+    bool isVN = languageNotifier.value == "Tiếng Việt";
 
     showDialog(
       context: context,
@@ -513,8 +510,7 @@ class _SettingsPageState extends State<SettingsPage> {
               const EdgeInsets.only(bottom: 15, right: 15, left: 15),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext), // Đóng popup nếu hủy
+              onPressed: () => Navigator.pop(dialogContext),
               child: Text(
                 isVN ? "Hủy" : "Cancel",
                 style: const TextStyle(
@@ -536,22 +532,14 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               onPressed: () async {
                 try {
-                  // Đóng hộp thoại popup trước
+                  // Đóng hộp thoại popup
                   Navigator.pop(dialogContext);
 
-                  // 1. Thực hiện đăng xuất hoàn toàn khỏi Firebase Auth
+                  // 1. Pop lùi lại về trang gốc (Trang do main.dart quản lý)
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+
+                  // 2. Thực hiện đăng xuất -> main.dart sẽ bắt được sự kiện và tự cập nhật ra màn hình Đăng Nhập
                   await FirebaseAuth.instance.signOut();
-
-                  if (!context.mounted) return;
-
-                  // 2. Xóa sạch toàn bộ Stack màn hình cũ (bao gồm HomePage đang chạy ngầm)
-                  // Điều này ngăn chặn lỗi bất đồng bộ dữ liệu Email Thật cũ-mới
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginPage()),
-                    (Route<dynamic> route) =>
-                        false, // Xóa sạch tất cả các route trước đó
-                  );
                 } catch (e) {
                   if (!context.mounted) return;
                   _showSnackBar(
@@ -698,16 +686,12 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               Icon(Icons.language, color: primaryColor),
               const SizedBox(width: 10),
-              // 🔥 Tự động đổi tiêu đề Dialog: "Chọn ngôn ngữ" hoặc "Select Language"
               Text(isVN ? "Chọn ngôn ngữ" : "Select Language"),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: options.map((lang) {
-              // 🔥 ĐÂY LÀ CHỖ XỬ LÝ THEO Ý BẠN:
-              // Nếu đang ở giao diện Tiếng Việt (isVN == true): hiển thị "Tiếng Việt" / "Tiếng Anh"
-              // Nếu đang ở giao diện Tiếng Anh (isVN == false): hiển thị "Vietnamese" / "English"
               String displayName;
               if (lang == "Tiếng Việt") {
                 displayName = isVN ? "Tiếng Việt" : "Vietnamese";
@@ -716,9 +700,8 @@ class _SettingsPageState extends State<SettingsPage> {
               }
 
               return RadioListTile<String>(
-                title: Text(displayName), // Hiển thị tên đã được xử lý
-                value:
-                    lang, // Giá trị lõi "Tiếng Việt" / "Tiếng Anh" giữ nguyên để không lỗi logic
+                title: Text(displayName),
+                value: lang,
                 groupValue: _selectedLanguage,
                 activeColor: primaryColor,
                 contentPadding: EdgeInsets.zero,
