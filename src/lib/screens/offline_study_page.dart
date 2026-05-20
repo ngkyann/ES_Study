@@ -18,8 +18,8 @@ class OfflineStudyPage extends StatefulWidget {
 class _OfflineStudyPageState extends State<OfflineStudyPage> {
   int selectedMinutes = 30;
   final Map<int, List<List<int>>> timePlans = {
-    1: [
-      [1],
+    15: [
+      [15],
     ],
     30: [
       [15, 5, 10],
@@ -570,6 +570,9 @@ class _StudySessionPageState extends State<StudySessionPage> {
   Future<void> _finishStudySession() async {
     int minutes = sessions.fold(0, (a, b) => a + b);
 
+    // 🔥 THÊM MỚI: Tính toán coin (1 nửa số phút/điểm, làm tròn lên)
+    int earnedCoins = (minutes / 2.0).round();
+
     List<bool> updatedStatus = List.from(widget.allStatus);
     List<String> finishedTasks = [];
 
@@ -607,11 +610,24 @@ class _StudySessionPageState extends State<StudySessionPage> {
       }
     }
 
+    // 🔥 THÊM MỚI: Cập nhật số Coin vào tài khoản trên Firebase
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.userId)
+        .set({
+      'coin': FieldValue.increment(earnedCoins),
+    }, SetOptions(merge: true));
+
     int completedCount = sessionDone.where((e) => e).length;
-    _showResult(completedCount, widget.goalsForRoom.length, minutes);
+
+    // Truyền thêm biến earnedCoins vào hàm hiển thị kết quả
+    _showResult(
+        completedCount, widget.goalsForRoom.length, minutes, earnedCoins);
   }
 
-  void _showResult(int completedTasks, int totalTasks, int minutes) {
+  // 🔥 CẬP NHẬT: Nhận thêm tham số earnedCoins để hiển thị
+  void _showResult(
+      int completedTasks, int totalTasks, int minutes, int earnedCoins) {
     bool isVN = languageNotifier.value == "Tiếng Việt";
     showDialog(
       context: context,
@@ -622,8 +638,9 @@ class _StudySessionPageState extends State<StudySessionPage> {
             textAlign: TextAlign.center),
         content: Text(
           isVN
-              ? "Bạn đã hoàn thành $completedTasks/$totalTasks nhiệm vụ.\nTiến độ đã được cập nhật vào Kế hoạch.\n\n🎁 Thưởng: +$minutes điểm"
-              : "You have completed $completedTasks/$totalTasks tasks.\nProgress has been updated to your Plan.\n\n🎁 Reward: +$minutes points",
+              // 🔥 CẬP NHẬT: Thêm dòng thông báo nhận Coin
+              ? "Bạn đã hoàn thành $completedTasks/$totalTasks nhiệm vụ.\nTiến độ đã được cập nhật vào Kế hoạch.\n\n🎁 Thưởng: +$minutes điểm & +$earnedCoins coin"
+              : "You have completed $completedTasks/$totalTasks tasks.\nProgress has been updated to your Plan.\n\n🎁 Reward: +$minutes points & +$earnedCoins coins",
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 16),
         ),
@@ -638,7 +655,8 @@ class _StudySessionPageState extends State<StudySessionPage> {
               ),
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.pop(context, minutes);
+                Navigator.pop(
+                    context, minutes); // Trả số phút (điểm) về trang chủ
               },
               child: Text(
                 isVN ? "Tuyệt vời!" : "Awesome!",

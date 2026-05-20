@@ -57,7 +57,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   bool _isMuted = true;
   bool _isVideoOff = true;
   bool _isChatOpen = false;
-
+  String? _hostId;
   // CHAT & NOTIFICATIONS
   final TextEditingController _chatController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -308,6 +308,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       }
 
       final data = snap.data()!;
+      _hostId = data['hostId'];
       _currentParticipantsCount = List.from(data['participants'] ?? []).length;
 
       // Khởi động đồng hồ lần đầu
@@ -767,8 +768,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 textAlign: TextAlign.center),
             content: Text(
                 isVN
-                    ? "Chủ phòng đã thoát sớm. Phiên học bị hủy và không có điểm nào được cộng."
-                    : "The host left early. Session cancelled and no points awarded.",
+                    ? "Chủ phòng đã thoát sớm. Phiên học bị hủy và không có điểm nào được cộng. Chủ phòng sẽ bị phạt điểm."
+                    : "The host left early. Session cancelled and no points awarded. The host will be penalized points.",
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 15)),
             actions: [
@@ -798,6 +799,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     int actualMinutes = widget
         .duration; // Đã hoàn thành tự nhiên thì nhận Full thời gian cài đặt
     int earnedPoints = actualMinutes * currentParticipants;
+    int earnedCoins = (earnedPoints / 2.0).round();
 
     if (earnedPoints > 0) {
       List<String> finishedTasks = [];
@@ -839,6 +841,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
       await userRef.set({
         'points': FieldValue.increment(earnedPoints),
+        'coin':
+            FieldValue.increment(earnedCoins), // 🔥 THÊM DÒNG NÀY: Cộng coin
         'streakCount': newStreak,
         'lastStudyDate': Timestamp.fromDate(now),
       }, SetOptions(merge: true));
@@ -882,9 +886,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     if (mounted) {
       String title = isVN ? "Xuất sắc! 🎉" : "Excellent! 🎉";
       String desc = isVN
-          ? "Bạn đã học được $actualMinutes phút!\nSố người cùng học: $currentParticipants\n\n🎁 Thưởng: +$earnedPoints điểm"
-          : "You studied for $actualMinutes minutes!\nStudy buddies: $currentParticipants\n\n🎁 Reward: +$earnedPoints points";
-
+          ? "Bạn đã học được $actualMinutes phút!\nSố người cùng học: $currentParticipants\n\n🎁 Thưởng: +$earnedPoints điểm & +$earnedCoins coin"
+          : "You studied for $actualMinutes minutes!\nStudy buddies: $currentParticipants\n\n🎁 Reward: +$earnedPoints points & +$earnedCoins coins";
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -1205,23 +1208,34 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         builder: (context, lang, child) {
           bool isVN = lang == "Tiếng Việt";
           List<Widget> videoWidgets = [];
+          // 1. Thêm khung hình của BẢN THÂN
           videoWidgets.add(
             _buildVideoView(
               _localRenderer,
               isVN ? "${widget.userName} (Bạn)" : "${widget.userName} (You)",
               _isVideoOff,
               _isMuted,
+              isHost:
+                  widget.isHost, // 🔥 THÊM MỚI: Truyền trạng thái Host của mình
             ),
           );
+
+          // 2. Thêm khung hình của CÁC THÀNH VIÊN KHÁC
           _remoteRenderers.forEach((peerId, renderer) {
             bool isRemoteCamOff = _remoteStates[peerId]?['camOff'] ?? false;
             bool isRemoteMicOff = _remoteStates[peerId]?['micOff'] ?? false;
+
+            // 🔥 THÊM MỚI: Kiểm tra xem thành viên này có phải là Host hay không
+            bool isRemoteHost = peerId == _hostId;
+
             videoWidgets.add(
               _buildVideoView(
                 renderer,
                 _remoteNames[peerId] ?? (isVN ? "Người dùng" : "User"),
                 isRemoteCamOff,
                 isRemoteMicOff,
+                isHost:
+                    isRemoteHost, // 🔥 THÊM MỚI: Truyền trạng thái Host của bạn bè
               ),
             );
           });
@@ -1507,14 +1521,25 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                           Expanded(
                                             child: ListView(
                                               children: [
+                                                // Hiển thị Bản thân (có check luôn nếu bản thân là Host)
                                                 ListTile(
                                                   title: Text(isVN
-                                                      ? "${widget.userName} (Bạn)"
-                                                      : "${widget.userName} (You)"),
+                                                      ? "${widget.userName} (Bạn)${widget.isHost ? ' (Chủ phòng)' : ''}"
+                                                      : "${widget.userName} (You)${widget.isHost ? ' (Host)' : ''}"),
                                                 ),
-                                                ..._remoteNames.values.map(
-                                                  (name) => ListTile(
-                                                      title: Text(name)),
+                                                // Hiển thị những người khác
+                                                ..._remoteNames.entries.map(
+                                                  (entry) {
+                                                    // 🔥 KIỂM TRA AI LÀ HOST ĐỂ GẮN TAG
+                                                    bool isRemoteHost =
+                                                        entry.key == _hostId;
+                                                    return ListTile(
+                                                      title: Text(entry.value +
+                                                          (isRemoteHost
+                                                              ? ' (Host)'
+                                                              : '')),
+                                                    );
+                                                  },
                                                 ),
                                               ],
                                             ),
@@ -1721,8 +1746,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     RTCVideoRenderer renderer,
     String name,
     bool isCamOff,
-    bool isMuted,
-  ) {
+    bool isMuted, {
+    required bool isHost, // 🔥 THÊM MỚI: Nhận tham số kiểm tra Host
+  }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.grey.shade900,
@@ -1745,6 +1771,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 child: const Icon(Icons.person, size: 30, color: Colors.white),
               ),
             ),
+
+          // THANH HIỂN THỊ TÊN VÀ TRẠNG THÁI HOST (Góc dưới bên trái)
           Positioned(
             bottom: 10,
             left: 10,
@@ -1754,12 +1782,26 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 color: Colors.black54,
                 borderRadius: BorderRadius.circular(5),
               ),
-              child: Text(
-                name,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 🔥 THÊM MỚI: Nếu là Host, hiển thị thêm biểu tượng ngôi sao vàng xịn sò
+                  if (isHost) ...[
+                    const Icon(Icons.stars, color: Colors.amber, size: 14),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    name + (isHost ? " (Host)" : ""),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ],
               ),
             ),
           ),
+
           if (isMuted)
             const Positioned(
               top: 10,
