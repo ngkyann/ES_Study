@@ -35,6 +35,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int userPoints = 0;
   int userStreak = 0;
+  int userCoins = 0;
   bool _isLoadingData = true;
   String _realEmail = '';
   String _realName = '';
@@ -148,6 +149,7 @@ class _HomePageState extends State<HomePage> {
         final data = doc.data()!;
         int points = data['points'] ?? 100;
         int streak = data['streakCount'] ?? 0;
+        int coins = data['coins'] ?? 0;
         String emailFromDb = data['email'] ?? widget.email;
         String nameFromDb = data['name'] ?? widget.userName;
         String classFromDb = data['class'] ?? widget.selectedClass;
@@ -170,6 +172,7 @@ class _HomePageState extends State<HomePage> {
           setState(() {
             userPoints = points;
             userStreak = streak;
+            userCoins = coins;
             _realEmail = emailFromDb;
             _realName = nameFromDb;
             _realClass = classFromDb;
@@ -277,7 +280,7 @@ class _HomePageState extends State<HomePage> {
                   elevation: 0,
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
-                  leadingWidth: 230,
+                  leadingWidth: 290,
                   leading: _buildAppBarLeading(),
                   actions: [
                     // 🔥 ĐÃ ĐỔI SANG HÌNH CÁI CHUÔNG
@@ -320,6 +323,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Tiện ích AppBar phía bên trái
   // Tiện ích AppBar phía bên trái
   Widget _buildAppBarLeading() {
     return Container(
@@ -371,30 +375,44 @@ class _HomePageState extends State<HomePage> {
                   ),
                 );
               }),
-          const SizedBox(width: 12),
-          const Icon(Icons.local_fire_department, color: Colors.orangeAccent),
-          const SizedBox(width: 4),
+          const SizedBox(width: 10),
+          const Icon(Icons.local_fire_department,
+              color: Colors.orangeAccent, size: 20),
+          const SizedBox(width: 2),
           _isLoadingData
               ? const SizedBox(
-                  width: 12,
-                  height: 12,
+                  width: 10,
+                  height: 10,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
+                      strokeWidth: 1.5, color: Colors.white))
               : Text("$userStreak",
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 18)),
-          const SizedBox(width: 12),
-          const Icon(Icons.workspace_premium, color: Colors.yellow),
-          const SizedBox(width: 4),
+                      fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(width: 10),
+          const Icon(Icons.workspace_premium, color: Colors.yellow, size: 20),
+          const SizedBox(width: 2),
           _isLoadingData
               ? const SizedBox(
-                  width: 12,
-                  height: 12,
+                  width: 10,
+                  height: 10,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
+                      strokeWidth: 1.5, color: Colors.white))
               : Text("$userPoints",
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 18)),
+                      fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(width: 10),
+          const Icon(Icons.monetization_on,
+              color: Colors.amberAccent, size: 20),
+          const SizedBox(width: 2),
+          _isLoadingData
+              ? const SizedBox(
+                  width: 10,
+                  height: 10,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 1.5, color: Colors.white))
+              : Text("$userCoins",
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15)),
         ],
       ),
     );
