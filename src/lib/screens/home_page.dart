@@ -64,8 +64,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // --- GIỮ NGUYÊN TOÀN BỘ LOGIC CŨ ---
-
   Future<void> _checkTodayPlansAndShowPopup() async {
     bool isVN = languageNotifier.value == "Tiếng Việt";
     try {
@@ -205,12 +203,13 @@ class _HomePageState extends State<HomePage> {
           DateTime lastStudyDay =
               DateTime(lastStudy.year, lastStudy.month, lastStudy.day);
           int difference = today.difference(lastStudyDay).inDays;
-          if (difference == 0)
+          if (difference == 0) {
             newStreak = currentStreak;
-          else if (difference == 1)
+          } else if (difference == 1) {
             newStreak = currentStreak + 1;
-          else
+          } else {
             newStreak = 1;
+          }
         }
       }
       await userRef.set({
@@ -233,8 +232,9 @@ class _HomePageState extends State<HomePage> {
     final hour = now.hour;
     bool isVN = languageNotifier.value == "Tiếng Việt";
     if (hour >= 5 && hour < 12) return isVN ? "Chào buổi sáng" : "Good morning";
-    if (hour >= 12 && hour < 18)
+    if (hour >= 12 && hour < 18) {
       return isVN ? "Chào buổi chiều" : "Good afternoon";
+    }
     return isVN ? "Chào buổi tối" : "Good evening";
   }
 
@@ -275,16 +275,44 @@ class _HomePageState extends State<HomePage> {
 
         return Scaffold(
           backgroundColor: Colors.grey.shade50,
-          appBar: _currentIndex == 1
-              ? AppBar(
-                  // Chỉ hiện AppBar ở tab Home
+          // 🔥 FIX LỖI GIẬT LAYOUT: Bỏ AppBar ở lớp Scaffold ngoài cùng
+          // appBar: null,
+
+          body: PageView(
+            controller: _pageController,
+            physics: const NeverScrollableScrollPhysics(),
+            onPageChanged: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            children: [
+              // 🔥 TAB 0: CỬA HÀNG (Bọc Scaffold để có AppBar riêng)
+              Scaffold(
+                backgroundColor: Colors.grey.shade50,
+                appBar: AppBar(
+                  title: Text(isVN ? "Cửa hàng" : "Shop",
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  centerTitle: true,
+                  elevation: 0,
+                ),
+                body: _buildPlaceholderPage(
+                    isVN ? "Cửa hàng" : "Shop", Icons.shopping_bag),
+              ),
+
+              // 🔥 TAB 1: TRANG CHỦ (Bọc Scaffold để có AppBar riêng trượt theo mượt mà)
+              Scaffold(
+                backgroundColor: Colors.grey.shade50,
+                appBar: AppBar(
                   elevation: 0,
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
                   leadingWidth: 290,
                   leading: _buildAppBarLeading(),
                   actions: [
-                    // 🔥 ĐÃ CẬP NHẬT: Nhấn chuông mở trang thông báo Liquid Glass
+                    // 🔥 ĐÃ KẾT HỢP: Hành vi chuyển trang khi nhấn chuông thông báo
                     IconButton(
                       icon: const Icon(Icons.notifications_none,
                           size: 28, color: Colors.white),
@@ -300,20 +328,11 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(width: 4),
                   ],
-                )
-              : null,
-          body: PageView(
-            controller: _pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            onPageChanged: (index) {
-              setState(() {
-                _currentIndex = index;
-              });
-            },
-            children: [
-              _buildPlaceholderPage(
-                  isVN ? "Cửa hàng" : "Shop", Icons.shopping_bag),
-              _buildHomeContent(isVN),
+                ),
+                body: _buildHomeContent(isVN),
+              ),
+
+              // 🔥 TAB 2: CÀI ĐẶT (Đã là Scaffold sẵn trong settings_page.dart)
               SettingsPage(
                 userName: _realName,
                 selectedClass: _realClass,
@@ -328,8 +347,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Tiện ích AppBar phía bên trái
-  // Tiện ích AppBar phía bên trái
   Widget _buildAppBarLeading() {
     return Container(
       margin: const EdgeInsets.only(left: 16, top: 10),
@@ -423,7 +440,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Nội dung chính trang Home (Mây + Menu)
   Widget _buildHomeContent(bool isVN) {
     return RefreshIndicator(
       color: primaryColor,
@@ -472,14 +488,15 @@ class _HomePageState extends State<HomePage> {
                       Icons.smart_toy, "Trợ lý học tập", Colors.blueAccent),
                 ],
                 isVN),
-            const SizedBox(height: 100), // Khoảng trống cho TabBar
+            const SizedBox(
+                height:
+                    30), // 🔥 Giảm khoảng trống do đã sử dụng bottomNavigationBar chuẩn
           ],
         ),
       ),
     );
   }
 
-  // Phần header mây trang trí
   Widget _buildCloudHeader() {
     return Stack(
       clipBehavior: Clip.none,
@@ -550,7 +567,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // 🔥 THANH ĐIỀU HƯỚNG TÙY CHỈNH CÓ UX PHÓNG TO
   Widget _buildBottomTab(bool isVN) {
     return Container(
       height: 70,
@@ -582,7 +598,6 @@ class _HomePageState extends State<HomePage> {
     bool isSelected = _currentIndex == index;
     return GestureDetector(
       onTap: () {
-        // 🔥 ĐÃ SỬ DỤNG: animateToPage để tạo hiệu ứng trượt khi click chuyển Tab
         _pageController.animateToPage(
           index,
           duration: const Duration(milliseconds: 500),
@@ -662,7 +677,7 @@ class _HomePageState extends State<HomePage> {
             } else if (item.title == "Trợ lý học tập") {
               await Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const AIAssistantPage()));
-            } else if (item.isSearch) {
+            } else if (item.title == "Tìm phòng học") {
               await Navigator.push(
                   context,
                   MaterialPageRoute(
