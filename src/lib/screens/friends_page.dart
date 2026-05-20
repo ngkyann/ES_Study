@@ -78,12 +78,22 @@ class _FriendsPageState extends State<FriendsPage> {
     final targetRef =
         FirebaseFirestore.instance.collection('users').doc(targetUserId);
 
+    // 🔥 TÌM ID CỦA CHUỖI BẠN BÈ ĐỂ XÓA
+    String streakId = _getChatId(widget.currentUserId, targetUserId);
+    final streakRef =
+        FirebaseFirestore.instance.collection('friend_streaks').doc(streakId);
+
+    // Xóa khỏi danh sách bạn bè của mình
     batch.update(myRef, {
       'friends': FieldValue.arrayRemove([targetUserId]),
     });
+    // Xóa khỏi danh sách bạn bè của người kia
     batch.update(targetRef, {
       'friends': FieldValue.arrayRemove([widget.currentUserId]),
     });
+    // 🔥 THÊM MỚI: XÓA DOCUMENT CHUỖI KHỎI DATABASE
+    batch.delete(streakRef);
+
     await batch.commit();
   }
 
@@ -267,76 +277,104 @@ class _FriendsPageState extends State<FriendsPage> {
                                 String targetName =
                                     friendData['name'] ?? 'Ẩn danh';
 
-                                return ListTile(
-                                  onTap: () => _openUserProfile(
-                                    targetId,
-                                    targetName,
-                                  ),
-                                  leading: CircleAvatar(
-                                    backgroundColor:
-                                        primaryColor.withOpacity(0.2),
-                                    backgroundImage: (friendData['avatarUrl'] !=
-                                                null &&
-                                            friendData['avatarUrl']
-                                                .toString()
-                                                .isNotEmpty)
-                                        ? NetworkImage(friendData['avatarUrl'])
-                                        : null,
-                                    child: (friendData['avatarUrl'] != null &&
-                                            friendData['avatarUrl']
-                                                .toString()
-                                                .isNotEmpty)
-                                        ? null
-                                        : const Icon(
-                                            Icons.person,
-                                            color: Colors.blue,
-                                          ),
-                                  ),
-                                  title: Text(
-                                    targetName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  subtitle: Text("ID: @$targetId"),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.message,
-                                          color: Colors.blueAccent,
+                                return FutureBuilder<DocumentSnapshot>(
+                                    future: FirebaseFirestore.instance
+                                        .collection('friend_streaks')
+                                        .doc(_getChatId(
+                                            widget.currentUserId, targetId))
+                                        .get(),
+                                    builder: (context, streakSnap) {
+                                      int streak = 0;
+                                      if (streakSnap.hasData &&
+                                          streakSnap.data!.exists) {
+                                        streak = (streakSnap.data!.data()
+                                                    as Map<String, dynamic>)[
+                                                'streak'] ??
+                                            0;
+                                      }
+                                      bool hasStreak = streak >= 3;
+
+                                      return ListTile(
+                                        onTap: () => _openUserProfile(
+                                            targetId, targetName),
+                                        leading: CircleAvatar(
+                                          backgroundColor:
+                                              primaryColor.withOpacity(0.2),
+                                          backgroundImage:
+                                              (friendData['avatarUrl'] !=
+                                                          null &&
+                                                      friendData['avatarUrl']
+                                                          .toString()
+                                                          .isNotEmpty)
+                                                  ? NetworkImage(
+                                                      friendData['avatarUrl'])
+                                                  : null,
+                                          child: (friendData['avatarUrl'] !=
+                                                      null &&
+                                                  friendData['avatarUrl']
+                                                      .toString()
+                                                      .isNotEmpty)
+                                              ? null
+                                              : const Icon(Icons.person,
+                                                  color: Colors.blue),
                                         ),
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => ChatPage(
-                                                chatId: _getChatId(
-                                                  widget.currentUserId,
-                                                  targetId,
-                                                ),
-                                                currentUserId:
-                                                    widget.currentUserId,
-                                                targetUserName: targetName,
-                                              ),
+                                        title: Row(
+                                          children: [
+                                            Text(targetName,
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                            if (hasStreak) ...[
+                                              const SizedBox(width: 5),
+                                              const Icon(
+                                                  Icons.local_fire_department,
+                                                  color: Colors.orange,
+                                                  size: 18),
+                                              Text("$streak",
+                                                  style: const TextStyle(
+                                                      color: Colors.orange,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 14)),
+                                            ]
+                                          ],
+                                        ),
+                                        subtitle: Text("ID: @$targetId"),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.message,
+                                                  color: Colors.blueAccent),
+                                              onPressed: () {
+                                                Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) => ChatPage(
+                                                        chatId: _getChatId(
+                                                            widget
+                                                                .currentUserId,
+                                                            targetId),
+                                                        currentUserId: widget
+                                                            .currentUserId,
+                                                        targetUserName:
+                                                            targetName,
+                                                      ),
+                                                    ));
+                                              },
                                             ),
-                                          );
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.person_remove,
-                                          color: Colors.red,
+                                            IconButton(
+                                              icon: const Icon(
+                                                  Icons.person_remove,
+                                                  color: Colors.red),
+                                              onPressed: () =>
+                                                  _showUnfriendConfirmDialog(
+                                                      targetId, targetName),
+                                            ),
+                                          ],
                                         ),
-                                        // 🔥 GỌI HÀM CONFIRM DIALOG THAY VÌ XÓA TRỰC TIẾP
-                                        onPressed: () =>
-                                            _showUnfriendConfirmDialog(
-                                                targetId, targetName),
-                                      ),
-                                    ],
-                                  ),
-                                );
+                                      );
+                                    });
                               },
                             ),
 
@@ -644,7 +682,24 @@ class OtherUserProfilePage extends StatelessWidget {
 
       int rank = (higherScoreQuery.count ?? 0) + 1;
       data['rank'] = rank;
-
+// 🔥 THÊM ĐOẠN NÀY VÀO TRƯỚC return data;
+      if (data['featuredFriendId'] != null) {
+        String fId = data['featuredFriendId'];
+        var fDoc = await userRef.doc(fId).get();
+        if (fDoc.exists) {
+          data['featuredFriendName'] = fDoc.data()?['name'] ?? 'Ẩn danh';
+          String streakId =
+              userId.compareTo(fId) < 0 ? '${userId}_$fId' : '${fId}_$userId';
+          var streakDoc = await FirebaseFirestore.instance
+              .collection('friend_streaks')
+              .doc(streakId)
+              .get();
+          if (streakDoc.exists) {
+            data['featuredFriendStreak'] = streakDoc.data()?['streak'] ?? 0;
+          }
+        }
+      }
+      // return data;
       return data;
     } catch (e) {
       debugPrint("Lỗi khi tải thông tin user: $e");
@@ -847,6 +902,46 @@ class OtherUserProfilePage extends StatelessWidget {
                                 Icons.calendar_month,
                                 isVN ? "Ngày gia nhập" : "Joined Date",
                                 joinDateText),
+                            // 🔥 THÊM MỚI: HIỂN THỊ BẠN THÂN BÊN PROFILE NGƯỜI KHÁC
+                            if (data['featuredFriendId'] != null &&
+                                data['featuredFriendStreak'] != null &&
+                                data['featuredFriendStreak'] >= 3)
+                              Card(
+                                elevation: 0,
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                    side: BorderSide(
+                                        color: Colors.orange.shade200)),
+                                color: Colors.orange.shade50,
+                                child: ListTile(
+                                  leading: const Icon(Icons.favorite,
+                                      color: Colors.redAccent),
+                                  title: Text(
+                                      isVN
+                                          ? "Bạn thân học tập"
+                                          : "Study Bestie",
+                                      style: const TextStyle(
+                                          fontSize: 13, color: Colors.grey)),
+                                  subtitle: Row(
+                                    children: [
+                                      Text(data['featuredFriendName'],
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                              color: Colors.black87)),
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.local_fire_department,
+                                          color: Colors.orange, size: 20),
+                                      Text("${data['featuredFriendStreak']}",
+                                          style: const TextStyle(
+                                              color: Colors.orange,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16)),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             const SizedBox(height: 25),
                             Text(
                               isVN ? "Huy chương mùa giải" : "Season Medals",

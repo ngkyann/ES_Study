@@ -38,6 +38,103 @@ class _ProfilePageState extends State<ProfilePage> {
   // State cho phần Bio
   bool _isEditingBio = false;
   bool _isSavingBio = false;
+  String _getChatId(String uid1, String uid2) {
+    return uid1.compareTo(uid2) < 0 ? '${uid1}_$uid2' : '${uid2}_$uid1';
+  }
+
+  void _showSelectFeaturedFriendDialog(List<dynamic> myFriends, bool isVN) {
+    showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) {
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                    isVN
+                        ? "Chọn Bạn thân nổi bật (Chuỗi >= 3)"
+                        : "Select Featured Friend (Streak >= 3)",
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              Expanded(
+                child: ListView.builder(
+                    itemCount: myFriends.length,
+                    itemBuilder: (context, index) {
+                      String friendId = myFriends[index];
+                      String chatId = _getChatId(widget.userId, friendId);
+
+                      return FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('friend_streaks')
+                              .doc(chatId)
+                              .get(),
+                          builder: (context, streakSnap) {
+                            if (!streakSnap.hasData || !streakSnap.data!.exists)
+                              return const SizedBox();
+                            int streak = (streakSnap.data!.data()
+                                    as Map<String, dynamic>)['streak'] ??
+                                0;
+                            if (streak < 3)
+                              return const SizedBox(); // Chỉ hiện nếu >= 3
+
+                            return FutureBuilder<DocumentSnapshot>(
+                                future: FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(friendId)
+                                    .get(),
+                                builder: (context, userSnap) {
+                                  if (!userSnap.hasData)
+                                    return const SizedBox();
+                                  String fName =
+                                      userSnap.data!.get('name') ?? 'Unknown';
+                                  String? fAvatar = (userSnap.data!.data()
+                                      as Map<String, dynamic>)['avatarUrl'];
+
+                                  return ListTile(
+                                    leading: CircleAvatar(
+                                        backgroundImage: fAvatar != null
+                                            ? NetworkImage(fAvatar)
+                                            : null),
+                                    title: Text(fName,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.local_fire_department,
+                                            color: Colors.orange),
+                                        Text("$streak",
+                                            style: const TextStyle(
+                                                color: Colors.orange,
+                                                fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    onTap: () async {
+                                      Navigator.pop(ctx);
+                                      await FirebaseFirestore.instance
+                                          .collection('users')
+                                          .doc(widget.userId)
+                                          .update(
+                                              {'featuredFriendId': friendId});
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(SnackBar(
+                                              content: Text(isVN
+                                                  ? "Đã cài đặt bạn thân nổi bật!"
+                                                  : "Featured friend set!")));
+                                    },
+                                  );
+                                });
+                          });
+                    }),
+              ),
+            ],
+          );
+        });
+  }
+
   final TextEditingController _bioController = TextEditingController();
 
   @override
@@ -647,7 +744,111 @@ class _ProfilePageState extends State<ProfilePage> {
                       children: [
                         // ĐÃ CHUYỂN BIO LÊN TRÊN ID NGƯỜI DÙNG
                         _buildBioSection(isVN),
+// 🔥 THÊM MỚI: WIDGET BẠN THÂN NỔI BẬT
+                        StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(widget.userId)
+                                .snapshots(),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData || !snapshot.data!.exists)
+                                return const SizedBox();
+                              final data =
+                                  snapshot.data!.data() as Map<String, dynamic>;
+                              List<dynamic> myFriends = data['friends'] ?? [];
+                              String? featuredId = data['featuredFriendId'];
 
+                              return Card(
+                                elevation: 0,
+                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                    side: BorderSide(
+                                        color: Colors.orange.shade200)),
+                                color: Colors.orange.shade50,
+                                child: ListTile(
+                                  onTap: () => _showSelectFeaturedFriendDialog(
+                                      myFriends, isVN),
+                                  leading: const Icon(Icons.favorite,
+                                      color: Colors.redAccent),
+                                  title: Text(
+                                      isVN
+                                          ? "Bạn thân học tập"
+                                          : "Study Bestie",
+                                      style: const TextStyle(
+                                          fontSize: 13, color: Colors.grey)),
+                                  subtitle: featuredId == null
+                                      ? Text(
+                                          isVN
+                                              ? "Chạm để chọn..."
+                                              : "Tap to select...",
+                                          style: const TextStyle(
+                                              color: Colors.orange,
+                                              fontStyle: FontStyle.italic))
+                                      : FutureBuilder<DocumentSnapshot>(
+                                          future: FirebaseFirestore.instance
+                                              .collection('users')
+                                              .doc(featuredId)
+                                              .get(),
+                                          builder: (context, fSnap) {
+                                            if (!fSnap.hasData)
+                                              return const Text("...");
+                                            String fName =
+                                                fSnap.data!.get('name');
+                                            return FutureBuilder<
+                                                    DocumentSnapshot>(
+                                                future: FirebaseFirestore
+                                                    .instance
+                                                    .collection(
+                                                        'friend_streaks')
+                                                    .doc(_getChatId(
+                                                        widget.userId,
+                                                        featuredId))
+                                                    .get(),
+                                                builder: (context, sSnap) {
+                                                  int streak = sSnap.hasData &&
+                                                          sSnap.data!.exists
+                                                      ? (sSnap.data!.data()
+                                                                  as Map<String,
+                                                                      dynamic>)[
+                                                              'streak'] ??
+                                                          0
+                                                      : 0;
+                                                  return Row(
+                                                    children: [
+                                                      Text(fName,
+                                                          style: const TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 16,
+                                                              color: Colors
+                                                                  .black87)),
+                                                      const SizedBox(width: 8),
+                                                      const Icon(
+                                                          Icons
+                                                              .local_fire_department,
+                                                          color: Colors.orange,
+                                                          size: 20),
+                                                      Text("$streak",
+                                                          style:
+                                                              const TextStyle(
+                                                                  color: Colors
+                                                                      .orange,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize:
+                                                                      16)),
+                                                    ],
+                                                  );
+                                                });
+                                          }),
+                                  trailing: const Icon(Icons.edit,
+                                      size: 16, color: Colors.grey),
+                                ),
+                              );
+                            }),
                         _infoCard(
                           Icons.alternate_email,
                           isVN ? "ID người dùng" : "User ID",
