@@ -47,6 +47,9 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
   }
 
   void _createAndJoinRoom() async {
+    // Chống spam bấm Enter nhiều lần khi đang xử lý
+    if (_isLoading) return;
+
     setState(() => _isLoading = true);
 
     if (_roomNameController.text.trim().isEmpty) {
@@ -59,10 +62,11 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
           ),
         ),
       );
+      // Sửa lỗi kẹt loading khi tên phòng bị trống
+      setState(() => _isLoading = false);
       return;
     }
 
-    setState(() => _isLoading = true);
     final String roomName = _roomNameController.text.trim();
     final String newRoomId = const Uuid().v4();
 
@@ -122,6 +126,10 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                   icon: Icons.edit_note,
                   child: TextField(
                     controller: _roomNameController,
+                    // THÊM: Định dạng nút Enter trên bàn phím là 'Done/Go'
+                    textInputAction: TextInputAction.done,
+                    // THÊM: Gọi hàm tạo phòng ngay khi nhấn Enter
+                    onSubmitted: (_) => _createAndJoinRoom(),
                     decoration: InputDecoration(
                       hintText:
                           isVN ? "Nhập tên phòng..." : "Enter room name...",
@@ -196,7 +204,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // 🔥 ĐÃ THÊM: Tuỳ chọn Phòng Riêng tư
+                // Tuỳ chọn Phòng Riêng tư
                 _buildConfigCard(
                   title: isVN ? "Chế độ riêng tư" : "Privacy Mode",
                   icon: Icons.security,
