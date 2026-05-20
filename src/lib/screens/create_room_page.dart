@@ -28,13 +28,12 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
   );
   int _selectedMinutes = 30;
   int _maxMembers = 4;
-  final List<int> _timeOptions = [1, 30, 45, 60, 90, 120];
+  final List<int> _timeOptions = [15, 30, 45, 60, 90, 120];
   final List<int> _memberOptions = [2, 4, 6, 8, 10, 15];
 
   String? _selectedPlanId;
-  String _selectedPlanTitle = languageNotifier.value == "Tiếng Việt"
-      ? "Học tự do"
-      : "Free Study";
+  String _selectedPlanTitle =
+      languageNotifier.value == "Tiếng Việt" ? "Học tự do" : "Free Study";
   List<String> _goalsForRoom = [];
   bool _isPrivate = false;
   String _roomCode = "";
@@ -124,9 +123,8 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                   child: TextField(
                     controller: _roomNameController,
                     decoration: InputDecoration(
-                      hintText: isVN
-                          ? "Nhập tên phòng..."
-                          : "Enter room name...",
+                      hintText:
+                          isVN ? "Nhập tên phòng..." : "Enter room name...",
                       filled: true,
                       fillColor: Colors.grey.shade100,
                       border: OutlineInputBorder(
@@ -222,9 +220,8 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                 const SizedBox(height: 16),
 
                 _buildConfigCard(
-                  title: isVN
-                      ? "Kế hoạch cá nhân của bạn"
-                      : "Your Personal Plan",
+                  title:
+                      isVN ? "Kế hoạch cá nhân của bạn" : "Your Personal Plan",
                   icon: Icons.assignment,
                   child: StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
@@ -296,9 +293,8 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                                   _goalsForRoom.add(allTasks[i]);
                               }
                             } else {
-                              _selectedPlanTitle = isVN
-                                  ? "Học tự do"
-                                  : "Free Study";
+                              _selectedPlanTitle =
+                                  isVN ? "Học tự do" : "Free Study";
                             }
                           });
                         },
