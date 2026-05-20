@@ -18,50 +18,95 @@ class _NotificationPageState extends State<NotificationPage> {
   Widget build(BuildContext context) {
     bool isVN = languageNotifier.value == "Tiếng Việt";
 
+    Color darkerPrimary = Color.lerp(primaryColor, primaryColor, 0.4)!;
+
+    final List<Shadow> outlineStyle = [
+      Shadow(offset: const Offset(-1.2, -1.2), color: darkerPrimary),
+      Shadow(offset: const Offset(1.2, -1.2), color: darkerPrimary),
+      Shadow(offset: const Offset(1.2, 1.2), color: darkerPrimary),
+      Shadow(offset: const Offset(-1.2, 1.2), color: darkerPrimary),
+    ];
+
     return Scaffold(
-      backgroundColor: Colors
-          .transparent, // 🔥 QUAN TRỌNG: Làm nền Scaffold trong suốt hoàn toàn
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(
           isVN ? "Thông báo" : "Notifications",
           style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: primaryColor), // Ăn theo màu hệ thống
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            shadows: outlineStyle, // Áp dụng viền cho tiêu đề
+          ),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: IconThemeData(color: primaryColor), // Ăn theo màu hệ thống
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(
-                  sigmaX: 20.0,
-                  sigmaY: 20.0), // Hiệu ứng làm mờ giao diện phía dưới
-              child: Container(
-                color: primaryColor.withOpacity(
-                    0.12), // Phủ một lớp màu hệ thống trong suốt siêu nhẹ
+          Container(
+            color: primaryColor.withOpacity(0.3),
+          ),
+          Positioned(
+            top: 100,
+            left: -50,
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    primaryColor.withOpacity(0.6),
+                    primaryColor.withOpacity(0.0),
+                  ],
+                ),
               ),
             ),
           ),
-
           Positioned(
-            top: 120,
-            left: -40,
+            bottom: 150,
+            right: -80,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.purple.withOpacity(0.5),
+                    Colors.purple.withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 400,
+            right: -30,
             child: Container(
               width: 200,
               height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: primaryColor.withOpacity(0.18),
+                gradient: RadialGradient(
+                  colors: [
+                    Colors.teal.withOpacity(0.5),
+                    Colors.teal.withOpacity(0.0),
+                  ],
+                ),
               ),
             ),
           ),
-
-          // 2. DANH SÁCH THÔNG BÁO ĐÈ LÊN TRÊN LỚP KÍNH
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 30.0, sigmaY: 30.0),
+              child: Container(
+                color: Colors.white.withOpacity(0.03),
+              ),
+            ),
+          ),
           SafeArea(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -71,8 +116,8 @@ class _NotificationPageState extends State<NotificationPage> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(
-                    child: CircularProgressIndicator(color: primaryColor),
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
                   );
                 }
 
@@ -81,17 +126,24 @@ class _NotificationPageState extends State<NotificationPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.notifications_off_outlined,
-                            size: 80, color: primaryColor.withOpacity(0.4)),
+                        Icon(
+                          Icons.notifications_off_outlined,
+                          size: 80,
+                          color: Colors.white,
+                          shadows: outlineStyle, // Áp dụng viền cho Icon trống
+                        ),
                         const SizedBox(height: 16),
                         Text(
                           isVN
                               ? "Không có thông báo nào"
                               : "No notifications yet",
                           style: TextStyle(
-                              color: primaryColor.withOpacity(0.7),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500),
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            shadows:
+                                outlineStyle, // Áp dụng viền cho Text trống
+                          ),
                         ),
                       ],
                     ),
@@ -120,82 +172,90 @@ class _NotificationPageState extends State<NotificationPage> {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                        // Hộp kính màu trắng sữa mỏng giúp đọc text rõ ràng trên nền phức tạp của Home Page
-                        color: Colors.white.withOpacity(0.65),
+                        color: Colors.white.withOpacity(0.07),
                         borderRadius: BorderRadius.circular(20),
-                        // Đường viền mỏng bóng bẩy theo màu hệ thống
                         border: Border.all(
-                          color: primaryColor.withOpacity(0.25),
+                          color: Colors.white.withOpacity(0.15),
                           width: 1.2,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
+                            color: primaryColor.withOpacity(0.3),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           )
                         ],
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: primaryColor.withOpacity(0.1),
-                                shape: BoxShape.circle,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Icon chuông trang trí nhỏ hiệu ứng neon nhẹ
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.notifications_active,
+                                  color: Colors.amberAccent,
+                                  size: 20,
+                                  shadows:
+                                      outlineStyle, // Áp dụng viền cho Icon chuông
+                                ),
                               ),
-                              child: Icon(
-                                Icons.notifications_active,
-                                color: primaryColor,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  RichText(
-                                    text: TextSpan(
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        color: Colors.black87,
-                                        height: 1.3,
+                              const SizedBox(width: 14),
+
+                              // Nội dung thông báo hiển thị đúng format yêu cầu
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    RichText(
+                                      text: TextSpan(
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: Colors.white,
+                                          height: 1.3,
+                                          shadows:
+                                              outlineStyle, // 🔥 Áp dụng viền cho TOÀN BỘ TextSpan bên trong
+                                        ),
+                                        children: [
+                                          // Phần Ngày/Tháng (In đậm nổi bật)
+                                          TextSpan(
+                                            text: '"$dayMonthStr"',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.cyanAccent),
+                                          ),
+                                          const TextSpan(text: ' : '),
+                                          // Phần Giờ:Phút (In đậm nổi bật)
+                                          TextSpan(
+                                            text: '"$hourMinuteStr"',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.orangeAccent),
+                                          ),
+                                          const TextSpan(text: ' : '),
+                                          // Phần nội dung thông báo thông thường
+                                          TextSpan(
+                                            text: '"$contentStr"',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.w400,
+                                                color: Colors.white),
+                                          ),
+                                        ],
                                       ),
-                                      children: [
-                                        // Phần Ngày/Tháng dạng "DD/MM" màu hệ thống
-                                        TextSpan(
-                                          text: '"$dayMonthStr"',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: primaryColor),
-                                        ),
-                                        const TextSpan(text: ' : '),
-                                        // Phần Giờ:Phút màu cam nổi bật nhạt
-                                        TextSpan(
-                                          text: '"$hourMinuteStr"',
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.orangeAccent),
-                                        ),
-                                        const TextSpan(text: ' : '),
-                                        // Nội dung văn bản thông báo
-                                        TextSpan(
-                                          text: '"$contentStr"',
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w400,
-                                              color: Colors.black87),
-                                        ),
-                                      ],
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     );
