@@ -28,7 +28,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
           languageNotifier.value == "Tiếng Việt" ? "Phòng học" : "Study room");
   int _selectedMinutes = 30;
   int _maxMembers = 4;
-  final List<int> _timeOptions = [15, 30, 45, 60, 90, 120];
+  final List<int> _timeOptions = [1, 30, 45, 60, 90, 120];
   final List<int> _memberOptions = [2, 4, 6, 8, 10, 15];
 
   String? _selectedPlanId;

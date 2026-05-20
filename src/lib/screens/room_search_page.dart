@@ -30,7 +30,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
   ];
 
   void _showJoinByCodeDialog(BuildContext context) {
-    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 THÊM NGÔN NGỮ
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     final TextEditingController codeController = TextEditingController();
 
     showDialog(
@@ -105,7 +105,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
     Map<String, dynamic> roomData,
     String roomId,
   ) {
-    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 THÊM NGÔN NGỮ
+    bool isVN = languageNotifier.value == "Tiếng Việt";
     int maxMembers = roomData['maxMembers'] ?? 4;
     int currentMembers = List.from(roomData['participants'] ?? []).length;
     String roomName = roomData['roomName'] ??
@@ -155,14 +155,21 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                     stream: FirebaseFirestore.instance
                         .collection('plans')
                         .where('userId', isEqualTo: widget.currentUserId)
-                        .where('time', isLessThanOrEqualTo: Timestamp.now())
+                        // 🔥 ĐÃ SỬA LỖI: Xóa '.where('time')' để tránh lỗi Index, đưa về lọc client-side
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
-                        return const CircularProgressIndicator();
+                        return const Center(child: CircularProgressIndicator());
                       }
 
-                      final validDocs = snapshot.data!.docs;
+                      // 🔥 LỌC CLIENT-SIDE (Từ đoạn code cũ hoạt động tốt)
+                      final now = DateTime.now();
+                      final validDocs = snapshot.data!.docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        if (data['time'] == null) return false;
+                        DateTime time = (data['time'] as Timestamp).toDate();
+                        return time.isBefore(now) || time.isAtSameMomentAs(now);
+                      }).toList();
 
                       return DropdownButtonFormField<String?>(
                         value: selectedPlanId,
@@ -268,7 +275,6 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 BỌC TÒAN BỘ ValueListenableBuilder
     return ValueListenableBuilder<String>(
       valueListenable: languageNotifier,
       builder: (context, lang, child) {
@@ -361,25 +367,10 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
               ),
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: (() {
-                    // Xây dựng Query động: Lọc tối đa trên Server
-                    Query query =
-                        FirebaseFirestore.instance.collection('study_rooms');
-
-                    // 1. Chỉ lấy phòng công khai
-                    query = query.where('isPrivate', isEqualTo: false);
-
-                    // 2. Lọc theo lớp (nếu không phải "Tất cả")
-                    if (_selectedFilterGrade != "Tất cả") {
-                      query = query.where('hostClass',
-                          isEqualTo: _selectedFilterGrade);
-                    }
-
-                    // 3. Sắp xếp theo thời gian tạo mới nhất
-                    return query
-                        .orderBy('createdAt', descending: true)
-                        .snapshots();
-                  })(),
+                  stream: FirebaseFirestore.instance
+                      .collection('study_rooms')
+                      .orderBy('createdAt', descending: true)
+                      .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return Center(
@@ -403,19 +394,24 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
 
                     final docs = snapshot.data!.docs;
 
-                    // Lọc Client-side: CHỈ lọc tìm kiếm ID (do Firestore không hỗ trợ contains)
                     final List<DocumentSnapshot> filteredDocs =
                         docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
+
+                      if (data['isPrivate'] == true) return false;
+
+                      final roomGrade = data['hostClass'] ?? "";
+                      final hostId = data['hostId'] ?? "";
+
+                      bool matchesGrade = _selectedFilterGrade == "Tất cả" ||
+                          roomGrade == _selectedFilterGrade;
+
                       final cleanSearchId =
                           _searchId.replaceAll('@', '').toLowerCase();
+                      bool matchesId = cleanSearchId.isEmpty ||
+                          hostId.toLowerCase().contains(cleanSearchId);
 
-                      if (cleanSearchId.isEmpty)
-                        return true; // Bỏ qua lọc nếu không gõ từ khóa
-
-                      final hostId =
-                          data['hostId']?.toString().toLowerCase() ?? "";
-                      return hostId.contains(cleanSearchId);
+                      return matchesGrade && matchesId;
                     }).toList();
 
                     if (filteredDocs.isEmpty) {
@@ -452,6 +448,16 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                           int hostPoints = data['hostPoints'] ?? 0;
                           String originalClass = data['hostClass'] ?? "Lớp ?";
 
+                          // 🔥 GIỮ LẠI TÍNH NĂNG ĐẾM THỜI GIAN CỦA CODE MỚI
+                          int durationMins = data['duration'] ?? 30;
+                          int elapsedMins = 0;
+                          if (data['createdAt'] != null) {
+                            DateTime createdAt =
+                                (data['createdAt'] as Timestamp).toDate();
+                            elapsedMins =
+                                DateTime.now().difference(createdAt).inMinutes;
+                          }
+
                           StudyRoom room = StudyRoom(
                             hostName: data['roomName'] ??
                                 data['hostName'] ??
@@ -462,9 +468,10 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                               data['participants'] ?? [],
                             ).length,
                             maxMembers: data['maxMembers'] ?? 4,
-                            startTime: isVN ? "Đang diễn ra" : "Ongoing",
-                            endTime:
-                                "${data['duration'] ?? 30} ${isVN ? 'phút' : 'mins'}",
+                            startTime: isVN
+                                ? "Đã học: ${elapsedMins}p"
+                                : "Elapsed: ${elapsedMins}m",
+                            endTime: "$durationMins ${isVN ? 'phút' : 'mins'}",
                             grade: isVN
                                 ? originalClass
                                 : originalClass.replaceFirst('Lớp', 'Class'),

@@ -66,10 +66,13 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
   // HỆ THỐNG
   int _remainingSeconds = 0;
+  DateTime? _roomEndTime;
   Timer? _timer;
   late List<bool> _personalTaskStatus;
   final player = AudioPlayer();
-
+  DateTime _joinTime = DateTime.now();
+  int _currentParticipantsCount = 1;
+  bool _hasLeft = false;
   // ANTI-AFK
   final Random _random = Random();
   int _maxAfkChecks = 0;
@@ -108,14 +111,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       _nextAfkTargetSeconds = _random.nextInt(121) + 780;
     }
     _initRoom();
-    _startTimer();
   }
 
-  void _startTimer() {
-    _remainingSeconds = widget.duration * 60;
+  // 🔥 HÀM ĐẾM NGƯỢC ĐỒNG BỘ MỚI
+  void _startSynchronizedTimer() {
+    if (_roomEndTime == null) return;
+
+    _timer?.cancel(); // Hủy timer cũ nếu có để tránh chạy đè
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
 
+      // 1. Xử lý logic bong bóng AFK (giữ nguyên của bạn)
       if (_showAfkBubble) {
         setState(() => _afkTimeoutSeconds--);
         if (_afkTimeoutSeconds <= 0) {
@@ -130,9 +136,19 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         }
       }
 
-      if (_remainingSeconds > 0) {
-        setState(() => _remainingSeconds--);
+      // 2. Tính thời gian còn lại dựa hoàn toàn vào mốc giờ của Firebase
+      final now = DateTime.now();
+      final difference = _roomEndTime!.difference(now);
+
+      if (difference.inSeconds > 0) {
+        setState(() {
+          _remainingSeconds = difference.inSeconds;
+        });
       } else {
+        // Hết giờ
+        setState(() {
+          _remainingSeconds = 0;
+        });
         timer.cancel();
         _leaveRoom(isFinishedNatural: true);
       }
@@ -256,13 +272,28 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
     _participantsSub = roomRef.snapshots().listen((snap) {
       if (!snap.exists) {
-        if (!widget.isHost && mounted) {
-          _showHostLeftDialogAndExit();
+        // 🔥 NẾU PHÒNG BỊ XÓA (Do Host thoát sớm hoặc Host hết giờ trước 1-2s)
+        if (!widget.isHost && mounted && !_hasLeft) {
+          // Ép buộc kết thúc và TIẾN HÀNH TRẢ ĐIỂM cho thành viên
+          _leaveRoomLogic(
+              isFailedAFK: false,
+              isFinishedNatural: true,
+              isHostForcedClose: true);
         }
         return;
       }
 
       final data = snap.data()!;
+      // 🔥 LƯU SỐ THÀNH VIÊN HIỆN TẠI VÀO BIẾN CACHE
+      _currentParticipantsCount = List.from(data['participants'] ?? []).length;
+
+      // ... (Các đoạn code bên dưới giữ nguyên: kiểm tra createdAt, trạng thái mic/cam...)
+      if (_roomEndTime == null && data['createdAt'] != null) {
+        DateTime createdAt = (data['createdAt'] as Timestamp).toDate();
+        // Cộng thời lượng phòng vào thời gian bắt đầu để ra thời điểm kết thúc chính xác
+        _roomEndTime = createdAt.add(Duration(minutes: widget.duration));
+        _startSynchronizedTimer();
+      }
       final names = Map<String, dynamic>.from(data['participantNames'] ?? {});
       final states = Map<String, dynamic>.from(data['participantStates'] ?? {});
 
@@ -295,54 +326,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       }
       if (mounted) setState(() {});
     });
-  }
-
-  void _showHostLeftDialogAndExit() {
-    bool isVN = languageNotifier.value == "Tiếng Việt";
-    _timer?.cancel();
-    for (var id in _peers.keys) {
-      _peers[id]?.close();
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.info_outline, color: Colors.blue),
-            SizedBox(width: 8),
-            Text(isVN ? "Phòng đã đóng" : "Room closed"),
-          ],
-        ),
-        content: Text(
-          isVN
-              ? "Chủ phòng (Host) đã rời đi. Phòng học đã bị giải tán, hẹn gặp lại bạn lần sau nhé!"
-              : "The Host has left. The study room is dismissed, see you next time!",
-        ),
-        actions: [
-          Center(
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
-              },
-              child: Text(
-                isVN ? "Đã hiểu" : "Got it",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _triggerAfkBubble() {
@@ -675,25 +658,30 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     );
   }
 
+  // 🔥 THAY THẾ TOÀN BỘ HÀM _leaveRoomLogic CŨ BẰNG HÀM NÀY
   Future<void> _leaveRoomLogic({
     required bool isFailedAFK,
     required bool isFinishedNatural,
+    bool isHostForcedClose =
+        false, // Thêm tham số này để báo hiệu Host đóng phòng
   }) async {
+    if (_hasLeft) return; // Tránh việc gọi 2 lần
+    _hasLeft = true;
     _timer?.cancel();
 
     for (var id in _peers.keys) {
       _peers[id]?.close();
     }
+
     bool isVN = languageNotifier.value == "Tiếng Việt";
     final roomRef =
         FirebaseFirestore.instance.collection('study_rooms').doc(widget.roomId);
     final roomSnap = await roomRef.get();
-    int currentParticipants = 1;
+
+    // Dùng số lượng thành viên đã lưu, vì nếu phòng bị xóa roomSnap sẽ không đọc được
+    int currentParticipants = _currentParticipantsCount;
 
     if (roomSnap.exists) {
-      final data = roomSnap.data() as Map<String, dynamic>;
-      currentParticipants = List.from(data['participants'] ?? []).length;
-
       if (widget.isHost) {
         await roomRef.delete();
       } else {
@@ -702,21 +690,53 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           'participantNames.${widget.userId}': FieldValue.delete(),
           'participantStates.${widget.userId}': FieldValue.delete(),
         });
-        await _sendSystemMessage(languageNotifier.value == "Tiếng Việt"
+        await _sendSystemMessage(isVN
             ? "${widget.userName} đã rời phòng."
             : "${widget.userName} left the room.");
       }
     }
 
-    if (isFailedAFK || !isFinishedNatural) {
-      if (mounted && !isFailedAFK) {
-        Navigator.pop(context);
+    // NẾU TỰ THOÁT SỚM HOẶC BỊ AFK (Không phải do Host ép thoát)
+    if (isFailedAFK || (!isFinishedNatural && !isHostForcedClose)) {
+      if (widget.isHost && !isFinishedNatural && !isFailedAFK) {
+        int penalty = 10 * currentParticipants;
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.userId)
+            .update({'points': FieldValue.increment(-penalty)});
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(isVN
+                    ? "Phạt -$penalty điểm do chủ phòng thoát sớm!"
+                    : "Penalty -$penalty points for leaving early!"),
+                backgroundColor: Colors.red),
+          );
+        }
       }
+      if (mounted && !isFailedAFK) Navigator.pop(context);
       return;
     }
 
-    final int actualMinutes = widget.duration;
+    // 👉 TÍNH THỜI GIAN THỰC TẾ ĐÃ NGỒI HỌC
+    int actualSeconds = DateTime.now().difference(_joinTime).inSeconds;
+    int actualMinutes = actualSeconds ~/ 60;
+
+    // Nếu vào chưa đủ 1 phút nhưng Host đóng phòng (trên 10 giây) thì châm chước cho 1 phút
+    if (actualMinutes == 0 && actualSeconds > 10) actualMinutes = 1;
+
+    // Bù trừ độ trễ đồng bộ: nếu ngồi sát nút giờ (lệch < 1 phút) thì làm tròn thành đủ giờ
+    if ((widget.duration - actualMinutes) <= 1 && !isHostForcedClose) {
+      actualMinutes = widget.duration;
+    }
+
     int earnedPoints = actualMinutes * currentParticipants;
+
+    // Nếu thời gian học quá ngắn (0 phút, 0 điểm)
+    if (earnedPoints <= 0) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
 
     List<String> finishedTasks = [];
     for (int i = 0; i < widget.goals.length; i++) {
@@ -727,12 +747,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       'userId': widget.userId,
       'time': DateTime.now(),
       'planTitle':
-          "${widget.planTitle} (${languageNotifier.value == "Tiếng Việt" ? "Học Online" : "Online Study"})",
+          "${widget.planTitle} (${isVN ? "Học Online" : "Online Study"})",
       'goals': widget.goals,
       'completedGoalsList': finishedTasks,
       'completed': finishedTasks.length,
       'total': widget.goals.length,
-      'minutes': actualMinutes,
+      'minutes': actualMinutes, // Lưu đúng thời gian thực tế
     });
 
     final userRef =
@@ -748,17 +768,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       Timestamp? lastStudyTs = userData['lastStudyDate'];
       if (lastStudyTs != null) {
         DateTime lastStudy = lastStudyTs.toDate();
-        DateTime lastStudyDay = DateTime(
-          lastStudy.year,
-          lastStudy.month,
-          lastStudy.day,
-        );
+        DateTime lastStudyDay =
+            DateTime(lastStudy.year, lastStudy.month, lastStudy.day);
         int difference = today.difference(lastStudyDay).inDays;
-        if (difference == 0) {
+        if (difference == 0)
           newStreak = currentStreak;
-        } else if (difference == 1) {
-          newStreak = currentStreak + 1;
-        }
+        else if (difference == 1) newStreak = currentStreak + 1;
       }
     }
 
@@ -768,37 +783,75 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       'lastStudyDate': Timestamp.fromDate(now),
     }, SetOptions(merge: true));
 
+    // Cập nhật chuỗi bạn bè (Friend Streak)
+    if (currentParticipants > 1 && roomSnap.exists) {
+      final data = roomSnap.data() as Map<String, dynamic>;
+      List<String> participants = List<String>.from(data['participants'] ?? []);
+
+      for (String pId in participants) {
+        if (pId != widget.userId) {
+          String streakId = _getChatId(widget.userId, pId);
+          DocumentReference streakRef = FirebaseFirestore.instance
+              .collection('friend_streaks')
+              .doc(streakId);
+          DocumentSnapshot streakSnap = await streakRef.get();
+
+          int newFriendStreak = 1;
+          if (streakSnap.exists && streakSnap.data() != null) {
+            Map<String, dynamic> streakData =
+                streakSnap.data() as Map<String, dynamic>;
+            int currentFriendStreak = streakData['streak'] ?? 0;
+            Timestamp? lastTs = streakData['lastStudyDate'];
+
+            if (lastTs != null) {
+              DateTime last = lastTs.toDate();
+              DateTime lastDay = DateTime(last.year, last.month, last.day);
+              int diff = today.difference(lastDay).inDays;
+              if (diff == 0)
+                newFriendStreak = currentFriendStreak;
+              else if (diff == 1) newFriendStreak = currentFriendStreak + 1;
+            }
+          }
+          await streakRef.set({
+            'streak': newFriendStreak,
+            'lastStudyDate': Timestamp.fromDate(now)
+          }, SetOptions(merge: true));
+        }
+      }
+    }
+
     if (mounted) {
+      String title = isVN ? "Xuất sắc! 🎉" : "Excellent! 🎉";
+      String desc = isVN
+          ? "Bạn đã học được $actualMinutes phút!\nSố người cùng học: $currentParticipants\n\n🎁 Thưởng: +$earnedPoints điểm"
+          : "You studied for $actualMinutes minutes!\nStudy buddies: $currentParticipants\n\n🎁 Reward: +$earnedPoints points";
+
+      // Nếu phòng bị đóng sớm do Host, báo cho người dùng biết
+      if (isHostForcedClose && _remainingSeconds > 5) {
+        title = isVN ? "Phòng đã đóng!" : "Room closed!";
+        desc = (isVN ? "Chủ phòng đã rời đi. " : "The host has left. ") + desc;
+      }
+
       await showDialog(
         context: context,
         barrierDismissible: false,
         builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(isVN ? "Xuất sắc! 🎉" : "Excellent! 🎉",
-              textAlign: TextAlign.center),
-          content: Text(
-            isVN
-                ? "Bạn đã kiên trì suốt $actualMinutes phút!\nSố người cùng học: $currentParticipants người\n\n🎁 Thưởng: +$earnedPoints điểm"
-                : "You persevered for $actualMinutes minutes!\nStudy buddies: $currentParticipants\n\n🎁 Reward: +$earnedPoints points",
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(title, textAlign: TextAlign.center),
+          content: Text(desc,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16)),
           actions: [
             Center(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                ),
+                    backgroundColor: primaryColor,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15))),
                 onPressed: () => Navigator.pop(context),
-                child: Text(
-                  isVN ? "Nhận thưởng" : "Claim reward",
-                  style: TextStyle(color: Colors.white),
-                ),
+                child: Text(isVN ? "Nhận thưởng" : "Claim reward",
+                    style: TextStyle(color: Colors.white)),
               ),
             ),
           ],
