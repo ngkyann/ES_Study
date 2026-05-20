@@ -109,10 +109,10 @@ class _NotificationPageState extends State<NotificationPage> {
           ),
           SafeArea(
             child: StreamBuilder<QuerySnapshot>(
+              // 🔥 SỬA LỖI 1: Bỏ .orderBy() để tránh lỗi đòi Composite Index của Firebase
               stream: FirebaseFirestore.instance
                   .collection('notifications')
                   .where('userId', isEqualTo: widget.userId)
-                  .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -121,7 +121,31 @@ class _NotificationPageState extends State<NotificationPage> {
                   );
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                // 🔥 SỬA LỖI 2: Lọc lấy các thông báo đã tới giờ
+                final now = DateTime.now();
+                final docs = snapshot.hasData
+                    ? snapshot.data!.docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final timestamp = data['createdAt'] as Timestamp?;
+                        if (timestamp == null) return false;
+
+                        // Chỉ hiển thị nếu giờ của thông báo <= giờ hiện tại
+                        return timestamp.toDate().isBefore(now) ||
+                            timestamp.toDate().isAtSameMomentAs(now);
+                      }).toList()
+                    : [];
+
+                // 🔥 THÊM MỚI: Tự động sắp xếp (Mới nhất lên đầu) bằng code Dart thay vì dùng Firebase orderBy
+                docs.sort((a, b) {
+                  final timeA = (a.data() as Map<String, dynamic>)['createdAt']
+                      as Timestamp;
+                  final timeB = (b.data() as Map<String, dynamic>)['createdAt']
+                      as Timestamp;
+                  return timeB
+                      .compareTo(timeA); // Sắp xếp giảm dần (descending)
+                });
+
+                if (docs.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -130,7 +154,7 @@ class _NotificationPageState extends State<NotificationPage> {
                           Icons.notifications_off_outlined,
                           size: 80,
                           color: Colors.white,
-                          shadows: outlineStyle, // Áp dụng viền cho Icon trống
+                          shadows: outlineStyle,
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -141,16 +165,13 @@ class _NotificationPageState extends State<NotificationPage> {
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
-                            shadows:
-                                outlineStyle, // Áp dụng viền cho Text trống
+                            shadows: outlineStyle,
                           ),
                         ),
                       ],
                     ),
                   );
                 }
-
-                final docs = snapshot.data!.docs;
 
                 return ListView.builder(
                   padding:
@@ -166,8 +187,14 @@ class _NotificationPageState extends State<NotificationPage> {
                         "${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}";
                     final String hourMinuteStr =
                         "${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}";
-                    final String contentStr = data['content'] ??
+
+                    // 🔥 THÊM MỚI: LẤY NỘI DUNG THEO NGÔN NGỮ HIỆN TẠI
+                    // Vẫn giữ lại check 'content' cũ để phòng trường hợp data cũ còn tồn tại
+                    final String fallbackContent = data['content'] ??
                         (isVN ? "Không có nội dung" : "No content");
+                    final String contentStr = isVN
+                        ? (data['content_vn'] ?? fallbackContent)
+                        : (data['content_en'] ?? fallbackContent);
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -221,29 +248,35 @@ class _NotificationPageState extends State<NotificationPage> {
                                           fontSize: 15,
                                           color: Colors.white,
                                           height: 1.3,
-                                          shadows:
-                                              outlineStyle, // 🔥 Áp dụng viền cho TOÀN BỘ TextSpan bên trong
+                                          //shadows:
+                                          //  outlineStyle, // 🔥 Áp dụng viền cho TOÀN BỘ TextSpan bên trong
                                         ),
                                         children: [
                                           // Phần Ngày/Tháng (In đậm nổi bật)
                                           TextSpan(
-                                            text: '"$dayMonthStr"',
+                                            text: '$dayMonthStr',
                                             style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
-                                                color: Colors.cyanAccent),
+                                                color: Colors.black),
                                           ),
-                                          const TextSpan(text: ' : '),
+                                          const TextSpan(
+                                              text: ' - ',
+                                              style: const TextStyle(
+                                                  color: Colors.black)),
                                           // Phần Giờ:Phút (In đậm nổi bật)
                                           TextSpan(
-                                            text: '"$hourMinuteStr"',
+                                            text: '$hourMinuteStr',
                                             style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
-                                                color: Colors.orangeAccent),
+                                                color: Colors.black),
                                           ),
-                                          const TextSpan(text: ' : '),
+                                          const TextSpan(
+                                              text: ' : ',
+                                              style: const TextStyle(
+                                                  color: Colors.black)),
                                           // Phần nội dung thông báo thông thường
                                           TextSpan(
-                                            text: '"$contentStr"',
+                                            text: '$contentStr.',
                                             style: const TextStyle(
                                                 fontWeight: FontWeight.w400,
                                                 color: Colors.white),

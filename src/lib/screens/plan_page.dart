@@ -119,6 +119,9 @@ class _PlanPageState extends State<PlanPage> {
     TextEditingController taskController = TextEditingController();
     List<String> tasks = [];
 
+    // 🔥 BIẾN QUẢN LÝ TRẠNG THÁI LOADING TRÁNH ĐƠ APP
+    bool isSubmitting = false;
+
     DateTime now = DateTime.now();
     dayController.text = now.day.toString().padLeft(2, '0');
     monthController.text = now.month.toString().padLeft(2, '0');
@@ -128,6 +131,7 @@ class _PlanPageState extends State<PlanPage> {
 
     showDialog(
       context: context,
+      barrierDismissible: false, // Không cho bấm ra ngoài khi đang xử lý
       builder: (_) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -147,6 +151,7 @@ class _PlanPageState extends State<PlanPage> {
                     children: [
                       TextField(
                         controller: titleController,
+                        enabled: !isSubmitting, // Khóa khi đang load
                         decoration: InputDecoration(
                           labelText: isVN
                               ? "Tên kế hoạch (VD: Học toán)"
@@ -221,6 +226,7 @@ class _PlanPageState extends State<PlanPage> {
                           Expanded(
                             child: TextField(
                               controller: taskController,
+                              enabled: !isSubmitting, // Khóa khi đang load
                               decoration: InputDecoration(
                                 hintText:
                                     isVN ? "Nhập nhiệm vụ..." : "Enter task...",
@@ -230,7 +236,8 @@ class _PlanPageState extends State<PlanPage> {
                                 isDense: true,
                               ),
                               onSubmitted: (_) {
-                                if (taskController.text.trim().isNotEmpty) {
+                                if (taskController.text.trim().isNotEmpty &&
+                                    !isSubmitting) {
                                   setDialogState(() {
                                     tasks.add(taskController.text.trim());
                                     taskController.clear();
@@ -242,15 +249,19 @@ class _PlanPageState extends State<PlanPage> {
                           const SizedBox(width: 8),
                           IconButton(
                             icon: Icon(Icons.add_circle,
-                                color: primaryColor, size: 32),
-                            onPressed: () {
-                              if (taskController.text.trim().isNotEmpty) {
-                                setDialogState(() {
-                                  tasks.add(taskController.text.trim());
-                                  taskController.clear();
-                                });
-                              }
-                            },
+                                color:
+                                    isSubmitting ? Colors.grey : primaryColor,
+                                size: 32),
+                            onPressed: isSubmitting
+                                ? null
+                                : () {
+                                    if (taskController.text.trim().isNotEmpty) {
+                                      setDialogState(() {
+                                        tasks.add(taskController.text.trim());
+                                        taskController.clear();
+                                      });
+                                    }
+                                  },
                           ),
                         ],
                       ),
@@ -270,13 +281,16 @@ class _PlanPageState extends State<PlanPage> {
                                 dense: true,
                                 title: Text("- ${tasks[i]}"),
                                 trailing: IconButton(
-                                  icon: const Icon(
+                                  icon: Icon(
                                     Icons.remove_circle,
-                                    color: Colors.red,
+                                    color:
+                                        isSubmitting ? Colors.grey : Colors.red,
                                     size: 20,
                                   ),
-                                  onPressed: () =>
-                                      setDialogState(() => tasks.removeAt(i)),
+                                  onPressed: isSubmitting
+                                      ? null
+                                      : () => setDialogState(
+                                          () => tasks.removeAt(i)),
                                 ),
                               );
                             },
@@ -288,9 +302,12 @@ class _PlanPageState extends State<PlanPage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: isSubmitting ? null : () => Navigator.pop(context),
                   child: Text(isVN ? "Hủy" : "Cancel",
-                      style: const TextStyle(color: Colors.grey)),
+                      style: TextStyle(
+                          color: isSubmitting
+                              ? Colors.grey.shade300
+                              : Colors.grey)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -298,93 +315,141 @@ class _PlanPageState extends State<PlanPage> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       )),
-                  onPressed: () async {
-                    if (titleController.text.isEmpty || tasks.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(isVN
-                              ? "Vui lòng nhập tên và nhiệm vụ!"
-                              : "Please enter title and tasks!"),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          if (titleController.text.isEmpty || tasks.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(isVN
+                                    ? "Vui lòng nhập tên và nhiệm vụ!"
+                                    : "Please enter title and tasks!"),
+                              ),
+                            );
+                            return;
+                          }
+
+                          DateTime parsedDate;
+                          try {
+                            int? day = int.tryParse(dayController.text.trim());
+                            int? month =
+                                int.tryParse(monthController.text.trim());
+                            int? year =
+                                int.tryParse(yearController.text.trim());
+                            int? hour =
+                                int.tryParse(hourController.text.trim());
+                            int? minute =
+                                int.tryParse(minuteController.text.trim());
+
+                            if (day == null ||
+                                month == null ||
+                                year == null ||
+                                hour == null ||
+                                minute == null) {
+                              throw Exception("Dữ liệu trống");
+                            }
+
+                            if (month < 1 ||
+                                month > 12 ||
+                                day < 1 ||
+                                day > 31 ||
+                                hour < 0 ||
+                                hour > 23 ||
+                                minute < 0 ||
+                                minute > 59) {
+                              throw Exception("Sai khoảng giá trị");
+                            }
+
+                            parsedDate =
+                                DateTime(year, month, day, hour, minute);
+
+                            if (parsedDate.isBefore(DateTime.now())) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(isVN
+                                      ? "Không thể đặt lịch trong quá khứ!"
+                                      : "Cannot set a plan in the past!"),
+                                ),
+                              );
+                              return;
+                            }
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(isVN
+                                    ? "Ngày hoặc giờ không hợp lệ!"
+                                    : "Invalid date or time!"),
+                              ),
+                            );
+                            return;
+                          }
+
+                          // 🔥 BẬT TRẠNG THÁI LOADING (XOAY VÒNG) TẠI ĐÂY
+                          setDialogState(() {
+                            isSubmitting = true;
+                          });
+
+                          try {
+                            DocumentReference docRef = await FirebaseFirestore
+                                .instance
+                                .collection('plans')
+                                .add({
+                              'userId': widget.userId,
+                              'title': titleController.text,
+                              'time': parsedDate,
+                              'tasks': tasks,
+                              'completedTasks': List.generate(
+                                tasks.length,
+                                (_) => false,
+                              ),
+                            });
+
+                            // 🔥 LƯU THÔNG BÁO VỚI CẢ 2 NGÔN NGỮ
+                            await FirebaseFirestore.instance
+                                .collection('notifications')
+                                .doc('plan_${docRef.id}')
+                                .set({
+                              'userId': widget.userId,
+                              'content_vn':
+                                  "📚 Đến giờ thực hiện kế hoạch: ${titleController.text}",
+                              'content_en':
+                                  "📚 Time for your plan: ${titleController.text}",
+                              'createdAt': Timestamp.fromDate(parsedDate),
+                            });
+
+                            // Gọi thông báo chuẩn xác với ID từ Firebase
+                            await _scheduleNotification(
+                              docRef.id.hashCode,
+                              titleController.text,
+                              parsedDate,
+                            );
+
+                            // Nếu tạo thành công, tắt pop up đi
+                            if (mounted) Navigator.pop(context);
+                          } catch (e) {
+                            // Nếu lỗi Firebase thì báo lỗi và tắt vòng xoay
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(isVN
+                                      ? "Đã có lỗi xảy ra!"
+                                      : "An error occurred!")),
+                            );
+                            setDialogState(() {
+                              isSubmitting = false;
+                            });
+                          }
+                        },
+                  // 🔥 ĐỔI GIAO DIỆN NÚT KHI ĐANG LOADING
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2.5))
+                      : Text(
+                          isVN ? "Tạo" : "Create",
+                          style: const TextStyle(color: Colors.white),
                         ),
-                      );
-                      return;
-                    }
-
-                    DateTime parsedDate;
-                    try {
-                      int? day = int.tryParse(dayController.text.trim());
-                      int? month = int.tryParse(monthController.text.trim());
-                      int? year = int.tryParse(yearController.text.trim());
-                      int? hour = int.tryParse(hourController.text.trim());
-                      int? minute = int.tryParse(minuteController.text.trim());
-
-                      if (day == null ||
-                          month == null ||
-                          year == null ||
-                          hour == null ||
-                          minute == null) {
-                        throw Exception("Dữ liệu trống");
-                      }
-
-                      if (month < 1 ||
-                          month > 12 ||
-                          day < 1 ||
-                          day > 31 ||
-                          hour < 0 ||
-                          hour > 23 ||
-                          minute < 0 ||
-                          minute > 59) {
-                        throw Exception("Sai khoảng giá trị");
-                      }
-
-                      parsedDate = DateTime(year, month, day, hour, minute);
-
-                      if (parsedDate.isBefore(DateTime.now())) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(isVN
-                                ? "Không thể đặt lịch trong quá khứ!"
-                                : "Cannot set a plan in the past!"),
-                          ),
-                        );
-                        return;
-                      }
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(isVN
-                              ? "Ngày hoặc giờ không hợp lệ!"
-                              : "Invalid date or time!"),
-                        ),
-                      );
-                      return;
-                    }
-
-                    DocumentReference docRef = await FirebaseFirestore.instance
-                        .collection('plans')
-                        .add({
-                      'userId': widget.userId,
-                      'title': titleController.text,
-                      'time': parsedDate,
-                      'tasks': tasks,
-                      'completedTasks': List.generate(
-                        tasks.length,
-                        (_) => false,
-                      ),
-                    });
-
-                    // Gọi thông báo chuẩn xác với ID từ Firebase
-                    await _scheduleNotification(
-                      docRef.id.hashCode,
-                      titleController.text,
-                      parsedDate,
-                    );
-                    if (mounted) Navigator.pop(context);
-                  },
-                  child: Text(
-                    isVN ? "Tạo" : "Create",
-                    style: const TextStyle(color: Colors.white),
-                  ),
                 ),
               ],
             );
@@ -501,6 +566,10 @@ class _PlanPageState extends State<PlanPage> {
                             await FirebaseFirestore.instance
                                 .collection('plans')
                                 .doc(data.id)
+                                .delete();
+                            await FirebaseFirestore.instance
+                                .collection('notifications')
+                                .doc('plan_${data.id}')
                                 .delete();
                           }),
                       onTap: () {
