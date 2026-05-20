@@ -15,6 +15,7 @@ import 'package:esstudy/screens/statistics_page.dart';
 import 'package:esstudy/screens/create_room_page.dart';
 import 'package:esstudy/constants/var.dart';
 import 'package:esstudy/screens/notification_page.dart';
+import 'package:esstudy/screens/shop_page.dart';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -275,53 +276,55 @@ class _HomePageState extends State<HomePage> {
 
         return Scaffold(
           backgroundColor: Colors.grey.shade50,
-          // 🔥 FIX LỖI GIẬT LAYOUT: Bỏ AppBar ở lớp Scaffold ngoài cùng
-          // appBar: null,
+          // Bỏ AppBar ở lớp Scaffold ngoài cùng để các trang con tự quản lý thanh cuộn
+          appBar: null,
 
           body: PageView(
             controller: _pageController,
-            physics: const NeverScrollableScrollPhysics(),
+            physics:
+                const NeverScrollableScrollPhysics(), // Tắt vuốt tay, chỉ trượt khi nhấn Tab Bar
             onPageChanged: (index) {
               setState(() {
                 _currentIndex = index;
               });
             },
             children: [
-              // 🔥 TAB 0: CỬA HÀNG (Bọc Scaffold để có AppBar riêng)
-              Scaffold(
-                backgroundColor: Colors.grey.shade50,
-                appBar: AppBar(
-                  title: Text(isVN ? "Cửa hàng" : "Shop",
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                  centerTitle: true,
-                  elevation: 0,
-                ),
-                body: _buildPlaceholderPage(
-                    isVN ? "Cửa hàng" : "Shop", Icons.shopping_bag),
-              ),
+              // 🔥 TAB 0: CỬA HÀNG VẬT PHẨM (Gọi trực tiếp ShopPage đã có sẵn thiết kế AppBar & Tab danh mục)
+              ShopPage(userId: widget.userId),
 
-              // 🔥 TAB 1: TRANG CHỦ (Bọc Scaffold để có AppBar riêng trượt theo mượt mà)
+              // 🔥 TAB 1: TRANG CHỦ (Giữ nguyên bố cục AppBar chứa Avatar, Điểm, Streak, Coin và nút Chuông)
               Scaffold(
                 backgroundColor: Colors.grey.shade50,
                 appBar: AppBar(
                   elevation: 0,
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
-                  leadingWidth: 290,
+                  leadingWidth:
+                      290, // Độ rộng chứa cụm thông tin cá nhân + Điểm + Streak + Coin
                   leading: _buildAppBarLeading(),
                   actions: [
-                    // 🔥 ĐÃ KẾT HỢP: Hành vi chuyển trang khi nhấn chuông thông báo
+                    // Nút hình cái chuông mở thông báo dạng lớp phủ kính mờ (Liquid Glass)
                     IconButton(
                       icon: const Icon(Icons.notifications_none,
                           size: 28, color: Colors.white),
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                NotificationPage(userId: widget.userId),
+                          PageRouteBuilder(
+                            opaque:
+                                false, // Giữ HomePage hiển thị mờ ảo ở phía sau lớp kính
+                            barrierDismissible:
+                                true, // Chạm ra ngoài để đóng thông báo
+                            pageBuilder:
+                                (context, animation, secondaryAnimation) =>
+                                    NotificationPage(userId: widget.userId),
+                            transitionsBuilder: (context, animation,
+                                secondaryAnimation, child) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              );
+                            },
                           ),
                         );
                       },
@@ -329,10 +332,11 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 4),
                   ],
                 ),
-                body: _buildHomeContent(isVN),
+                body: _buildHomeContent(
+                    isVN), // Chứa nội dung mây bay và lưới danh mục học tập
               ),
 
-              // 🔥 TAB 2: CÀI ĐẶT (Đã là Scaffold sẵn trong settings_page.dart)
+              // 🔥 TAB 2: CÀI ĐẶT (Trang SettingsPage tự quản lý Scaffold nội bộ)
               SettingsPage(
                 userName: _realName,
                 selectedClass: _realClass,
@@ -341,6 +345,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
+          // Thanh Bottom Tab Bar góc dưới với hiệu ứng UX phóng to mục đang chọn
           bottomNavigationBar: _buildBottomTab(isVN),
         );
       },
