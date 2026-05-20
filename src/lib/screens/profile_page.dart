@@ -42,96 +42,185 @@ class _ProfilePageState extends State<ProfilePage> {
     return uid1.compareTo(uid2) < 0 ? '${uid1}_$uid2' : '${uid2}_$uid1';
   }
 
-  void _showSelectFeaturedFriendDialog(List<dynamic> myFriends, bool isVN) {
+// 🔥 THÊM HÀM NÀY: Tải trước toàn bộ danh sách bạn bè hợp lệ (chuỗi >= 3) để chống delay
+  Future<List<Map<String, dynamic>>> _getValidFeaturedFriends(
+      List<dynamic> myFriends) async {
+    List<Map<String, dynamic>> validFriends = [];
+
+    for (String friendId in myFriends) {
+      String chatId = _getChatId(widget.userId, friendId);
+      var streakSnap = await FirebaseFirestore.instance
+          .collection('friend_streaks')
+          .doc(chatId)
+          .get();
+
+      if (streakSnap.exists) {
+        int streak = (streakSnap.data() as Map<String, dynamic>)['streak'] ?? 0;
+        // Chỉ lấy những bạn có chuỗi >= 3
+        if (streak >= 3) {
+          var userSnap = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(friendId)
+              .get();
+          if (userSnap.exists) {
+            var userData = userSnap.data() as Map<String, dynamic>;
+            validFriends.add({
+              'id': friendId,
+              'name': userData['name'] ?? 'Ẩn danh',
+              'avatarUrl': userData['avatarUrl'],
+              'streak': streak,
+            });
+          }
+        }
+      }
+    }
+
+    // Sắp xếp danh sách theo chuỗi từ cao xuống thấp
+    validFriends.sort((a, b) => b['streak'].compareTo(a['streak']));
+    return validFriends;
+  }
+
+  // 🔥 CẬP NHẬT HÀM: Thêm tham số currentFeaturedId và tối ưu UI chọn/bỏ chọn
+  void _showSelectFeaturedFriendDialog(
+      List<dynamic> myFriends, String? currentFeaturedId, bool isVN) {
+    // Biến lưu trạng thái nội bộ để update UI lập tức khi bấm
+    String? localSelectedId = currentFeaturedId;
+
     showModalBottomSheet(
         context: context,
         shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
         builder: (ctx) {
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                    isVN
-                        ? "Chọn Bạn thân nổi bật (Chuỗi >= 3)"
-                        : "Select Featured Friend (Streak >= 3)",
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-              Expanded(
-                child: ListView.builder(
-                    itemCount: myFriends.length,
-                    itemBuilder: (context, index) {
-                      String friendId = myFriends[index];
-                      String chatId = _getChatId(widget.userId, friendId);
+          // StatefulBuilder giúp cập nhật lại danh sách bên trong BottomSheet
+          return StatefulBuilder(
+              builder: (BuildContext context, StateSetter setModalState) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(
+                      isVN ? "Chọn Bạn thân nổi bật" : "Select Featured Friend",
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                const Divider(height: 1, thickness: 1),
+                Expanded(
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _getValidFeaturedFriends(myFriends),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return Center(
+                              child: CircularProgressIndicator(
+                                  color: primaryColor));
+                        }
 
-                      return FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance
-                              .collection('friend_streaks')
-                              .doc(chatId)
-                              .get(),
-                          builder: (context, streakSnap) {
-                            if (!streakSnap.hasData || !streakSnap.data!.exists)
-                              return const SizedBox();
-                            int streak = (streakSnap.data!.data()
-                                    as Map<String, dynamic>)['streak'] ??
-                                0;
-                            if (streak < 3)
-                              return const SizedBox(); // Chỉ hiện nếu >= 3
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return Center(
+                            child: Text(
+                              isVN
+                                  ? "Chưa có bạn bè nào đạt chuỗi 3 ngày trở lên."
+                                  : "No friends with a 3+ day streak yet.",
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          );
+                        }
 
-                            return FutureBuilder<DocumentSnapshot>(
-                                future: FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(friendId)
-                                    .get(),
-                                builder: (context, userSnap) {
-                                  if (!userSnap.hasData)
-                                    return const SizedBox();
-                                  String fName =
-                                      userSnap.data!.get('name') ?? 'Unknown';
-                                  String? fAvatar = (userSnap.data!.data()
-                                      as Map<String, dynamic>)['avatarUrl'];
+                        final validFriends = snapshot.data!;
+                        return ListView.builder(
+                            itemCount: validFriends.length,
+                            itemBuilder: (context, index) {
+                              final friend = validFriends[index];
+                              final bool isSelected =
+                                  friend['id'] == localSelectedId;
 
-                                  return ListTile(
-                                    leading: CircleAvatar(
-                                        backgroundImage: fAvatar != null
-                                            ? NetworkImage(fAvatar)
-                                            : null),
-                                    title: Text(fName,
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: Colors.grey.shade200,
+                                  backgroundImage: friend['avatarUrl'] != null
+                                      ? NetworkImage(friend['avatarUrl'])
+                                      : null,
+                                  child: friend['avatarUrl'] == null
+                                      ? const Icon(Icons.person,
+                                          color: Colors.grey)
+                                      : null,
+                                ),
+                                title: Text(friend['name'],
+                                    style: TextStyle(
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: isSelected
+                                            ? primaryColor
+                                            : Colors.black87)),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.local_fire_department,
+                                        color: Colors.orange),
+                                    Text("${friend['streak']}",
                                         style: const TextStyle(
+                                            color: Colors.orange,
                                             fontWeight: FontWeight.bold)),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.local_fire_department,
-                                            color: Colors.orange),
-                                        Text("$streak",
-                                            style: const TextStyle(
-                                                color: Colors.orange,
-                                                fontWeight: FontWeight.bold)),
-                                      ],
-                                    ),
-                                    onTap: () async {
-                                      Navigator.pop(ctx);
-                                      await FirebaseFirestore.instance
-                                          .collection('users')
-                                          .doc(widget.userId)
-                                          .update(
-                                              {'featuredFriendId': friendId});
+                                    const SizedBox(width: 10),
+                                    // 🌟 HIỆN DẤU TRỪ MÀU ĐỎ NẾU ĐANG ĐƯỢC CHỌN
+                                    if (isSelected)
+                                      const Icon(Icons.remove_circle,
+                                          color: Colors.red, size: 24)
+                                    else
+                                      Icon(Icons.circle_outlined,
+                                          color: Colors.grey.shade400,
+                                          size: 22),
+                                  ],
+                                ),
+                                onTap: () async {
+                                  if (isSelected) {
+                                    // HỦY CHỌN: Nếu bấm vào người đang được chọn
+                                    setModalState(() => localSelectedId = null);
+
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(widget.userId)
+                                        .update({
+                                      'featuredFriendId': FieldValue.delete()
+                                    });
+
+                                    if (context.mounted) Navigator.pop(ctx);
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(SnackBar(
+                                              content: Text(isVN
+                                                  ? "Đã gỡ bạn thân nổi bật!"
+                                                  : "Featured friend removed!")));
+                                    }
+                                  } else {
+                                    // CHỌN MỚI: Nếu bấm vào một người khác
+                                    setModalState(
+                                        () => localSelectedId = friend['id']);
+
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(widget.userId)
+                                        .update(
+                                            {'featuredFriendId': friend['id']});
+
+                                    if (context.mounted) Navigator.pop(ctx);
+                                    if (mounted) {
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(SnackBar(
                                               content: Text(isVN
                                                   ? "Đã cài đặt bạn thân nổi bật!"
                                                   : "Featured friend set!")));
-                                    },
-                                  );
-                                });
-                          });
-                    }),
-              ),
-            ],
-          );
+                                    }
+                                  }
+                                },
+                              );
+                            });
+                      }),
+                ),
+              ],
+            );
+          });
         });
   }
 
@@ -768,7 +857,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 color: Colors.orange.shade50,
                                 child: ListTile(
                                   onTap: () => _showSelectFeaturedFriendDialog(
-                                      myFriends, isVN),
+                                      myFriends, featuredId, isVN),
                                   leading: const Icon(Icons.favorite,
                                       color: Colors.redAccent),
                                   title: Text(
