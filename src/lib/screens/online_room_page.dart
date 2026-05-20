@@ -698,7 +698,11 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
     // NẾU TỰ THOÁT SỚM HOẶC BỊ AFK (Không phải do Host ép thoát)
     if (isFailedAFK || (!isFinishedNatural && !isHostForcedClose)) {
-      if (widget.isHost && !isFinishedNatural && !isFailedAFK) {
+      // 🔥 SỬA Ở ĐÂY: Chỉ phạt nếu Host thoát sớm VÀ có từ 2 người trở lên trong phòng
+      if (widget.isHost &&
+          !isFinishedNatural &&
+          !isFailedAFK &&
+          currentParticipants > 1) {
         int penalty = 10 * currentParticipants;
         await FirebaseFirestore.instance
             .collection('users')
@@ -714,10 +718,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           );
         }
       }
+
       if (mounted && !isFailedAFK) Navigator.pop(context);
       return;
     }
-
     // 👉 TÍNH THỜI GIAN THỰC TẾ ĐÃ NGỒI HỌC
     int actualSeconds = DateTime.now().difference(_joinTime).inSeconds;
     int actualMinutes = actualSeconds ~/ 60;
