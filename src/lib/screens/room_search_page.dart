@@ -162,7 +162,6 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                         return const CircularProgressIndicator();
                       }
 
-                      final now = DateTime.now();
                       final validDocs = snapshot.data!.docs;
 
                       return DropdownButtonFormField<String?>(
