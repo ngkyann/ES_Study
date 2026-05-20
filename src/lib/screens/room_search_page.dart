@@ -155,6 +155,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                     stream: FirebaseFirestore.instance
                         .collection('plans')
                         .where('userId', isEqualTo: widget.currentUserId)
+                        .where('time', isLessThanOrEqualTo: Timestamp.now())
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
@@ -162,10 +163,7 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                       }
 
                       final now = DateTime.now();
-                      final validDocs = snapshot.data!.docs.where((doc) {
-                        DateTime time = (doc['time'] as Timestamp).toDate();
-                        return time.isBefore(now) || time.isAtSameMomentAs(now);
-                      }).toList();
+                      final validDocs = snapshot.data!.docs;
 
                       return DropdownButtonFormField<String?>(
                         value: selectedPlanId,
@@ -364,10 +362,25 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
               ),
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('study_rooms')
-                      .orderBy('createdAt', descending: true)
-                      .snapshots(),
+                  stream: (() {
+                    // Xây dựng Query động: Lọc tối đa trên Server
+                    Query query =
+                        FirebaseFirestore.instance.collection('study_rooms');
+
+                    // 1. Chỉ lấy phòng công khai
+                    query = query.where('isPrivate', isEqualTo: false);
+
+                    // 2. Lọc theo lớp (nếu không phải "Tất cả")
+                    if (_selectedFilterGrade != "Tất cả") {
+                      query = query.where('hostClass',
+                          isEqualTo: _selectedFilterGrade);
+                    }
+
+                    // 3. Sắp xếp theo thời gian tạo mới nhất
+                    return query
+                        .orderBy('createdAt', descending: true)
+                        .snapshots();
+                  })(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return Center(
@@ -390,24 +403,20 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                     }
 
                     final docs = snapshot.data!.docs;
+
+                    // Lọc Client-side: CHỈ lọc tìm kiếm ID (do Firestore không hỗ trợ contains)
                     final List<DocumentSnapshot> filteredDocs =
                         docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-
-                      if (data['isPrivate'] == true) return false;
-
-                      final roomGrade = data['hostClass'] ?? "";
-                      final hostId = data['hostId'] ?? "";
-
-                      bool matchesGrade = _selectedFilterGrade == "Tất cả" ||
-                          roomGrade == _selectedFilterGrade;
-
                       final cleanSearchId =
                           _searchId.replaceAll('@', '').toLowerCase();
-                      bool matchesId = cleanSearchId.isEmpty ||
-                          hostId.toLowerCase().contains(cleanSearchId);
 
-                      return matchesGrade && matchesId;
+                      if (cleanSearchId.isEmpty)
+                        return true; // Bỏ qua lọc nếu không gõ từ khóa
+
+                      final hostId =
+                          data['hostId']?.toString().toLowerCase() ?? "";
+                      return hostId.contains(cleanSearchId);
                     }).toList();
 
                     if (filteredDocs.isEmpty) {

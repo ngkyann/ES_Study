@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/constants/var.dart';
+import 'package:flutter/services.dart';
 
 class ChatPage extends StatefulWidget {
   final String chatId;
@@ -422,6 +423,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   // 🔥 ĐÃ CẬP NHẬT: Thêm chức năng Long Press (nhấn giữ) để xóa tin nhắn
+  // 🔥 ĐÃ CẬP NHẬT: Thêm chức năng Copy tin nhắn
   Widget _buildMessageBubble(String messageId, Map<String, dynamic> msg,
       bool isMe, BuildContext context, bool isVN) {
     final text = msg['text'] as String? ?? '';
@@ -450,6 +452,30 @@ class _ChatPageState extends State<ChatPage> {
                           fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
+
+                  // 🔥 TÍNH NĂNG MỚI: SAO CHÉP TIN NHẮN
+                  if (text.isNotEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.copy, color: Colors.blue),
+                      title: Text(isVN ? "Sao chép tin nhắn" : "Copy message"),
+                      onTap: () async {
+                        Navigator.pop(ctx); // Đóng menu
+                        await Clipboard.setData(
+                            ClipboardData(text: text)); // Copy vào bộ nhớ tạm
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isVN
+                                  ? "Đã sao chép tin nhắn"
+                                  : "Message copied to clipboard"),
+                              duration: const Duration(seconds: 2),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+
                   ListTile(
                     leading:
                         const Icon(Icons.delete_sweep, color: Colors.orange),

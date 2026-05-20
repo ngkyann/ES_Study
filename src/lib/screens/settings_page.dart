@@ -45,7 +45,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
     List<Color> defaultColors = [
       const Color(0xFF87CEFA),
-      Colors.black,
       Colors.green,
       const Color.fromARGB(255, 255, 125, 165),
     ];
@@ -430,7 +429,7 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Row(
             children: [
               _buildColorOption(const Color(0xFF87CEFA)),
-              _buildColorOption(Colors.black),
+              _buildColorOption(Colors.red),
               _buildColorOption(Colors.green),
               _buildColorOption(const Color.fromARGB(255, 255, 125, 165)),
               _buildColorOption(_customColor, isRainbow: true),
