@@ -547,26 +547,24 @@ class _AIAssistantPageState extends State<AIAssistantPage> {
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 10, vertical: 5),
                                             decoration: BoxDecoration(
-                                              color: Colors.grey.shade100,
+                                              color: Colors.transparent,
                                               borderRadius:
                                                   BorderRadius.circular(8),
-                                              border: Border.all(
-                                                  color: Colors.grey.shade300),
                                             ),
                                             child: Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 Icon(Icons.copy,
                                                     size: 14,
-                                                    color:
-                                                        Colors.grey.shade700),
+                                                    color: primaryColor
+                                                        .withOpacity(0.8)),
                                                 const SizedBox(width: 4),
                                                 // 🔥 SỬA CHỮ NÚT COPY
                                                 Text(isVN ? "Sao chép" : "Copy",
                                                     style: TextStyle(
                                                         fontSize: 12,
-                                                        color: Colors
-                                                            .grey.shade700,
+                                                        color: primaryColor
+                                                            .withOpacity(0.8),
                                                         fontWeight:
                                                             FontWeight.bold)),
                                               ],

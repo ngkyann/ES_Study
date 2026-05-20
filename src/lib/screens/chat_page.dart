@@ -74,6 +74,7 @@ class _ChatPageState extends State<ChatPage> {
     try {
       FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.any,
+        withData: true,
       );
 
       if (result != null) {
@@ -88,7 +89,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // Xử lý gửi tin nhắn
+// Xử lý gửi tin nhắn
   Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
     if (text.isEmpty && _selectedImage == null && _selectedFile == null) return;
@@ -100,6 +101,7 @@ class _ChatPageState extends State<ChatPage> {
     String? fileName;
 
     try {
+      // 1. Xử lý upload Hình ảnh
       if (_selectedImage != null) {
         final storageRef = FirebaseStorage.instance
             .ref()
@@ -108,14 +110,22 @@ class _ChatPageState extends State<ChatPage> {
             .child(
                 '${DateTime.now().millisecondsSinceEpoch}_${_selectedImage!.name}');
 
-        if (_webImageBytes != null) {
-          await storageRef.putData(_webImageBytes!);
+        UploadTask uploadTask;
+        if (kIsWeb) {
+          if (_webImageBytes != null) {
+            uploadTask = storageRef.putData(_webImageBytes!);
+          } else {
+            throw Exception("Không thể đọc dữ liệu ảnh (bytes null) trên Web");
+          }
         } else {
-          await storageRef.putFile(File(_selectedImage!.path));
+          uploadTask = storageRef.putFile(File(_selectedImage!.path));
         }
-        imageUrl = await storageRef.getDownloadURL();
+
+        final snapshot = await uploadTask;
+        imageUrl = await snapshot.ref.getDownloadURL();
       }
 
+      // 2. Xử lý upload Tập tin/Tài liệu
       if (_selectedFile != null) {
         fileName = _selectedFile!.name;
         final storageRef = FirebaseStorage.instance
@@ -124,12 +134,24 @@ class _ChatPageState extends State<ChatPage> {
             .child(widget.chatId)
             .child('${DateTime.now().millisecondsSinceEpoch}_$fileName');
 
-        if (kIsWeb && _selectedFile!.bytes != null) {
-          await storageRef.putData(_selectedFile!.bytes!);
-        } else if (_selectedFile!.path != null) {
-          await storageRef.putFile(File(_selectedFile!.path!));
+        UploadTask uploadTask;
+        if (kIsWeb) {
+          if (_selectedFile!.bytes != null) {
+            uploadTask = storageRef.putData(_selectedFile!.bytes!);
+          } else {
+            throw Exception("Không thể đọc dữ liệu file (bytes null) trên Web");
+          }
+        } else {
+          if (_selectedFile!.path != null) {
+            uploadTask = storageRef.putFile(File(_selectedFile!.path!));
+          } else {
+            throw Exception(
+                "Không tìm thấy đường dẫn file trên thiết bị di động");
+          }
         }
-        fileUrl = await storageRef.getDownloadURL();
+
+        final snapshot = await uploadTask;
+        fileUrl = await snapshot.ref.getDownloadURL();
       }
 
       bool isVN = languageNotifier.value == "Tiếng Việt";
@@ -150,7 +172,7 @@ class _ChatPageState extends State<ChatPage> {
         'fileUrl': fileUrl,
         'fileName': fileName,
         'timestamp': FieldValue.serverTimestamp(),
-        'deletedBy': [], // Khởi tạo mảng trống để sau này theo dõi việc xóa
+        'deletedBy': [],
       });
 
       await FirebaseFirestore.instance
@@ -174,7 +196,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  // 🔥 HÀM XÓA 1 TIN NHẮN (CHỈ XÓA BÊN MÌNH)
+  // HÀM XÓA 1 TIN NHẮN (CHỈ XÓA BÊN MÌNH)
   Future<void> _deleteMessageForMe(String messageId) async {
     await FirebaseFirestore.instance
         .collection('chats')
@@ -186,7 +208,7 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  // 🔥 HÀM XÓA 1 TIN NHẮN (XÓA CẢ 2 PHÍA - CHỈ CHO NGƯỜI GỬI)
+  // HÀM XÓA 1 TIN NHẮN (XÓA CẢ 2 PHÍA - CHỈ CHO NGƯỜI GỬI)
   Future<void> _deleteMessageForEveryone(String messageId) async {
     await FirebaseFirestore.instance
         .collection('chats')
@@ -196,7 +218,7 @@ class _ChatPageState extends State<ChatPage> {
         .delete();
   }
 
-  // 🔥 HÀM XÓA TOÀN BỘ LỊCH SỬ TRÒ CHUYỆN (CHỈ XÓA BÊN MÌNH)
+  // HÀM XÓA TOÀN BỘ LỊST SỬ TRÒ CHUYỆN (CHỈ XÓA BÊN MÌNH)
   Future<void> _clearChatHistory() async {
     bool isVN = languageNotifier.value == "Tiếng Việt";
 
@@ -280,7 +302,6 @@ class _ChatPageState extends State<ChatPage> {
             backgroundColor: primaryColor,
             foregroundColor: Colors.white,
             elevation: 1,
-            // 🔥 THÊM NÚT XÓA LỊCH SỬ TRÒ CHUYỆN TRÊN APPBAR
             actions: [
               IconButton(
                 icon: const Icon(Icons.delete_outline),
@@ -328,11 +349,10 @@ class _ChatPageState extends State<ChatPage> {
                         final bool isMe =
                             msg['senderId'] == widget.currentUserId;
 
-                        // 🔥 KIỂM TRA XEM TIN NHẮN NÀY ĐÃ BỊ MÌNH XÓA CHƯA
                         final deletedBy =
                             List<String>.from(msg['deletedBy'] ?? []);
                         if (deletedBy.contains(widget.currentUserId)) {
-                          return const SizedBox.shrink(); // Ẩn tin nhắn này đi
+                          return const SizedBox.shrink();
                         }
 
                         return _buildMessageBubble(
@@ -361,12 +381,17 @@ class _ChatPageState extends State<ChatPage> {
                               border: Border.all(
                                   color: Colors.grey.shade300, width: 1),
                             ),
+                            // Tìm đoạn ClipRRect hiển thị ảnh preview cũ và thay bằng:
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(11),
                               child: _selectedImage != null
-                                  ? (_webImageBytes != null
-                                      ? Image.memory(_webImageBytes!,
-                                          fit: BoxFit.cover)
+                                  ? (kIsWeb
+                                      ? (_webImageBytes != null
+                                          ? Image.memory(_webImageBytes!,
+                                              fit: BoxFit.cover)
+                                          : const Center(
+                                              child:
+                                                  CircularProgressIndicator()))
                                       : Image.file(File(_selectedImage!.path),
                                           fit: BoxFit.cover))
                                   : const Icon(Icons.insert_drive_file,
@@ -422,8 +447,6 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  // 🔥 ĐÃ CẬP NHẬT: Thêm chức năng Long Press (nhấn giữ) để xóa tin nhắn
-  // 🔥 ĐÃ CẬP NHẬT: Thêm chức năng Copy tin nhắn
   Widget _buildMessageBubble(String messageId, Map<String, dynamic> msg,
       bool isMe, BuildContext context, bool isVN) {
     final text = msg['text'] as String? ?? '';
@@ -435,7 +458,6 @@ class _ChatPageState extends State<ChatPage> {
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: () {
-          // Bật Menu chức năng khi nhấn giữ tin nhắn
           showModalBottomSheet(
             context: context,
             shape: const RoundedRectangleBorder(
@@ -452,16 +474,13 @@ class _ChatPageState extends State<ChatPage> {
                           fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
-
-                  // 🔥 TÍNH NĂNG MỚI: SAO CHÉP TIN NHẮN
                   if (text.isNotEmpty)
                     ListTile(
                       leading: const Icon(Icons.copy, color: Colors.blue),
                       title: Text(isVN ? "Sao chép tin nhắn" : "Copy message"),
                       onTap: () async {
-                        Navigator.pop(ctx); // Đóng menu
-                        await Clipboard.setData(
-                            ClipboardData(text: text)); // Copy vào bộ nhớ tạm
+                        Navigator.pop(ctx);
+                        await Clipboard.setData(ClipboardData(text: text));
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -475,7 +494,6 @@ class _ChatPageState extends State<ChatPage> {
                         }
                       },
                     ),
-
                   ListTile(
                     leading:
                         const Icon(Icons.delete_sweep, color: Colors.orange),
@@ -491,7 +509,6 @@ class _ChatPageState extends State<ChatPage> {
                       _deleteMessageForMe(messageId);
                     },
                   ),
-                  // Chỉ cho phép xóa cả 2 phía nếu đó là tin nhắn do mình gửi
                   if (isMe)
                     ListTile(
                       leading:
@@ -609,6 +626,46 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  void _showAttachmentOptions(BuildContext context, bool isVN) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                isVN ? "Gửi đính kèm" : "Send attachment",
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.image, color: primaryColor),
+              title: Text(isVN ? "Gửi hình ảnh" : "Send image"),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickImage();
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.attach_file, color: primaryColor),
+              title: Text(isVN ? "Gửi tập tin" : "Send file"),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickFile();
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInputArea(bool isVN) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -618,12 +675,8 @@ class _ChatPageState extends State<ChatPage> {
         child: Row(
           children: [
             IconButton(
-              icon: Icon(Icons.image, color: primaryColor),
-              onPressed: _pickImage,
-            ),
-            IconButton(
-              icon: Icon(Icons.attach_file, color: primaryColor),
-              onPressed: _pickFile,
+              icon: Icon(Icons.add, color: primaryColor, size: 28),
+              onPressed: () => _showAttachmentOptions(context, isVN),
             ),
             Expanded(
               child: Container(
