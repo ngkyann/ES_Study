@@ -632,24 +632,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildPlaceholderPage(String title, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 100, color: Colors.grey.shade300),
-          const SizedBox(height: 10),
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 20,
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold)),
-          const Text("Coming Soon", style: TextStyle(color: Colors.grey)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildGridMenu(BuildContext context, List<MenuData> items, bool isVN) {
     return GridView.builder(
       shrinkWrap: true,
