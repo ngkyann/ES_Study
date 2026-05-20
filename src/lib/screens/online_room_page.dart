@@ -808,6 +808,160 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     }
   }
 
+// 🔥 THÊM 1: Hàm tạo ID chat 1-1 (Giống bên trang FriendsPage)
+  String _getChatId(String uid1, String uid2) {
+    return uid1.compareTo(uid2) < 0 ? '${uid1}_$uid2' : '${uid2}_$uid1';
+  }
+
+  // 🔥 THÊM 2: Hàm hiển thị danh sách bạn bè và gửi mã
+  void _showShareToFriendBottomSheet() {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+    showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (ctx) {
+          return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(widget.userId)
+                  .get(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                      child: CircularProgressIndicator(color: primaryColor));
+                }
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return Center(
+                      child: Text(
+                          isVN ? "Lỗi tải danh sách" : "Error loading list"));
+                }
+
+                List<String> friendsIds =
+                    List<String>.from(snapshot.data!.get('friends') ?? []);
+
+                if (friendsIds.isEmpty) {
+                  return Center(
+                      child: Text(isVN
+                          ? "Bạn chưa có bạn bè nào để gửi"
+                          : "You have no friends to send"));
+                }
+
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        isVN
+                            ? "Chọn bạn bè để rủ vào phòng"
+                            : "Select friend to invite",
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                          itemCount: friendsIds.length,
+                          itemBuilder: (context, index) {
+                            String friendId = friendsIds[index];
+                            return FutureBuilder<DocumentSnapshot>(
+                              future: FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(friendId)
+                                  .get(),
+                              builder: (context, friendSnap) {
+                                if (!friendSnap.hasData)
+                                  return const ListTile(title: Text("..."));
+
+                                var friendData = friendSnap.data!.data()
+                                    as Map<String, dynamic>;
+                                String friendName =
+                                    friendData['name'] ?? 'Unknown';
+                                String? avatarUrl = friendData['avatarUrl'];
+
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor:
+                                        primaryColor.withOpacity(0.2),
+                                    backgroundImage: avatarUrl != null
+                                        ? NetworkImage(avatarUrl)
+                                        : null,
+                                    child: avatarUrl == null
+                                        ? Icon(Icons.person,
+                                            color: primaryColor)
+                                        : null,
+                                  ),
+                                  title: Text(friendName,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                  trailing: ElevatedButton.icon(
+                                    icon: const Icon(Icons.send,
+                                        size: 16, color: Colors.white),
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor: primaryColor),
+                                    onPressed: () async {
+                                      // 1. Tạo ID cuộc trò chuyện
+                                      String chatId =
+                                          _getChatId(widget.userId, friendId);
+
+                                      // 2. Nội dung tin nhắn rủ rê
+                                      String msg = isVN
+                                          ? "Vào học cùng mình nhé! Mã phòng riêng tư là: ${widget.roomCode}"
+                                          : "Join my study room! The private code is: ${widget.roomCode}";
+
+                                      // 3. Lưu vào Firebase Chats
+                                      await FirebaseFirestore.instance
+                                          .collection('chats')
+                                          .doc(chatId)
+                                          .collection('messages')
+                                          .add({
+                                        'senderId': widget.userId,
+                                        'text': msg,
+                                        'timestamp':
+                                            FieldValue.serverTimestamp(),
+                                        'deletedBy': [],
+                                      });
+
+                                      await FirebaseFirestore.instance
+                                          .collection('chats')
+                                          .doc(chatId)
+                                          .set({
+                                        'lastMessage': msg,
+                                        'lastTimestamp':
+                                            FieldValue.serverTimestamp(),
+                                      }, SetOptions(merge: true));
+
+                                      // 4. Đóng thông báo
+                                      if (ctx.mounted) Navigator.pop(ctx);
+                                      if (context.mounted)
+                                        Navigator.pop(context);
+
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(isVN
+                                              ? "Đã gửi mã cho $friendName!"
+                                              : "Code sent to $friendName!"),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    },
+                                    label: Text(isVN ? "Gửi mã" : "Send",
+                                        style: const TextStyle(
+                                            color: Colors.white)),
+                                  ),
+                                );
+                              },
+                            );
+                          }),
+                    ),
+                  ],
+                );
+              });
+        });
+  }
+
   void _showRoomCodeDialog() {
     if (!mounted) return;
     bool isVN = languageNotifier.value == "Tiếng Việt";
@@ -842,6 +996,15 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           ],
         ),
         actions: [
+          TextButton.icon(
+            icon: Icon(Icons.share, color: primaryColor),
+            onPressed: () {
+              _showShareToFriendBottomSheet(); // Gọi hàm vừa thêm ở trên
+            },
+            label: Text(isVN ? "Gửi bạn bè" : "Send to friend",
+                style: TextStyle(
+                    color: primaryColor, fontWeight: FontWeight.bold)),
+          ),
           ElevatedButton.icon(
             icon: const Icon(Icons.copy, color: Colors.white),
             style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
@@ -1367,6 +1530,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                   ],
                 ),
                 centerTitle: true,
+
+                // 🔥 ĐOẠN CODE THÊM MỚI: NÚT XEM VÀ CHIA SẺ MÃ PHÒNG (Góc trên bên phải)
+                actions: [
+                  if (widget.isPrivate && widget.roomCode != null)
+                    IconButton(
+                      icon: const Icon(Icons.share, color: Colors.white),
+                      onPressed:
+                          _showRoomCodeDialog, // Gọi lại hộp thoại hiện mã phòng
+                    ),
+                ],
+                // 🔥 KẾT THÚC ĐOẠN THÊM MỚI
               ),
               body: Stack(
                 children: [
