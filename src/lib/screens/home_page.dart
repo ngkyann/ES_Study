@@ -302,11 +302,9 @@ class _HomePageState extends State<HomePage> {
                   ],
                 )
               : null,
-          // 🔥 ĐÃ ĐỔI: Sử dụng PageView để hỗ trợ hiệu ứng trượt (Animation)
           body: PageView(
             controller: _pageController,
-            physics:
-                const NeverScrollableScrollPhysics(), // Tắt vuốt tay để chỉ trượt khi bấm Tab
+            physics: const NeverScrollableScrollPhysics(),
             onPageChanged: (index) {
               setState(() {
                 _currentIndex = index;
