@@ -53,14 +53,18 @@ class _PlanPageState extends State<PlanPage> {
 
     if (androidPlugin != null) {
       await androidPlugin.requestNotificationsPermission();
+      // Xin quyền chạy thông báo chính xác khi tắt màn hình (Android 12+)
+      await androidPlugin.requestExactAlarmsPermission();
     }
   }
 
-  Future<void> _scheduleNotification(String title, DateTime dateTime) async {
-    bool isVN = languageNotifier.value == "Tiếng Việt"; // 🔥 DỊCH THÔNG BÁO
+  // 🔥 ĐÃ SỬA: Dùng đúng cú pháp tham số có tên (Named Parameters) của bản mới
+  Future<void> _scheduleNotification(
+      int notifId, String title, DateTime dateTime) async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
 
     await notificationsPlugin.zonedSchedule(
-      id: dateTime.millisecondsSinceEpoch ~/ 1000,
+      id: notifId,
       title: isVN ? "📚 Đến giờ học!" : "📚 Time to study!",
       body: title,
       scheduledDate: tz.TZDateTime.from(dateTime, tz.local),
@@ -70,13 +74,19 @@ class _PlanPageState extends State<PlanPage> {
           'Study Reminder',
           importance: Importance.max,
           priority: Priority.high,
+          playSound: true,
+          showWhen: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
   }
 
-  // 🔥 Hàm hỗ trợ tạo TextField nhập số nhỏ
   Widget _buildTimeInputField(TextEditingController controller, String label,
       {int flex = 1}) {
     return Expanded(
@@ -101,7 +111,6 @@ class _PlanPageState extends State<PlanPage> {
 
   Future<void> _addPlan() async {
     TextEditingController titleController = TextEditingController();
-    // 🆕 Tách thành 5 Controller riêng biệt
     TextEditingController dayController = TextEditingController();
     TextEditingController monthController = TextEditingController();
     TextEditingController yearController = TextEditingController();
@@ -110,7 +119,6 @@ class _PlanPageState extends State<PlanPage> {
     TextEditingController taskController = TextEditingController();
     List<String> tasks = [];
 
-    // Gợi ý ngày giờ hiện tại
     DateTime now = DateTime.now();
     dayController.text = now.day.toString().padLeft(2, '0');
     monthController.text = now.month.toString().padLeft(2, '0');
@@ -150,8 +158,6 @@ class _PlanPageState extends State<PlanPage> {
                         ),
                       ),
                       const SizedBox(height: 15),
-
-                      // 🆕 Khung nhập Ngày Tháng Năm
                       Text(
                         isVN ? "Ngày / Tháng / Năm" : "Day / Month / Year",
                         style: const TextStyle(
@@ -182,8 +188,6 @@ class _PlanPageState extends State<PlanPage> {
                         ],
                       ),
                       const SizedBox(height: 15),
-
-                      // 🆕 Khung nhập Giờ Phút
                       Text(
                         isVN ? "Giờ : Phút" : "Hour : Minute",
                         style: const TextStyle(
@@ -203,10 +207,9 @@ class _PlanPageState extends State<PlanPage> {
                           const SizedBox(width: 8),
                           _buildTimeInputField(
                               minuteController, isVN ? "Phút" : "MM"),
-                          const Spacer(), // Đẩy ô nhập sang trái cho gọn
+                          const Spacer(),
                         ],
                       ),
-
                       const Divider(height: 30),
                       Text(
                         isVN ? "Nhiệm vụ cần làm:" : "Tasks to do:",
@@ -309,7 +312,6 @@ class _PlanPageState extends State<PlanPage> {
 
                     DateTime parsedDate;
                     try {
-                      // 🆕 Parse từng ô nhập liệu
                       int? day = int.tryParse(dayController.text.trim());
                       int? month = int.tryParse(monthController.text.trim());
                       int? year = int.tryParse(yearController.text.trim());
@@ -324,7 +326,6 @@ class _PlanPageState extends State<PlanPage> {
                         throw Exception("Dữ liệu trống");
                       }
 
-                      // Validate khoảng giá trị hợp lệ
                       if (month < 1 ||
                           month > 12 ||
                           day < 1 ||
@@ -359,7 +360,9 @@ class _PlanPageState extends State<PlanPage> {
                       return;
                     }
 
-                    await FirebaseFirestore.instance.collection('plans').add({
+                    DocumentReference docRef = await FirebaseFirestore.instance
+                        .collection('plans')
+                        .add({
                       'userId': widget.userId,
                       'title': titleController.text,
                       'time': parsedDate,
@@ -370,7 +373,9 @@ class _PlanPageState extends State<PlanPage> {
                       ),
                     });
 
+                    // Gọi thông báo chuẩn xác với ID từ Firebase
                     await _scheduleNotification(
+                      docRef.id.hashCode,
                       titleController.text,
                       parsedDate,
                     );
@@ -391,7 +396,6 @@ class _PlanPageState extends State<PlanPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔥 BỌC GIAO DIỆN CHÍNH
     return ValueListenableBuilder<String>(
       valueListenable: languageNotifier,
       builder: (context, lang, child) {
@@ -488,12 +492,17 @@ class _PlanPageState extends State<PlanPage> {
                             (isVN ? "nhiệm vụ" : "tasks"),
                       ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => FirebaseFirestore.instance
-                            .collection('plans')
-                            .doc(data.id)
-                            .delete(),
-                      ),
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () async {
+                            // 🔥 ĐÃ SỬA: Hàm hủy thông báo cũng cần khai báo "id:"
+                            await notificationsPlugin.cancel(
+                                id: data.id.hashCode);
+
+                            await FirebaseFirestore.instance
+                                .collection('plans')
+                                .doc(data.id)
+                                .delete();
+                          }),
                       onTap: () {
                         showDialog(
                           context: context,
