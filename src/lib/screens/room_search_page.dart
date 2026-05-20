@@ -24,6 +24,21 @@ class RoomSearchPage extends StatefulWidget {
 class _RoomSearchPageState extends State<RoomSearchPage> {
   String _selectedFilterGrade = "Tất cả";
   String _searchId = "";
+  Timer? _refreshTimer;
+  @override
+  void initState() {
+    super.initState();
+    // Tự động làm mới giao diện mỗi 30 giây để cập nhật đồng hồ đếm ngược
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel(); // Dọn dẹp Timer khi thoát trang
+    super.dispose();
+  }
 
   final List<String> _grades = [
     "Tất cả",
@@ -401,6 +416,20 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
 
                       if (data['isPrivate'] == true) return false;
 
+                      // 🔥 CHỐT CHẶN 1: Tự động ẩn phòng khi hết giờ dựa theo Host
+                      if (data.containsKey('currentRemaining')) {
+                        if ((data['currentRemaining'] as int) <= 0)
+                          return false;
+                      } else if (data['createdAt'] != null) {
+                        int durationMins = data['duration'] ?? 30;
+                        DateTime createdAt =
+                            (data['createdAt'] as Timestamp).toDate();
+                        if (DateTime.now().difference(createdAt).inMinutes >=
+                            durationMins) {
+                          return false;
+                        }
+                      }
+
                       final roomGrade = data['hostClass'] ?? "";
                       final hostId = data['hostId'] ?? "";
 
@@ -449,14 +478,28 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                           int hostPoints = data['hostPoints'] ?? 0;
                           String originalClass = data['hostClass'] ?? "Lớp ?";
 
-                          // 🔥 GIỮ LẠI TÍNH NĂNG ĐẾM THỜI GIAN CỦA CODE MỚI
+                          // 🔥 LOGIC MỚI: TÍNH THỜI GIAN CÒN LẠI (ĐÃ FIX LỖI 900 PHÚT)
                           int durationMins = data['duration'] ?? 30;
-                          int elapsedMins = 0;
-                          if (data['createdAt'] != null) {
+                          int remainingMins = durationMins;
+
+                          // Ưu tiên đọc số giây đếm ngược trực tiếp từ Host đẩy lên (Đồng bộ tuyệt đối)
+                          if (data.containsKey('currentRemaining')) {
+                            remainingMins =
+                                (data['currentRemaining'] as int) ~/ 60;
+                          } else if (data['createdAt'] != null) {
                             DateTime createdAt =
                                 (data['createdAt'] as Timestamp).toDate();
-                            elapsedMins =
+                            int elapsedMins =
                                 DateTime.now().difference(createdAt).inMinutes;
+                            remainingMins = durationMins - elapsedMins;
+                          }
+
+                          // 🔥 CHỐT CHẶN AN TOÀN: Ép số phút không được vượt quá thời gian ban đầu hoặc xuống âm
+                          if (remainingMins > durationMins) {
+                            remainingMins = durationMins;
+                          }
+                          if (remainingMins < 0) {
+                            remainingMins = 0;
                           }
 
                           StudyRoom room = StudyRoom(
@@ -469,15 +512,15 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                               data['participants'] ?? [],
                             ).length,
                             maxMembers: data['maxMembers'] ?? 4,
+                            // 🔥 HIỂN THỊ ĐẾM NGƯỢC THỜI GIAN
                             startTime: isVN
-                                ? "Đã học: ${elapsedMins}p"
-                                : "Elapsed: ${elapsedMins}m",
+                                ? "Còn lại: ${remainingMins} phút"
+                                : "Left: ${remainingMins} mins",
                             endTime: "$durationMins ${isVN ? 'phút' : 'mins'}",
                             grade: isVN
                                 ? originalClass
                                 : originalClass.replaceFirst('Lớp', 'Class'),
                           );
-
                           return RoomCard(
                             room: room,
                             onJoin: () => _showJoinRoomDialog(

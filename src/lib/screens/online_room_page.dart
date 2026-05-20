@@ -66,13 +66,21 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
   // HỆ THỐNG
   int _remainingSeconds = 0;
-  DateTime? _roomEndTime;
+  bool _isTimerStarted =
+      false; // Thay thế _roomEndTime để đánh dấu đã chạy đồng hồ chưa
   Timer? _timer;
   late List<bool> _personalTaskStatus;
   final player = AudioPlayer();
-  DateTime _joinTime = DateTime.now();
+  // DateTime _joinTime = DateTime.now();
   int _currentParticipantsCount = 1;
   bool _hasLeft = false;
+  Route? _myRoute;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _myRoute = ModalRoute.of(context); // Lưu lại định danh của trang phòng học
+  }
+
   // ANTI-AFK
   final Random _random = Random();
   int _maxAfkChecks = 0;
@@ -114,14 +122,11 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   }
 
   // 🔥 HÀM ĐẾM NGƯỢC ĐỒNG BỘ MỚI
-  void _startSynchronizedTimer() {
-    if (_roomEndTime == null) return;
-
-    _timer?.cancel(); // Hủy timer cũ nếu có để tránh chạy đè
+  void _startTimer() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
 
-      // 1. Xử lý logic bong bóng AFK (giữ nguyên của bạn)
       if (_showAfkBubble) {
         setState(() => _afkTimeoutSeconds--);
         if (_afkTimeoutSeconds <= 0) {
@@ -136,21 +141,24 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         }
       }
 
-      // 2. Tính thời gian còn lại dựa hoàn toàn vào mốc giờ của Firebase
-      final now = DateTime.now();
-      final difference = _roomEndTime!.difference(now);
-
-      if (difference.inSeconds > 0) {
+      if (_remainingSeconds > 0) {
         setState(() {
-          _remainingSeconds = difference.inSeconds;
+          _remainingSeconds--;
         });
+
+        // Host liên tục đẩy giờ chuẩn lên Firebase mỗi 5s
+        if (widget.isHost && _remainingSeconds % 5 == 0) {
+          FirebaseFirestore.instance
+              .collection('study_rooms')
+              .doc(widget.roomId)
+              .update({
+            'currentRemaining': _remainingSeconds,
+          }).catchError((e) {});
+        }
       } else {
         // Hết giờ
-        setState(() {
-          _remainingSeconds = 0;
-        });
         timer.cancel();
-        _leaveRoom(isFinishedNatural: true);
+        _leaveRoomLogic(isFailedAFK: false, isFinishedNatural: true);
       }
     });
   }
@@ -251,20 +259,31 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         .listen((snap) {
       if (snap.docChanges.isNotEmpty &&
           snap.docChanges.first.type == DocumentChangeType.added) {
-        if (_isFirstMessageFetch) {
-          _isFirstMessageFetch = false;
-          return;
-        }
-
         final msg = snap.docChanges.first.doc.data();
-        if (msg != null &&
-            msg['senderId'] != widget.userId &&
-            msg['senderId'] != 'system') {
-          if (!_isChatOpen && mounted) {
-            setState(() => _unreadMessages++);
-            try {
-              player.play(AssetSource('sounds/ting.mp3'));
-            } catch (_) {}
+        if (msg != null) {
+          // 🔥 THÊM MỚI: LẮNG NGHE LỆNH KẾT THÚC PHÒNG TỪ HOST
+          if (msg['isSystem'] == true && msg['text'] == '[CMD_ROOM_FINISHED]') {
+            if (mounted && !widget.isHost) {
+              _remainingSeconds = 0;
+              _timer?.cancel();
+              // Ép thành viên hoàn thành tự nhiên và nhận đủ điểm!
+              _leaveRoomLogic(isFailedAFK: false, isFinishedNatural: true);
+            }
+            return;
+          }
+
+          // Đoạn xử lý thông báo chat cũ giữ nguyên
+          if (_isFirstMessageFetch) {
+            _isFirstMessageFetch = false;
+            return;
+          }
+          if (msg['senderId'] != widget.userId && msg['senderId'] != 'system') {
+            if (!_isChatOpen && mounted) {
+              setState(() => _unreadMessages++);
+              try {
+                player.play(AssetSource('sounds/ting.mp3'));
+              } catch (_) {}
+            }
           }
         }
       }
@@ -272,27 +291,38 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
     _participantsSub = roomRef.snapshots().listen((snap) {
       if (!snap.exists) {
-        // 🔥 NẾU PHÒNG BỊ XÓA (Do Host thoát sớm hoặc Host hết giờ trước 1-2s)
         if (!widget.isHost && mounted && !_hasLeft) {
-          // Ép buộc kết thúc và TIẾN HÀNH TRẢ ĐIỂM cho thành viên
-          _leaveRoomLogic(
-              isFailedAFK: false,
-              isFinishedNatural: true,
-              isHostForcedClose: true);
+          // 🔥 NẾU PHÒNG BỊ XÓA MÀ GIỜ CHỈ CÒN DƯỚI 5 GIÂY -> LÀ DO HOST VỪA KẾT THÚC THÀNH CÔNG!
+          if (_remainingSeconds <= 5) {
+            _timer?.cancel();
+            _leaveRoomLogic(isFailedAFK: false, isFinishedNatural: true);
+          } else {
+            // Host out sớm thật sự -> Không được cộng điểm
+            _leaveRoomLogic(
+                isFailedAFK: false,
+                isFinishedNatural: false,
+                isHostForcedClose: true);
+          }
         }
         return;
       }
 
       final data = snap.data()!;
-      // 🔥 LƯU SỐ THÀNH VIÊN HIỆN TẠI VÀO BIẾN CACHE
       _currentParticipantsCount = List.from(data['participants'] ?? []).length;
 
-      // ... (Các đoạn code bên dưới giữ nguyên: kiểm tra createdAt, trạng thái mic/cam...)
-      if (_roomEndTime == null && data['createdAt'] != null) {
-        DateTime createdAt = (data['createdAt'] as Timestamp).toDate();
-        // Cộng thời lượng phòng vào thời gian bắt đầu để ra thời điểm kết thúc chính xác
-        _roomEndTime = createdAt.add(Duration(minutes: widget.duration));
-        _startSynchronizedTimer();
+      // Khởi động đồng hồ lần đầu
+      if (!_isTimerStarted) {
+        _isTimerStarted = true;
+        _remainingSeconds = widget.duration * 60;
+        _startTimer();
+      }
+
+      // 🔥 ĐỒNG BỘ THỜI GIAN VỚI HOST: Nếu lệch quá 3 giây thì ép thành viên nhảy số theo Host
+      if (!widget.isHost && data.containsKey('currentRemaining')) {
+        int hostRemaining = data['currentRemaining'];
+        if ((_remainingSeconds - hostRemaining).abs() > 3) {
+          _remainingSeconds = hostRemaining;
+        }
       }
       final names = Map<String, dynamic>.from(data['participantNames'] ?? {});
       final states = Map<String, dynamic>.from(data['participantStates'] ?? {});
@@ -696,9 +726,15 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       }
     }
 
-    // NẾU TỰ THOÁT SỚM HOẶC BỊ AFK (Không phải do Host ép thoát)
-    if (isFailedAFK || (!isFinishedNatural && !isHostForcedClose)) {
-      // 🔥 SỬA Ở ĐÂY: Chỉ phạt nếu Host thoát sớm VÀ có từ 2 người trở lên trong phòng
+    // 🔥 NẾU TỰ THOÁT SỚM, BỊ AFK HOẶC HOST HỦY PHÒNG (Không cộng điểm cho ai cả)
+    // 🔥 ĐÓNG SẠCH MỌI BOTTOM SHEET (CHAT, NHIỆM VỤ, NHÓM) ĐANG MỞ TRƯỚC KHI THOÁT
+    if (_myRoute != null && Navigator.of(context).canPop()) {
+      Navigator.of(context).popUntil((route) => route == _myRoute);
+    }
+
+    // 1. NẾU THẤT BẠI HOẶC HOST OUT SỚM (Không ai có điểm)
+    if (isFailedAFK || !isFinishedNatural || isHostForcedClose) {
+      // Phạt Host
       if (widget.isHost &&
           !isFinishedNatural &&
           !isFailedAFK &&
@@ -719,107 +755,126 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         }
       }
 
-      if (mounted && !isFailedAFK) Navigator.pop(context);
+      // Báo cho thành viên Host đã out
+      if (!widget.isHost && isHostForcedClose && mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogCtx) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(isVN ? "Phòng đã đóng!" : "Room Closed!",
+                textAlign: TextAlign.center),
+            content: Text(
+                isVN
+                    ? "Chủ phòng đã thoát sớm. Phiên học bị hủy và không có điểm nào được cộng."
+                    : "The host left early. Session cancelled and no points awarded.",
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15)),
+            actions: [
+              Center(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15))),
+                  onPressed: () =>
+                      Navigator.pop(dialogCtx), // Chỉ đóng hộp thoại
+                  child: Text(isVN ? "Đóng" : "Close",
+                      style: const TextStyle(color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      if (mounted && !isFailedAFK) Navigator.pop(context); // Đóng phòng học
       return;
     }
-    // 👉 TÍNH THỜI GIAN THỰC TẾ ĐÃ NGỒI HỌC
-    int actualSeconds = DateTime.now().difference(_joinTime).inSeconds;
-    int actualMinutes = actualSeconds ~/ 60;
 
-    // Nếu vào chưa đủ 1 phút nhưng Host đóng phòng (trên 10 giây) thì châm chước cho 1 phút
-    if (actualMinutes == 0 && actualSeconds > 10) actualMinutes = 1;
-
-    // Bù trừ độ trễ đồng bộ: nếu ngồi sát nút giờ (lệch < 1 phút) thì làm tròn thành đủ giờ
-    if ((widget.duration - actualMinutes) <= 1 && !isHostForcedClose) {
-      actualMinutes = widget.duration;
-    }
-
+    // 2. NẾU HOÀN THÀNH THÀNH CÔNG (Tất cả nhận điểm)
+    // int actualSeconds = DateTime.now().difference(_joinTime).inSeconds;
+    int actualMinutes = widget
+        .duration; // Đã hoàn thành tự nhiên thì nhận Full thời gian cài đặt
     int earnedPoints = actualMinutes * currentParticipants;
 
-    // Nếu thời gian học quá ngắn (0 phút, 0 điểm)
-    if (earnedPoints <= 0) {
-      if (mounted) Navigator.pop(context);
-      return;
-    }
-
-    List<String> finishedTasks = [];
-    for (int i = 0; i < widget.goals.length; i++) {
-      if (_personalTaskStatus[i]) finishedTasks.add(widget.goals[i]);
-    }
-
-    await FirebaseFirestore.instance.collection('study_history').add({
-      'userId': widget.userId,
-      'time': DateTime.now(),
-      'planTitle':
-          "${widget.planTitle} (${isVN ? "Học Online" : "Online Study"})",
-      'goals': widget.goals,
-      'completedGoalsList': finishedTasks,
-      'completed': finishedTasks.length,
-      'total': widget.goals.length,
-      'minutes': actualMinutes, // Lưu đúng thời gian thực tế
-    });
-
-    final userRef =
-        FirebaseFirestore.instance.collection('users').doc(widget.userId);
-    final userDoc = await userRef.get();
-    int newStreak = 1;
-    DateTime now = DateTime.now();
-    DateTime today = DateTime(now.year, now.month, now.day);
-
-    if (userDoc.exists && userDoc.data() != null) {
-      final userData = userDoc.data()!;
-      int currentStreak = userData['streakCount'] ?? 0;
-      Timestamp? lastStudyTs = userData['lastStudyDate'];
-      if (lastStudyTs != null) {
-        DateTime lastStudy = lastStudyTs.toDate();
-        DateTime lastStudyDay =
-            DateTime(lastStudy.year, lastStudy.month, lastStudy.day);
-        int difference = today.difference(lastStudyDay).inDays;
-        if (difference == 0)
-          newStreak = currentStreak;
-        else if (difference == 1) newStreak = currentStreak + 1;
+    if (earnedPoints > 0) {
+      List<String> finishedTasks = [];
+      for (int i = 0; i < widget.goals.length; i++) {
+        if (_personalTaskStatus[i]) finishedTasks.add(widget.goals[i]);
       }
-    }
 
-    await userRef.set({
-      'points': FieldValue.increment(earnedPoints),
-      'streakCount': newStreak,
-      'lastStudyDate': Timestamp.fromDate(now),
-    }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('study_history').add({
+        'userId': widget.userId,
+        'time': DateTime.now(),
+        'planTitle':
+            "${widget.planTitle} (${isVN ? "Học Online" : "Online Study"})",
+        'goals': widget.goals,
+        'completedGoalsList': finishedTasks,
+        'completed': finishedTasks.length,
+        'total': widget.goals.length,
+        'minutes': actualMinutes,
+      });
 
-    // Cập nhật chuỗi bạn bè (Friend Streak)
-    if (currentParticipants > 1 && roomSnap.exists) {
-      final data = roomSnap.data() as Map<String, dynamic>;
-      List<String> participants = List<String>.from(data['participants'] ?? []);
+      final userRef =
+          FirebaseFirestore.instance.collection('users').doc(widget.userId);
+      final userDoc = await userRef.get();
+      int newStreak = 1;
+      DateTime now = DateTime.now();
+      DateTime today = DateTime(now.year, now.month, now.day);
 
-      for (String pId in participants) {
-        if (pId != widget.userId) {
-          String streakId = _getChatId(widget.userId, pId);
-          DocumentReference streakRef = FirebaseFirestore.instance
-              .collection('friend_streaks')
-              .doc(streakId);
-          DocumentSnapshot streakSnap = await streakRef.get();
+      if (userDoc.exists && userDoc.data() != null) {
+        int currentStreak = userDoc.data()!['streakCount'] ?? 0;
+        Timestamp? lastStudyTs = userDoc.data()!['lastStudyDate'];
+        if (lastStudyTs != null) {
+          DateTime lastStudyDay = DateTime(lastStudyTs.toDate().year,
+              lastStudyTs.toDate().month, lastStudyTs.toDate().day);
+          int difference = today.difference(lastStudyDay).inDays;
+          if (difference == 0)
+            newStreak = currentStreak;
+          else if (difference == 1) newStreak = currentStreak + 1;
+        }
+      }
 
-          int newFriendStreak = 1;
-          if (streakSnap.exists && streakSnap.data() != null) {
-            Map<String, dynamic> streakData =
-                streakSnap.data() as Map<String, dynamic>;
-            int currentFriendStreak = streakData['streak'] ?? 0;
-            Timestamp? lastTs = streakData['lastStudyDate'];
+      await userRef.set({
+        'points': FieldValue.increment(earnedPoints),
+        'streakCount': newStreak,
+        'lastStudyDate': Timestamp.fromDate(now),
+      }, SetOptions(merge: true));
 
-            if (lastTs != null) {
-              DateTime last = lastTs.toDate();
-              DateTime lastDay = DateTime(last.year, last.month, last.day);
-              int diff = today.difference(lastDay).inDays;
-              if (diff == 0)
-                newFriendStreak = currentFriendStreak;
-              else if (diff == 1) newFriendStreak = currentFriendStreak + 1;
+      // Cập nhật Friend Streak
+      if (currentParticipants > 1 && roomSnap.exists) {
+        final data = roomSnap.data() as Map<String, dynamic>;
+        List<String> participants =
+            List<String>.from(data['participants'] ?? []);
+        for (String pId in participants) {
+          if (pId != widget.userId) {
+            String streakId = _getChatId(widget.userId, pId);
+            DocumentReference streakRef = FirebaseFirestore.instance
+                .collection('friend_streaks')
+                .doc(streakId);
+            DocumentSnapshot streakSnap = await streakRef.get();
+            int newFriendStreak = 1;
+            if (streakSnap.exists && streakSnap.data() != null) {
+              int currentFriendStreak =
+                  (streakSnap.data() as Map<String, dynamic>)['streak'] ?? 0;
+              Timestamp? lastTs =
+                  (streakSnap.data() as Map<String, dynamic>)['lastStudyDate'];
+              if (lastTs != null) {
+                DateTime lastDay = DateTime(lastTs.toDate().year,
+                    lastTs.toDate().month, lastTs.toDate().day);
+                int diff = today.difference(lastDay).inDays;
+                if (diff == 0)
+                  newFriendStreak = currentFriendStreak;
+                else if (diff == 1) newFriendStreak = currentFriendStreak + 1;
+              }
             }
+            await streakRef.set({
+              'streak': newFriendStreak,
+              'lastStudyDate': Timestamp.fromDate(now)
+            }, SetOptions(merge: true));
           }
-          await streakRef.set({
-            'streak': newFriendStreak,
-            'lastStudyDate': Timestamp.fromDate(now)
-          }, SetOptions(merge: true));
         }
       }
     }
@@ -830,16 +885,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           ? "Bạn đã học được $actualMinutes phút!\nSố người cùng học: $currentParticipants\n\n🎁 Thưởng: +$earnedPoints điểm"
           : "You studied for $actualMinutes minutes!\nStudy buddies: $currentParticipants\n\n🎁 Reward: +$earnedPoints points";
 
-      // Nếu phòng bị đóng sớm do Host, báo cho người dùng biết
-      if (isHostForcedClose && _remainingSeconds > 5) {
-        title = isVN ? "Phòng đã đóng!" : "Room closed!";
-        desc = (isVN ? "Chủ phòng đã rời đi. " : "The host has left. ") + desc;
-      }
-
       await showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => AlertDialog(
+        builder: (dialogCtx) => AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(title, textAlign: TextAlign.center),
@@ -853,18 +902,20 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                     backgroundColor: primaryColor,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15))),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () =>
+                    Navigator.pop(dialogCtx), // Chỉ đóng Dialog thưởng
                 child: Text(isVN ? "Nhận thưởng" : "Claim reward",
-                    style: TextStyle(color: Colors.white)),
+                    style: const TextStyle(color: Colors.white)),
               ),
             ),
           ],
         ),
       );
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context); // Thoát khỏi phòng học
     }
   }
 
+// end
 // 🔥 THÊM 1: Hàm tạo ID chat 1-1 (Giống bên trang FriendsPage)
   String _getChatId(String uid1, String uid2) {
     return uid1.compareTo(uid2) < 0 ? '${uid1}_$uid2' : '${uid2}_$uid1';

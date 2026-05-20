@@ -107,7 +107,7 @@ class RoomCard extends StatelessWidget {
                                   TextStyle(fontSize: 11, color: Colors.grey),
                             ),
                             Text(
-                              "${room.startTime} - ${room.endTime}",
+                              "${room.startTime} / ${room.endTime}",
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
