@@ -14,6 +14,7 @@ import 'package:esstudy/screens/friends_page.dart';
 import 'package:esstudy/screens/statistics_page.dart';
 import 'package:esstudy/screens/create_room_page.dart';
 import 'package:esstudy/constants/var.dart';
+import 'package:esstudy/screens/notification_page.dart';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -283,12 +284,18 @@ class _HomePageState extends State<HomePage> {
                   leadingWidth: 290,
                   leading: _buildAppBarLeading(),
                   actions: [
-                    // 🔥 ĐÃ ĐỔI SANG HÌNH CÁI CHUÔNG
+                    // 🔥 ĐÃ CẬP NHẬT: Nhấn chuông mở trang thông báo Liquid Glass
                     IconButton(
                       icon: const Icon(Icons.notifications_none,
                           size: 28, color: Colors.white),
                       onPressed: () {
-                        // Tạm thời chưa có chức năng
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                NotificationPage(userId: widget.userId),
+                          ),
+                        );
                       },
                     ),
                     const SizedBox(width: 4),
