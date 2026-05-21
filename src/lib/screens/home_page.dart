@@ -17,6 +17,7 @@ import 'package:esstudy/constants/var.dart';
 import 'package:esstudy/screens/notification_page.dart';
 import 'package:esstudy/screens/shop_page.dart';
 import 'dart:async';
+import 'dart:math';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -44,6 +45,11 @@ class _HomePageState extends State<HomePage> {
   String _realName = '';
   String _realClass = '';
   int _currentIndex = 1;
+
+  // Added missing variables to avoid compile errors
+  String _activeEffect = '';
+  List<String> _ownedEffects = [];
+  Map<String, dynamic>? userData;
 
   final PageController _pageController = PageController(initialPage: 1);
   StreamSubscription<DocumentSnapshot>? _userSubscription;
@@ -144,6 +150,9 @@ class _HomePageState extends State<HomePage> {
 
   void _startListeningUserData() {
     try {
+      // Hủy lắng nghe cũ nếu có để tránh rò rỉ bộ nhớ và xung đột State chuột
+      _userSubscription?.cancel();
+
       _userSubscription = FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
@@ -158,8 +167,8 @@ class _HomePageState extends State<HomePage> {
           String nameFromDb = data['name'] ?? widget.userName;
           String classFromDb = data['class'] ?? widget.selectedClass;
           Timestamp? lastStudyTs = data['lastStudyDate'];
+          String activeEffectFromDb = data['activeEffect'] ?? '';
 
-          // Giữ nguyên logic tính toán chuỗi ngày học (Streak) cũ của bạn
           if (lastStudyTs != null && streak > 0) {
             DateTime lastStudy = lastStudyTs.toDate();
             DateTime now = DateTime.now();
@@ -175,17 +184,30 @@ class _HomePageState extends State<HomePage> {
             }
           }
 
-          if (mounted) {
-            setState(() {
-              userPoints = points;
-              userStreak = streak;
-              userCoins = coins;
-              _realEmail = emailFromDb;
-              _realName = nameFromDb;
-              _realClass = classFromDb;
-              _isLoadingData = false;
-            });
+          if (!mounted) return;
+
+          if (userPoints == points &&
+              userStreak == streak &&
+              userCoins == coins &&
+              _activeEffect == activeEffectFromDb &&
+              _realEmail == emailFromDb &&
+              _realName == nameFromDb &&
+              _realClass == classFromDb) {
+            return;
           }
+          setState(() {
+            userPoints = points;
+            userStreak = streak;
+            userCoins = coins;
+            _realEmail = emailFromDb;
+            _realName = nameFromDb;
+            _realClass = classFromDb;
+            _activeEffect = activeEffectFromDb;
+            _isLoadingData = false;
+            userData = data;
+
+            _ownedEffects = List<String>.from(data['ownedEffects'] ?? []);
+          });
         } else {
           if (mounted) setState(() => _isLoadingData = false);
         }
@@ -237,6 +259,434 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // 1. Hàm hiển thị BottomSheet để chọn hiệu ứng nền
+  void _showEffectOptions() {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+
+    final effects = [
+      {
+        "id": "cloud",
+        "nameVN": "Đám mây",
+        "nameEN": "Cloud",
+        "icon": Icons.cloud,
+        "color": Colors.lightBlue,
+      },
+      {
+        "id": "firework",
+        "nameVN": "Pháo hoa",
+        "nameEN": "Firework",
+        "icon": Icons.celebration,
+        "color": Colors.redAccent,
+      },
+      {
+        "id": "snow",
+        "nameVN": "Tuyết rơi",
+        "nameEN": "Snow",
+        "icon": Icons.ac_unit,
+        "color": Colors.cyan,
+      },
+      {
+        "id": "sparkle",
+        "nameVN": "Lấp lánh",
+        "nameEN": "Sparkle",
+        "icon": Icons.auto_awesome,
+        "color": Colors.amber,
+      },
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          height: 430,
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(30),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 70,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Text(
+                isVN ? "Kho hiệu ứng của bạn" : "Your Effect Inventory",
+                style: const TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 22),
+              Expanded(
+                child: GridView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: effects.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: 1.05,
+                  ),
+                  itemBuilder: (context, index) {
+                    final effect = effects[index];
+
+                    final effectId = effect["id"] as String;
+
+                    final ownedEffects =
+                        List<String>.from(userData?['ownedEffects'] ?? []);
+
+                    bool owned =
+                        effectId == "cloud" || ownedEffects.contains(effectId);
+
+                    bool selected = (effectId == "cloud" &&
+                            (_activeEffect == "" ||
+                                _activeEffect == "cloud")) ||
+                        _activeEffect == effectId;
+
+                    return Opacity(
+                      opacity: owned ? 1 : 0.45,
+                      child: Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        elevation: selected ? 8 : 2,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(24),
+                          onTap: !owned
+                              ? null
+                              : () async {
+                                  await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(widget.userId)
+                                      .update({
+                                    'activeEffect':
+                                        effectId == "cloud" ? "" : effectId,
+                                  });
+
+                                  if (mounted) {
+                                    Navigator.pop(context);
+                                  }
+                                },
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: selected
+                                    ? primaryColor
+                                    : Colors.grey.shade200,
+                                width: 2,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  effect["icon"] as IconData,
+                                  size: 54,
+                                  color: effect["color"] as Color,
+                                ),
+                                const SizedBox(height: 14),
+                                Text(
+                                  isVN
+                                      ? effect["nameVN"] as String
+                                      : effect["nameEN"] as String,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                if (selected)
+                                  const Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green,
+                                  )
+                                else if (!owned)
+                                  Text(
+                                    isVN ? "Chưa sở hữu" : "Locked",
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 12,
+                                    ),
+                                  )
+                                else
+                                  Text(
+                                    isVN ? "Đã sở hữu" : "Owned",
+                                    style: const TextStyle(
+                                      color: Colors.blue,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // 2. Hàm xây dựng hiệu ứng đám mây mặc định (Trả về List<Widget> để rải trực tiếp vào Stack)
+  List<Widget> _buildDefaultCloud() {
+    return [
+      Positioned(
+          bottom: -50,
+          right: -30,
+          child: Transform.scale(
+              scaleX: 1.4,
+              child: Icon(Icons.cloud,
+                  color: Colors.white.withOpacity(0.32), size: 180))), //
+      Positioned(
+          bottom: 10,
+          right: 120,
+          child: Transform.scale(
+              scaleX: 1.3,
+              child: Icon(Icons.cloud,
+                  color: Colors.white.withOpacity(0.28), size: 90))), //
+    ];
+  }
+
+  // 3. Hàm xây dựng hiệu ứng tùy chỉnh bằng ảnh mạng/GIF động
+  Widget _buildCustomEffect(String effectStr) {
+    if (effectStr == 'firework') {
+      return Positioned(
+        bottom: -30,
+        right: -10,
+        child: IgnorePointer(
+          ignoring: true,
+          child: SizedBox(
+            width: 180,
+            height: 180,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                ...List.generate(18, (index) {
+                  final angle = (index * 20) * 3.1415926 / 180;
+
+                  return TweenAnimationBuilder(
+                    tween: Tween<double>(begin: 0.2, end: 1),
+                    duration: Duration(
+                      milliseconds: 900 + (index * 40),
+                    ),
+                    curve: Curves.easeOut,
+                    builder: (context, value, child) {
+                      return Transform.translate(
+                        offset: Offset(
+                          55 * value * cos(angle),
+                          55 * value * sin(angle),
+                        ),
+                        child: Opacity(
+                          opacity: 1 - (value * 0.7),
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: [
+                                Colors.redAccent,
+                                Colors.orange,
+                                Colors.yellow,
+                                Colors.blueAccent,
+                                Colors.purpleAccent,
+                              ][index % 5],
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: [
+                                    Colors.redAccent,
+                                    Colors.orange,
+                                    Colors.yellow,
+                                    Colors.blueAccent,
+                                    Colors.purpleAccent,
+                                  ][index % 5]
+                                      .withOpacity(0.8),
+                                  blurRadius: 12,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }),
+
+                // Vòng giữa
+                ...List.generate(12, (index) {
+                  final angle = (index * 30) * 3.1415926 / 180;
+
+                  return TweenAnimationBuilder(
+                    tween: Tween<double>(begin: 0.1, end: 1),
+                    duration: Duration(
+                      milliseconds: 700 + (index * 50),
+                    ),
+                    curve: Curves.easeOut,
+                    builder: (context, value, child) {
+                      return Transform.translate(
+                        offset: Offset(
+                          35 * value * cos(angle),
+                          35 * value * sin(angle),
+                        ),
+                        child: Opacity(
+                          opacity: 1 - (value * 0.8),
+                          child: Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.white.withOpacity(0.9),
+                                  blurRadius: 10,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }),
+
+                // Tâm pháo hoa
+                TweenAnimationBuilder(
+                  tween: Tween<double>(begin: 0.4, end: 1.2),
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.easeOut,
+                  builder: (context, value, child) {
+                    return Transform.scale(
+                      scale: value,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: Colors.yellow,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.yellow.withOpacity(0.9),
+                              blurRadius: 25,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (effectStr == 'snow') {
+      return Positioned.fill(
+        child: IgnorePointer(
+          ignoring: true,
+          child: Stack(
+            children: List.generate(40, (index) {
+              final left = (index * 15.0) % MediaQuery.of(context).size.width;
+
+              return TweenAnimationBuilder(
+                tween: Tween<double>(
+                  begin: 50,
+                  end: 400,
+                ),
+                duration: Duration(
+                  milliseconds: 6000 + (index * 120),
+                ),
+                curve: Curves.linear,
+                builder: (context, value, child) {
+                  return Positioned(
+                    left: left,
+                    top: value,
+                    child: Opacity(
+                      opacity: 0.8,
+                      child: Icon(
+                        Icons.ac_unit,
+                        color: Colors.white.withOpacity(0.9),
+                        size: 12 + (index % 6).toDouble(),
+                      ),
+                    ),
+                  );
+                },
+              );
+            }),
+          ),
+        ),
+      );
+    }
+
+    if (effectStr == 'sparkle') {
+      return Positioned.fill(
+        child: IgnorePointer(
+          ignoring: true,
+          child: Stack(
+            children: List.generate(24, (index) {
+              final dx = (index * 17.0) % MediaQuery.of(context).size.width;
+
+              final dy = (index * 11.0) % 180;
+
+              return Positioned(
+                left: dx,
+                top: dy,
+                child: TweenAnimationBuilder(
+                  tween: Tween<double>(
+                    begin: 0.2,
+                    end: 1,
+                  ),
+                  duration: Duration(
+                    milliseconds: 700 + (index * 40),
+                  ),
+                  curve: Curves.easeInOut,
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.scale(
+                        scale: value,
+                        child: Icon(
+                          Icons.auto_awesome,
+                          color: Colors.amber.withOpacity(0.9),
+                          size: 10 + (index % 10).toDouble(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            }),
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
   String getGreeting() {
     final vn = tz.getLocation('Asia/Ho_Chi_Minh');
     final now = tz.TZDateTime.now(vn);
@@ -247,6 +697,30 @@ class _HomePageState extends State<HomePage> {
       return isVN ? "Chào buổi chiều" : "Good afternoon";
     }
     return isVN ? "Chào buổi tối" : "Good evening";
+  }
+
+  Route slidePageRoute(Widget page) {
+    return PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 280),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        const begin = Offset(1.0, 0.0);
+        const end = Offset.zero;
+
+        final tween = Tween(
+          begin: begin,
+          end: end,
+        ).chain(
+          CurveTween(curve: Curves.easeOutCubic),
+        );
+
+        return SlideTransition(
+          position: animation.drive(tween),
+          child: child,
+        );
+      },
+    );
   }
 
   String _getMenuTitle(String id, bool isVN) {
@@ -286,34 +760,29 @@ class _HomePageState extends State<HomePage> {
 
         return Scaffold(
           backgroundColor: Colors.grey.shade50,
-          // Bỏ AppBar ở lớp Scaffold ngoài cùng để các trang con tự quản lý thanh cuộn
           appBar: null,
-
           body: PageView(
             controller: _pageController,
-            physics:
-                const NeverScrollableScrollPhysics(), // Tắt vuốt tay, chỉ trượt khi nhấn Tab Bar
+            physics: const NeverScrollableScrollPhysics(),
             onPageChanged: (index) {
               setState(() {
                 _currentIndex = index;
               });
             },
             children: [
-              // 🔥 TAB 0: CỬA HÀNG VẬT PHẨM (Gọi trực tiếp ShopPage đã có sẵn thiết kế AppBar & Tab danh mục)
+              // TAB 0: CỬA HÀNG VẬT PHẨM
               ShopPage(userId: widget.userId),
 
-              // 🔥 TAB 1: TRANG CHỦ (Giữ nguyên bố cục AppBar chứa Avatar, Điểm, Streak, Coin và nút Chuông)
+              // TAB 1: TRANG CHỦ
               Scaffold(
                 backgroundColor: Colors.grey.shade50,
                 appBar: AppBar(
                   elevation: 0,
                   backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
-                  leadingWidth:
-                      290, // Độ rộng chứa cụm thông tin cá nhân + Điểm + Streak + Coin
+                  leadingWidth: 290,
                   leading: _buildAppBarLeading(),
                   actions: [
-                    // Nút hình cái chuông mở thông báo dạng lớp phủ kính mờ (Liquid Glass)
                     IconButton(
                       icon: const Icon(Icons.notifications_none,
                           size: 28, color: Colors.white),
@@ -321,10 +790,8 @@ class _HomePageState extends State<HomePage> {
                         Navigator.push(
                           context,
                           PageRouteBuilder(
-                            opaque:
-                                false, // Giữ HomePage hiển thị mờ ảo ở phía sau lớp kính
-                            barrierDismissible:
-                                true, // Chạm ra ngoài để đóng thông báo
+                            opaque: false,
+                            barrierDismissible: true,
                             pageBuilder:
                                 (context, animation, secondaryAnimation) =>
                                     NotificationPage(userId: widget.userId),
@@ -342,11 +809,10 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 4),
                   ],
                 ),
-                body: _buildHomeContent(
-                    isVN), // Chứa nội dung mây bay và lưới danh mục học tập
+                body: _buildHomeContent(isVN),
               ),
 
-              // 🔥 TAB 2: CÀI ĐẶT (Trang SettingsPage tự quản lý Scaffold nội bộ)
+              // TAB 2: CÀI ĐẶT
               SettingsPage(
                 userName: _realName,
                 selectedClass: _realClass,
@@ -355,7 +821,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
-          // Thanh Bottom Tab Bar góc dưới với hiệu ứng UX phóng to mục đang chọn
           bottomNavigationBar: _buildBottomTab(isVN),
         );
       },
@@ -381,17 +846,19 @@ class _HomePageState extends State<HomePage> {
                 return GestureDetector(
                   onTap: () {
                     Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => ProfilePage(
-                                  userName: _realName,
-                                  userId: widget.userId,
-                                  selectedClass: _realClass,
-                                  userPoints: userPoints,
-                                  userCoins: userCoins,
-                                  email: _realEmail,
-                                  userStreak: userStreak,
-                                )));
+                      context,
+                      slidePageRoute(
+                        ProfilePage(
+                          userName: _realName,
+                          userId: widget.userId,
+                          selectedClass: _realClass,
+                          userPoints: userPoints,
+                          userCoins: userCoins,
+                          email: _realEmail,
+                          userStreak: userStreak,
+                        ),
+                      ),
+                    );
                   },
                   child: Container(
                     padding: const EdgeInsets.all(2),
@@ -504,9 +971,7 @@ class _HomePageState extends State<HomePage> {
                       Icons.smart_toy, "Trợ lý học tập", Colors.blueAccent),
                 ],
                 isVN),
-            const SizedBox(
-                height:
-                    30), // 🔥 Giảm khoảng trống do đã sử dụng bottomNavigationBar chuẩn
+            const SizedBox(height: 30),
           ],
         ),
       ),
@@ -518,64 +983,74 @@ class _HomePageState extends State<HomePage> {
       clipBehavior: Clip.none,
       children: [
         Positioned(
-            top: -500,
-            left: 0,
-            right: 0,
-            height: 500,
-            child: Container(color: primaryColor)),
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: primaryColor,
-            borderRadius: const BorderRadius.only(
+          top: -500,
+          left: 0,
+          right: 0,
+          height: 500,
+          child: Container(color: primaryColor),
+        ),
+        GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: _showEffectOptions,
+          onLongPress: _showEffectOptions,
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: primaryColor,
+              borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(30),
-                bottomRight: Radius.circular(30)),
-            boxShadow: [
-              BoxShadow(
+                bottomRight: Radius.circular(30),
+              ),
+              boxShadow: [
+                BoxShadow(
                   color: Colors.black.withOpacity(0.2),
                   blurRadius: 20,
-                  offset: const Offset(0, 10))
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(30),
-                bottomRight: Radius.circular(30)),
-            child: Stack(
-              children: [
-                Positioned(
-                    bottom: -50,
-                    right: -30,
-                    child: Transform.scale(
-                        scaleX: 1.4,
-                        child: Icon(Icons.cloud,
-                            color: Colors.white.withOpacity(0.32), size: 180))),
-                Positioned(
-                    bottom: 10,
-                    right: 120,
-                    child: Transform.scale(
-                        scaleX: 1.3,
-                        child: Icon(Icons.cloud,
-                            color: Colors.white.withOpacity(0.28), size: 90))),
-                Padding(
-                  padding: const EdgeInsets.only(
-                      top: 15, left: 20, right: 20, bottom: 45),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("${getGreeting()},",
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text(_realName,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold)),
-                    ],
-                  ),
+                  offset: const Offset(0, 10),
                 ),
               ],
+            ),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(30),
+                bottomRight: Radius.circular(30),
+              ),
+              child: Stack(
+                children: [
+                  if (_activeEffect == '' || _activeEffect == 'cloud')
+                    ..._buildDefaultCloud()
+                  else
+                    _buildCustomEffect(_activeEffect),
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      top: 15,
+                      left: 20,
+                      right: 20,
+                      bottom: 45,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "${getGreeting()},",
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _realName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -612,30 +1087,43 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildTabItem(int index, IconData icon, String label) {
     bool isSelected = _currentIndex == index;
+
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () {
+        if (_currentIndex == index) return;
+
         _pageController.animateToPage(
           index,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
         );
+
+        setState(() {
+          _currentIndex = index;
+        });
       },
       child: AnimatedScale(
         scale: isSelected ? 1.25 : 1.0,
         duration: const Duration(milliseconds: 250),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon,
-                color: isSelected ? primaryColor : Colors.grey,
-                size: isSelected ? 30 : 26),
+            Icon(
+              icon,
+              color: isSelected ? primaryColor : Colors.grey,
+              size: isSelected ? 30 : 26,
+            ),
             if (isSelected)
               Container(
                 margin: const EdgeInsets.only(top: 4),
                 width: 4,
                 height: 4,
-                decoration:
-                    BoxDecoration(color: primaryColor, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: primaryColor,
+                  shape: BoxShape.circle,
+                ),
               )
           ],
         ),
@@ -646,7 +1134,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildGridMenu(BuildContext context, List<MenuData> items, bool isVN) {
     return GridView.builder(
       shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+      physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
@@ -656,73 +1144,95 @@ class _HomePageState extends State<HomePage> {
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
-        return InkWell(
-          onTap: () async {
-            if (item.title == "Tạo phòng học") {
-              await Navigator.push(
+
+        // SỬA LỖI UI & LOGIC TẠI ĐÂY:
+        // Sử dụng Material làm nền và đổ bóng để InkWell con bên trong hiển thị hiệu ứng ripple mượt mà
+        return Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          shadowColor: Colors.black.withOpacity(0.06),
+          elevation: 2,
+          child: InkWell(
+            splashColor: item.color.withOpacity(0.12),
+            highlightColor: item.color.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(20),
+            onTap: () async {
+              if (item.title == "Tạo phòng học") {
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => CreateRoomPage(
-                          userId: widget.userId,
-                          userName: _realName,
-                          userClass: _realClass)));
-            } else if (item.title == "Học offline") {
-              final result = await Navigator.push(
+                  slidePageRoute(
+                    CreateRoomPage(
+                      userId: widget.userId,
+                      userName: _realName,
+                      userClass: _realClass,
+                    ),
+                  ),
+                );
+              } else if (item.title == "Học offline") {
+                final result = await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => OfflineStudyPage(userId: widget.userId)));
-              if (result is int) await _updateStudyProgress(result);
-            } else if (item.title == "Trợ lý học tập") {
-              await Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const AIAssistantPage()));
-            } else if (item.title == "Tìm phòng học") {
-              await Navigator.push(
+                  slidePageRoute(
+                    OfflineStudyPage(userId: widget.userId),
+                  ),
+                );
+                if (result is int) await _updateStudyProgress(result);
+              } else if (item.title == "Trợ lý học tập") {
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => RoomSearchPage(
-                          currentUserId: widget.userId,
-                          currentUserName: _realName)));
-            } else if (item.title == "Kế hoạch học tập") {
-              await Navigator.push(
+                  slidePageRoute(
+                    const AIAssistantPage(),
+                  ),
+                );
+              } else if (item.title == "Tìm phòng học") {
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => PlanPage(userId: widget.userId)));
-            } else if (item.title == "Bảng xếp hạng") {
-              await Navigator.push(
+                  slidePageRoute(
+                    RoomSearchPage(
+                      currentUserId: widget.userId,
+                      currentUserName: _realName,
+                    ),
+                  ),
+                );
+              } else if (item.title == "Kế hoạch học tập") {
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          LeaderboardPage(currentUserId: widget.userId)));
-            } else if (item.title == "Lịch sử học tập") {
-              await Navigator.push(
+                  slidePageRoute(
+                    PlanPage(userId: widget.userId),
+                  ),
+                );
+              } else if (item.title == "Bảng xếp hạng") {
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => HistoryPage(userId: widget.userId)));
-            } else if (item.title == "Thành tích học tập") {
-              await Navigator.push(
+                  slidePageRoute(
+                    LeaderboardPage(currentUserId: widget.userId),
+                  ),
+                );
+              } else if (item.title == "Lịch sử học tập") {
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => StatisticsPage(userId: widget.userId)));
-            } else if (item.title == "Bạn bè") {
-              await Navigator.push(
+                  slidePageRoute(
+                    HistoryPage(userId: widget.userId),
+                  ),
+                );
+              } else if (item.title == "Thành tích học tập") {
+                await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => FriendsPage(
-                          currentUserId: widget.userId,
-                          currentUserName: _realName)));
-            }
-            if (mounted) _startListeningUserData();
-          },
-          child: Container(
-            decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4))
-                ]),
+                  slidePageRoute(
+                    StatisticsPage(userId: widget.userId),
+                  ),
+                );
+              } else if (item.title == "Bạn bè") {
+                await Navigator.push(
+                  context,
+                  slidePageRoute(
+                    FriendsPage(
+                      currentUserId: widget.userId,
+                      currentUserName: _realName,
+                    ),
+                  ),
+                );
+              }
+            },
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

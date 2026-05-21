@@ -36,6 +36,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   );
 
   @override
+  void deactivate() {
+    FocusScope.of(context).unfocus();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _idController.dispose();
@@ -173,6 +179,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                   .collection('users')
                                   .doc(targetInput)
                                   .get();
+                              if (!mounted) return;
                               if (doc.exists) {
                                 targetEmail = doc.get('email');
                               } else {
@@ -186,9 +193,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
                             await FirebaseAuth.instance
                                 .sendPasswordResetEmail(email: targetEmail);
+                            if (!mounted) return;
 
                             if (context.mounted) {
-                              Navigator.pop(context);
+                              if (Navigator.canPop(context)) {
+                                Navigator.pop(context);
+                              }
                               _showMessage(
                                   isVN
                                       ? "Đã gửi link khôi phục. Vui lòng kiểm tra hộp thư Email của bạn!"
@@ -219,6 +229,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         );
       },
     );
+    if (!mounted) return;
   }
 
   // ====================================================================
@@ -231,7 +242,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
+      builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) => AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -250,8 +261,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           actions: [
             TextButton(
               onPressed: () async {
-                Navigator.pop(ctx);
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
                 await tempApp.delete();
+                if (!mounted) return;
                 if (mounted) setState(() => _isLoading = false);
               },
               child: Text(isVN ? "Đóng" : "Close",
@@ -265,8 +279,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       setStateDialog(() => isSending = true);
                       try {
                         await unverifiedUser.sendEmailVerification();
-                        if (ctx.mounted) {
-                          Navigator.pop(ctx);
+                        if (!mounted) return;
+                        if (context.mounted) {
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          }
                           _showMessage(
                             isVN
                                 ? "Đã gửi lại thư xác nhận! Hãy kiểm tra hòm thư."
@@ -275,11 +292,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           );
                         }
                       } catch (e) {
-                        if (ctx.mounted)
+                        if (context.mounted) {
                           _showMessage(
                               "Lỗi gửi thư: Vui lòng đợi 1 lát rồi thử lại.");
+                        }
                       }
                       await tempApp.delete();
+                      if (!mounted) return;
                       if (mounted) setState(() => _isLoading = false);
                     },
               child: isSending
@@ -317,16 +336,25 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 Timer.periodic(const Duration(seconds: 3), (timer) async {
               try {
                 final auth = FirebaseAuth.instanceFor(app: tempApp);
-                await auth.currentUser?.reload();
+                try {
+                  await auth.currentUser
+                      ?.reload()
+                      .timeout(const Duration(seconds: 8));
+                } catch (_) {}
+                if (!mounted) return;
 
                 if (auth.currentUser?.emailVerified == true) {
                   timer.cancel();
-                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (context.mounted) if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  }
                   await tempApp.delete();
+                  if (!mounted) return;
 
                   // Tiến hành đăng nhập vào luồng chính (Main Auth) -> main.dart sẽ bắt tín hiệu và TỰ CHUYỂN TRANG
                   await FirebaseAuth.instance.signInWithEmailAndPassword(
                       email: email, password: password);
+                  if (!mounted) return;
                 }
               } catch (e) {
                 // Ignore errors like network drops
@@ -369,16 +397,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               final auth =
                                   FirebaseAuth.instanceFor(app: tempApp);
                               await auth.currentUser?.reload();
+                              if (!mounted) return;
 
                               if (auth.currentUser?.emailVerified == true) {
                                 checkTimer?.cancel();
                                 if (ctx.mounted) Navigator.pop(ctx);
                                 await tempApp.delete();
+                                if (!mounted) return;
 
                                 // Đăng nhập luồng chính -> main.dart sẽ tự động bắt tín hiệu
                                 await FirebaseAuth.instance
                                     .signInWithEmailAndPassword(
                                         email: email, password: password);
+                                if (!mounted) return;
                               } else {
                                 setStateDialog(() => isChecking = false);
                                 _showMessage(isVN
@@ -410,6 +441,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         checkTimer?.cancel();
                         Navigator.pop(ctx);
                         await tempApp.delete();
+                        if (!mounted) return;
                         setState(() {
                           _isLogin = true;
                           _passwordController.clear();
@@ -423,6 +455,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         try {
                           final auth = FirebaseAuth.instanceFor(app: tempApp);
                           await auth.currentUser?.sendEmailVerification();
+                          if (!mounted) return;
                           _showMessage(
                             isVN
                                 ? "Đã gửi lại thư xác nhận mới!"
@@ -456,6 +489,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   // LOGIC 4: XỬ LÝ ĐĂNG NHẬP / ĐĂNG KÝ CHÍNH
   // ====================================================================
   Future<void> _handleAuth() async {
+    if (_isLoading) return;
     final String id = _idController.text.trim();
     final String password = _passwordController.text.trim();
     bool isVN = languageNotifier.value == "Tiếng Việt";
@@ -474,6 +508,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         // ================= ĐĂNG NHẬP BẰNG ID =================
         final userDoc =
             await FirebaseFirestore.instance.collection('users').doc(id).get();
+        if (!mounted) return;
         if (!userDoc.exists) {
           setState(() => _isLoading = false);
           _showMessage(isVN
@@ -488,11 +523,24 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           realEmail = data['email'];
         }
 
+        // Bổ sung các trường khởi tạo nếu chưa có (khi login tài khoản cũ)
+        Map<String, dynamic> updates = {};
+        if (!data.containsKey('activeEffect')) updates['activeEffect'] = '';
+        if (!data.containsKey('ownedEffects')) updates['ownedEffects'] = [];
+        if (updates.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(id)
+              .update(updates);
+          if (!mounted) return;
+        }
+
         // Kiểm tra ngầm để chặn trường hợp chưa kích hoạt
         final String tempAppName =
             'tempLogin_${DateTime.now().millisecondsSinceEpoch}';
         final FirebaseApp tempApp = await Firebase.initializeApp(
             name: tempAppName, options: Firebase.app().options);
+        if (!mounted) return;
 
         try {
           final tempAuth = FirebaseAuth.instanceFor(app: tempApp);
@@ -501,6 +549,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           try {
             tempCred = await tempAuth.signInWithEmailAndPassword(
                 email: realEmail, password: password);
+            if (!mounted) return;
           } on FirebaseAuthException catch (fallbackErr) {
             if (fallbackErr.code == 'user-not-found' ||
                 fallbackErr.code == 'invalid-credential' ||
@@ -508,6 +557,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               try {
                 tempCred = await tempAuth.signInWithEmailAndPassword(
                     email: "$id@esstudy.com", password: password);
+                if (!mounted) return;
                 realEmail = "$id@esstudy.com";
               } catch (_) {
                 rethrow; // Ném lỗi sai pass
@@ -526,10 +576,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           // KHI ĐÃ HỢP LỆ -> XÓA TEMP VÀ LOGIN BẰNG MAIN AUTH
           // Không cần tắt Loading hay pushRoute ở đây, main.dart sẽ tự động điều hướng hoàn hảo.
           await tempApp.delete();
+          if (!mounted) return;
           await FirebaseAuth.instance
               .signInWithEmailAndPassword(email: realEmail, password: password);
+          if (!mounted) return;
         } catch (e) {
           await tempApp.delete();
+          if (!mounted) return;
           rethrow;
         }
       } else {
@@ -555,6 +608,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
         final idCheckDoc =
             await FirebaseFirestore.instance.collection('users').doc(id).get();
+        if (!mounted) return;
         if (idCheckDoc.exists) {
           setState(() => _isLoading = false);
           _showMessage(isVN
@@ -569,6 +623,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           name: tempAppName,
           options: Firebase.app().options,
         );
+        if (!mounted) return;
 
         try {
           UserCredential cred = await FirebaseAuth.instanceFor(app: tempApp)
@@ -576,20 +631,29 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             email: email,
             password: password,
           );
+          if (!mounted) return;
 
           await cred.user!.sendEmailVerification();
+          if (!mounted) return;
 
+          // 🔥 ĐÃ ĐỒNG BỘ: Bổ sung các trường khởi tạo liên quan đến Shop, Streak, và Bạn bè
           await FirebaseFirestore.instance.collection('users').doc(id).set({
             'name': name,
             'id': id,
             'email': email,
             'class': _selectedClass,
             'points': 100,
-            'coin': 1000,
+            'coin': 0,
+            'streakCount': 0,
             'avatarUrl': '',
             'bannerUrl': '',
+            'ownedEffects': [],
+            'activeEffect': '',
+            'friends': [],
+            'friendRequests': [],
             'createdAt': FieldValue.serverTimestamp(),
           });
+          if (!mounted) return;
 
           if (!mounted) return;
           setState(() => _isLoading = false);
@@ -598,6 +662,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           _showVerificationWaitingDialog(tempApp, email, password);
         } catch (e) {
           await tempApp.delete();
+          if (!mounted) return;
           rethrow;
         }
       }
@@ -679,7 +744,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 backgroundColor: Colors.white,
                 displacement: 60,
                 onRefresh: () async {
-                  await Future.delayed(const Duration(milliseconds: 800));
+                  await Future.delayed(const Duration(milliseconds: 250));
+                  if (!mounted) return;
                   if (mounted) setState(() {});
                 },
                 child: SingleChildScrollView(
@@ -959,7 +1025,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                   borderRadius: BorderRadius.circular(30),
                                 ),
                               ),
-                              onPressed: _isLoading ? null : _handleAuth,
+                              onPressed: _isLoading
+                                  ? null
+                                  : () async {
+                                      FocusScope.of(context).unfocus();
+                                      await _handleAuth();
+                                    },
                               child: _isLoading
                                   ? const SizedBox(
                                       width: 24,
