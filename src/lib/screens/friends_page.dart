@@ -78,7 +78,7 @@ class _FriendsPageState extends State<FriendsPage> {
     final targetRef =
         FirebaseFirestore.instance.collection('users').doc(targetUserId);
 
-    // 🔥 TÌM ID CỦA CHUỖI BẠN BÈ ĐỂ XÓA
+    // TÌM ID CỦA CHUỖI BẠN BÈ ĐỂ XÓA
     String streakId = _getChatId(widget.currentUserId, targetUserId);
     final streakRef =
         FirebaseFirestore.instance.collection('friend_streaks').doc(streakId);
@@ -91,13 +91,13 @@ class _FriendsPageState extends State<FriendsPage> {
     batch.update(targetRef, {
       'friends': FieldValue.arrayRemove([widget.currentUserId]),
     });
-    // 🔥 THÊM MỚI: XÓA DOCUMENT CHUỖI KHỎI DATABASE
+    // XÓA DOCUMENT CHUỖI KHỎI DATABASE
     batch.delete(streakRef);
 
     await batch.commit();
   }
 
-  // 🔥 THÊM: HỘP THOẠI XÁC NHẬN KHI XÓA BẠN BÈ
+  // HỘP THOẠI XÁC NHẬN KHI XÓA BẠN BÈ
   void _showUnfriendConfirmDialog(String targetId, String targetName) {
     bool isVN = languageNotifier.value == "Tiếng Việt";
 
@@ -651,7 +651,7 @@ class _FriendsPageState extends State<FriendsPage> {
 }
 
 // =====================================================================
-// TRANG XEM HỒ SƠ NGƯỜI KHÁC
+// TRANG XEM HỒ SƠ NGƯỜI KHÁC (ĐÃ ĐƯỢC ĐỒNG BỘ VỚI PROFILE PAGE)
 // =====================================================================
 class OtherUserProfilePage extends StatelessWidget {
   final String userId;
@@ -682,7 +682,8 @@ class OtherUserProfilePage extends StatelessWidget {
 
       int rank = (higherScoreQuery.count ?? 0) + 1;
       data['rank'] = rank;
-// 🔥 THÊM ĐOẠN NÀY VÀO TRƯỚC return data;
+
+      // Xử lý lấy thông tin Bạn thân học tập của họ
       if (data['featuredFriendId'] != null) {
         String fId = data['featuredFriendId'];
         var fDoc = await userRef.doc(fId).get();
@@ -699,12 +700,63 @@ class OtherUserProfilePage extends StatelessWidget {
           }
         }
       }
-      // return data;
       return data;
     } catch (e) {
       debugPrint("Lỗi khi tải thông tin user: $e");
       return {};
     }
+  }
+
+  // Khối Card Tiểu sử (Chỉ xem)
+  Widget _buildReadOnlyBioSection(bool isVN, String bio) {
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, color: primaryColor),
+                const SizedBox(width: 8),
+                Text(
+                  isVN ? "Tiểu sử" : "Bio",
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              bio.isNotEmpty
+                  ? bio
+                  : (isVN
+                      ? "Chưa có dòng giới thiệu nào."
+                      : "No bio added yet."),
+              style: TextStyle(
+                color: bio.isNotEmpty ? Colors.black87 : Colors.grey,
+                fontSize: 14,
+                fontStyle: bio.isNotEmpty ? FontStyle.normal : FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -741,17 +793,16 @@ class OtherUserProfilePage extends StatelessWidget {
 
                 final data = snapshot.data!;
                 final points = data['points'] ?? 0;
-                final streak = data['streakCount'] ?? 0;
+                final streak = data['streakCount'] ?? data['streak'] ?? 0;
                 final rank = data['rank'] ?? 0;
                 final className =
                     data['class'] ?? (isVN ? "Chưa có lớp" : "No class yet");
                 final List<dynamic> medals = data['medals'] ?? [];
 
-                final String? avatarUrl = data['avatarUrl'];
-                final String bio = data['bio'] ??
-                    (isVN
-                        ? "Chưa có dòng giới thiệu nào."
-                        : "No bio added yet.");
+                final String? avatarUrl = data['avatarUrl']?.toString();
+                final String? bannerUrl =
+                    data['bannerUrl']?.toString(); // 🔥 Đã lấy Banner
+                final String bio = data['bio']?.toString() ?? "";
 
                 String joinDateText = isVN ? "Chưa rõ" : "Unknown";
                 if (data['createdAt'] != null) {
@@ -777,42 +828,73 @@ class OtherUserProfilePage extends StatelessWidget {
                 } else {
                   rankText = isVN ? "Chưa xếp hạng" : "Unranked";
                 }
+
                 return SingleChildScrollView(
                   child: Column(
                     children: [
+                      // KHUNG AVATAR + BANNER (Thiết kế đồng bộ với ProfilePage)
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 30),
                         decoration: BoxDecoration(
                           color: primaryColor,
-                          borderRadius: const BorderRadius.only(
-                            bottomLeft: Radius.circular(30),
-                            bottomRight: Radius.circular(30),
-                          ),
+                          image: (bannerUrl != null && bannerUrl.isNotEmpty)
+                              ? DecorationImage(
+                                  image: NetworkImage(bannerUrl),
+                                  fit: BoxFit.cover,
+                                  colorFilter: ColorFilter.mode(
+                                    Colors.black.withOpacity(0.35),
+                                    BlendMode.darken,
+                                  ),
+                                )
+                              : null,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.15),
-                              blurRadius: 15,
-                              offset: const Offset(0, 8),
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 25,
+                              offset: const Offset(0, 10),
                             ),
                           ],
                         ),
                         child: Column(
                           children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundColor: Colors.white,
-                              backgroundImage:
-                                  (avatarUrl != null && avatarUrl.isNotEmpty)
-                                      ? NetworkImage(avatarUrl)
-                                      : null,
-                              child: (avatarUrl != null && avatarUrl.isNotEmpty)
-                                  ? null
-                                  : Icon(
-                                      Icons.person,
-                                      color: primaryColor,
-                                      size: 50,
-                                    ),
+                            // Khung Avatar
+                            Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child:
+                                    (avatarUrl != null && avatarUrl.isNotEmpty)
+                                        ? Image.network(
+                                            avatarUrl,
+                                            width: 100,
+                                            height: 100,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) {
+                                              return Icon(Icons.person,
+                                                  color: primaryColor,
+                                                  size: 50);
+                                            },
+                                          )
+                                        : Icon(Icons.person,
+                                            color: primaryColor, size: 50),
+                              ),
                             ),
                             const SizedBox(height: 15),
                             Text(
@@ -826,33 +908,21 @@ class OtherUserProfilePage extends StatelessWidget {
                             Text(
                               "@$userId",
                               style: const TextStyle(
-                                fontSize: 14,
+                                fontSize: 16,
                                 color: Colors.white70,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(height: 10),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 32),
-                              child: Text(
-                                "\"$bio\"",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.white.withOpacity(0.85),
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ),
                             const SizedBox(height: 15),
+                            // Thẻ Chuỗi học tập
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
+                                  horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color:
+                                    (bannerUrl != null && bannerUrl.isNotEmpty)
+                                        ? Colors.black.withOpacity(0.3)
+                                        : Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
@@ -878,31 +948,17 @@ class OtherUserProfilePage extends StatelessWidget {
                           ],
                         ),
                       ),
+
+                      // NỘI DUNG THÔNG TIN BÊN DƯỚI
                       Padding(
                         padding: const EdgeInsets.all(20),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              isVN ? "Thông tin học tập" : "Study Information",
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            _infoCard(Icons.workspace_premium,
-                                isVN ? "Tổng điểm" : "Total Points", "$points"),
-                            _infoCard(Icons.military_tech,
-                                isVN ? "Xếp hạng" : "Rank", rankText),
-                            _infoCard(Icons.school, isVN ? "Lớp" : "Class",
-                                className),
-                            _infoCard(
-                                Icons.calendar_month,
-                                isVN ? "Ngày gia nhập" : "Joined Date",
-                                joinDateText),
-                            // 🔥 THÊM MỚI: HIỂN THỊ BẠN THÂN BÊN PROFILE NGƯỜI KHÁC
+                            // 1. Khối Tiểu sử
+                            _buildReadOnlyBioSection(isVN, bio),
+
+                            // 2. Khối Bạn thân nổi bật
                             if (data['featuredFriendId'] != null &&
                                 data['featuredFriendStreak'] != null &&
                                 data['featuredFriendStreak'] >= 3)
@@ -942,7 +998,24 @@ class OtherUserProfilePage extends StatelessWidget {
                                   ),
                                 ),
                               ),
+
+                            // 3. Các Info Card thông tin
+                            _infoCard(Icons.alternate_email,
+                                isVN ? "ID người dùng" : "User ID", "@$userId"),
+                            _infoCard(Icons.military_tech,
+                                isVN ? "Xếp hạng" : "Rank", rankText),
+                            _infoCard(Icons.workspace_premium,
+                                isVN ? "Tổng điểm" : "Total Points", "$points"),
+                            _infoCard(
+                                Icons.calendar_month,
+                                isVN ? "Ngày gia nhập" : "Joined Date",
+                                joinDateText),
+                            _infoCard(Icons.school, isVN ? "Lớp" : "Class",
+                                className),
+
                             const SizedBox(height: 25),
+
+                            // 4. Khối Huy chương (Giữ nguyên từ bản trước vì tính năng này hữu ích)
                             Text(
                               isVN ? "Huy chương mùa giải" : "Season Medals",
                               style: const TextStyle(
@@ -953,6 +1026,7 @@ class OtherUserProfilePage extends StatelessWidget {
                             ),
                             const SizedBox(height: 10),
                             _buildMedalsSection(medals, isVN),
+                            const SizedBox(height: 20),
                           ],
                         ),
                       ),

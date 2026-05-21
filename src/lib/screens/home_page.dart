@@ -16,6 +16,7 @@ import 'package:esstudy/screens/create_room_page.dart';
 import 'package:esstudy/constants/var.dart';
 import 'package:esstudy/screens/notification_page.dart';
 import 'package:esstudy/screens/shop_page.dart';
+import 'dart:async';
 
 class HomePage extends StatefulWidget {
   final String userName;
@@ -45,10 +46,12 @@ class _HomePageState extends State<HomePage> {
   int _currentIndex = 1;
 
   final PageController _pageController = PageController(initialPage: 1);
+  StreamSubscription<DocumentSnapshot>? _userSubscription;
 
   @override
   void dispose() {
     _pageController.dispose();
+    _userSubscription?.cancel();
     super.dispose();
   }
 
@@ -58,7 +61,7 @@ class _HomePageState extends State<HomePage> {
     _realEmail = widget.email;
     _realName = widget.userName;
     _realClass = widget.selectedClass;
-    _fetchUserData();
+    _startListeningUserData();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkTodayPlansAndShowPopup();
@@ -139,49 +142,56 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _fetchUserData() async {
+  void _startListeningUserData() {
     try {
-      var doc = await FirebaseFirestore.instance
+      _userSubscription = FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
-          .get();
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
-        int points = data['points'] ?? 100;
-        int streak = data['streakCount'] ?? 0;
-        int coins = data['coins'] ?? 0;
-        String emailFromDb = data['email'] ?? widget.email;
-        String nameFromDb = data['name'] ?? widget.userName;
-        String classFromDb = data['class'] ?? widget.selectedClass;
-        Timestamp? lastStudyTs = data['lastStudyDate'];
-        if (lastStudyTs != null && streak > 0) {
-          DateTime lastStudy = lastStudyTs.toDate();
-          DateTime now = DateTime.now();
-          DateTime today = DateTime(now.year, now.month, now.day);
-          DateTime lastStudyDay =
-              DateTime(lastStudy.year, lastStudy.month, lastStudy.day);
-          if (today.difference(lastStudyDay).inDays > 1) {
-            streak = 0;
-            FirebaseFirestore.instance
-                .collection('users')
-                .doc(widget.userId)
-                .update({'streakCount': 0});
+          .snapshots()
+          .listen((doc) {
+        if (doc.exists && doc.data() != null) {
+          final data = doc.data()!;
+          int points = data['points'] ?? 100;
+          int streak = data['streakCount'] ?? 0;
+          int coins = data['coin'] ?? 0;
+          String emailFromDb = data['email'] ?? widget.email;
+          String nameFromDb = data['name'] ?? widget.userName;
+          String classFromDb = data['class'] ?? widget.selectedClass;
+          Timestamp? lastStudyTs = data['lastStudyDate'];
+
+          // Giữ nguyên logic tính toán chuỗi ngày học (Streak) cũ của bạn
+          if (lastStudyTs != null && streak > 0) {
+            DateTime lastStudy = lastStudyTs.toDate();
+            DateTime now = DateTime.now();
+            DateTime today = DateTime(now.year, now.month, now.day);
+            DateTime lastStudyDay =
+                DateTime(lastStudy.year, lastStudy.month, lastStudy.day);
+            if (today.difference(lastStudyDay).inDays > 1) {
+              streak = 0;
+              FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(widget.userId)
+                  .update({'streakCount': 0});
+            }
           }
+
+          if (mounted) {
+            setState(() {
+              userPoints = points;
+              userStreak = streak;
+              userCoins = coins;
+              _realEmail = emailFromDb;
+              _realName = nameFromDb;
+              _realClass = classFromDb;
+              _isLoadingData = false;
+            });
+          }
+        } else {
+          if (mounted) setState(() => _isLoadingData = false);
         }
-        if (mounted) {
-          setState(() {
-            userPoints = points;
-            userStreak = streak;
-            userCoins = coins;
-            _realEmail = emailFromDb;
-            _realName = nameFromDb;
-            _realClass = classFromDb;
-            _isLoadingData = false;
-          });
-        }
-      } else {
+      }, onError: (e) {
         if (mounted) setState(() => _isLoadingData = false);
-      }
+      });
     } catch (e) {
       if (mounted) setState(() => _isLoadingData = false);
     }
@@ -378,6 +388,7 @@ class _HomePageState extends State<HomePage> {
                                   userId: widget.userId,
                                   selectedClass: _realClass,
                                   userPoints: userPoints,
+                                  userCoins: userCoins,
                                   email: _realEmail,
                                   userStreak: userStreak,
                                 )));
@@ -448,7 +459,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildHomeContent(bool isVN) {
     return RefreshIndicator(
       color: primaryColor,
-      onRefresh: () async => _fetchUserData(),
+      onRefresh: () async => _startListeningUserData(),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
@@ -700,7 +711,7 @@ class _HomePageState extends State<HomePage> {
                           currentUserId: widget.userId,
                           currentUserName: _realName)));
             }
-            if (mounted) _fetchUserData();
+            if (mounted) _startListeningUserData();
           },
           child: Container(
             decoration: BoxDecoration(

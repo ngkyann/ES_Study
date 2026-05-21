@@ -585,7 +585,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             'email': email,
             'class': _selectedClass,
             'points': 100,
-            'coin': 0,
+            'coin': 1000,
+            'avatarUrl': '',
+            'bannerUrl': '',
             'createdAt': FieldValue.serverTimestamp(),
           });
 
