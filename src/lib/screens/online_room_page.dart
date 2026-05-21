@@ -745,6 +745,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
             .collection('users')
             .doc(widget.userId)
             .update({'points': FieldValue.increment(-penalty)});
+
+        // 🔥 THÊM MỚI: Bắn thông báo phạt về bảng notifications cho Host
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': widget.userId,
+          'content_vn':
+              "⚠️ Bạn đã bị phạt -$penalty điểm do thoát khỏi phòng học Online sớm khi đang có thành viên khác.",
+          'content_en':
+              "⚠️ You have been penalized -$penalty points for leaving the Online study room early while other members were present.",
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -757,37 +768,49 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       }
 
       // Báo cho thành viên Host đã out
-      if (!widget.isHost && isHostForcedClose && mounted) {
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (dialogCtx) => AlertDialog(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text(isVN ? "Phòng đã đóng!" : "Room Closed!",
-                textAlign: TextAlign.center),
-            content: Text(
-                isVN
-                    ? "Chủ phòng đã thoát sớm. Phiên học bị hủy và không có điểm nào được cộng. Chủ phòng sẽ bị phạt điểm."
-                    : "The host left early. Session cancelled and no points awarded. The host will be penalized points.",
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 15)),
-            actions: [
-              Center(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15))),
-                  onPressed: () =>
-                      Navigator.pop(dialogCtx), // Chỉ đóng hộp thoại
-                  child: Text(isVN ? "Đóng" : "Close",
-                      style: const TextStyle(color: Colors.white)),
+      if (!widget.isHost && isHostForcedClose) {
+        // 🔥 THÊM MỚI: Bắn thông báo về bảng notifications cho Thành viên bị ảnh hưởng
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': widget.userId,
+          'content_vn':
+              "🚫 Phiên học Online đã bị hủy vì chủ phòng thoát sớm. Bạn không được cộng điểm cho phiên học này.",
+          'content_en':
+              "🚫 The Online study session was cancelled because the host left early. No points were awarded.",
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        if (mounted) {
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogCtx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              title: Text(isVN ? "Phòng đã đóng!" : "Room Closed!",
+                  textAlign: TextAlign.center),
+              content: Text(
+                  isVN
+                      ? "Chủ phòng đã thoát sớm. Phiên học bị hủy và không có điểm nào được cộng. Chủ phòng sẽ bị phạt điểm."
+                      : "The host left early. Session cancelled and no points awarded. The host will be penalized points.",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 15)),
+              actions: [
+                Center(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15))),
+                    onPressed: () =>
+                        Navigator.pop(dialogCtx), // Chỉ đóng hộp thoại
+                    child: Text(isVN ? "Đóng" : "Close",
+                        style: const TextStyle(color: Colors.white)),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
+              ],
+            ),
+          );
+        }
       }
 
       if (mounted && !isFailedAFK) Navigator.pop(context); // Đóng phòng học
@@ -795,7 +818,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     }
 
     // 2. NẾU HOÀN THÀNH THÀNH CÔNG (Tất cả nhận điểm)
-    // int actualSeconds = DateTime.now().difference(_joinTime).inSeconds;
     int actualMinutes = widget
         .duration; // Đã hoàn thành tự nhiên thì nhận Full thời gian cài đặt
     int earnedPoints = actualMinutes * currentParticipants;
@@ -841,11 +863,20 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
       await userRef.set({
         'points': FieldValue.increment(earnedPoints),
-        'coin':
-            FieldValue.increment(earnedCoins), // 🔥 THÊM DÒNG NÀY: Cộng coin
+        'coin': FieldValue.increment(earnedCoins),
         'streakCount': newStreak,
         'lastStudyDate': Timestamp.fromDate(now),
       }, SetOptions(merge: true));
+
+      // 🔥 THÊM MỚI: Bắn thông báo cập nhật điểm/coin về bảng notifications
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'userId': widget.userId,
+        'content_vn':
+            "🎉 Tuyệt vời! Bạn vừa hoàn thành phòng học Online dài $actualMinutes phút cùng $currentParticipants người. Nhận được +$earnedPoints điểm và +$earnedCoins coin",
+        'content_en':
+            "🎉 Awesome! You finished a $actualMinutes-minute Online session with $currentParticipants buddies. Earned +$earnedPoints points and +$earnedCoins coins",
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       // Cập nhật Friend Streak
       if (currentParticipants > 1 && roomSnap.exists) {

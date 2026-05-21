@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/constants/var.dart';
+import 'package:flutter/widgets.dart';
 
 class NotificationPage extends StatefulWidget {
   final String userId;
@@ -276,11 +277,33 @@ class _NotificationPageState extends State<NotificationPage> {
                                                   color: Colors.black)),
                                           // Phần nội dung thông báo thông thường
                                           TextSpan(
-                                            text: '$contentStr.',
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w400,
-                                                color: Colors.white),
-                                          ),
+                                            children: [
+                                              WidgetSpan(
+                                                child: Stack(
+                                                  children: [
+                                                    Text(
+                                                      '$contentStr.',
+                                                      style: TextStyle(
+                                                        foreground: Paint()
+                                                          ..style =
+                                                              PaintingStyle
+                                                                  .stroke
+                                                          ..strokeWidth = 2
+                                                          ..color =
+                                                              Colors.black,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      '$contentStr.',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          )
                                         ],
                                       ),
                                     ),

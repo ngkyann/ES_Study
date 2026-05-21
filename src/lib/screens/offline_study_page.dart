@@ -570,7 +570,7 @@ class _StudySessionPageState extends State<StudySessionPage> {
   Future<void> _finishStudySession() async {
     int minutes = sessions.fold(0, (a, b) => a + b);
 
-    // 🔥 THÊM MỚI: Tính toán coin (1 nửa số phút/điểm, làm tròn lên)
+    // Tính toán coin (1 nửa số phút/điểm, làm tròn lên)
     int earnedCoins = (minutes / 2.0).round();
 
     List<bool> updatedStatus = List.from(widget.allStatus);
@@ -584,6 +584,7 @@ class _StudySessionPageState extends State<StudySessionPage> {
       }
     }
 
+    // Lưu lịch sử học
     await FirebaseFirestore.instance.collection('study_history').add({
       'userId': widget.userId,
       'time': DateTime.now(),
@@ -595,6 +596,7 @@ class _StudySessionPageState extends State<StudySessionPage> {
       'minutes': minutes,
     });
 
+    // Cập nhật tiến độ kế hoạch
     if (widget.planId != null) {
       bool isAllFinished = updatedStatus.every((status) => status == true);
       if (isAllFinished) {
@@ -610,17 +612,29 @@ class _StudySessionPageState extends State<StudySessionPage> {
       }
     }
 
-    // 🔥 THÊM MỚI: Cập nhật số Coin vào tài khoản trên Firebase
+    // Cập nhật số Coin VÀ ĐIỂM vào tài khoản
     await FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userId)
         .set({
       'coin': FieldValue.increment(earnedCoins),
+      'points':
+          FieldValue.increment(minutes), // 🔥 ĐÃ BỔ SUNG: Cộng điểm học tập
     }, SetOptions(merge: true));
+
+    // 🔥 THÊM MỚI: Bắn thông báo về bảng notifications để hiển thị bên NotificationPage
+    await FirebaseFirestore.instance.collection('notifications').add({
+      'userId': widget.userId,
+      'content_vn':
+          "🎉 Tuyệt vời! Bạn vừa hoàn thành phiên học Offline dài $minutes phút. Nhận được +$minutes điểm và +$earnedCoins coin",
+      'content_en':
+          "🎉 Awesome! You finished a $minutes-minute Offline session. Earned +$minutes points and +$earnedCoins coins",
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
     int completedCount = sessionDone.where((e) => e).length;
 
-    // Truyền thêm biến earnedCoins vào hàm hiển thị kết quả
+    // Hiển thị Popup kết quả
     _showResult(
         completedCount, widget.goalsForRoom.length, minutes, earnedCoins);
   }

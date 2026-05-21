@@ -10,6 +10,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/constants/var.dart';
 import 'package:flutter/services.dart';
+import 'dart:async'; // Bắt buộc phải có để hủy lắng nghe Stream khi thoát trang
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class ChatPage extends StatefulWidget {
   final String chatId;
@@ -35,6 +37,10 @@ class _ChatPageState extends State<ChatPage> {
   Uint8List? _webImageBytes;
   PlatformFile? _selectedFile;
   bool _isUploading = false;
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+  StreamSubscription<QuerySnapshot>? _messageSubscription;
+  bool _isFirstLoad = true;
 
   // Tự động mở link tải tài liệu/tập tin về máy
   Future<void> _downloadFile(String fileUrl) async {
@@ -42,6 +48,99 @@ class _ChatPageState extends State<ChatPage> {
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initLocalNotifications(); // Khởi tạo thông báo cục bộ
+    _listenForNewMessages(); // Bắt đầu lắng nghe tin nhắn mới
+  }
+
+  @override
+  void dispose() {
+    _messageSubscription?.cancel(); // Hủy lắng nghe khi thoát trang chat
+    super.dispose();
+  }
+
+  // 🛠️ ĐÃ SỬA: Thêm tên tham số `settings:` khi khởi tạo
+  Future<void> _initLocalNotifications() async {
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const ios = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    await _localNotifications.initialize(
+      settings: const InitializationSettings(android: android, iOS: ios),
+    );
+  }
+
+  // Hàm âm thầm theo dõi bảng tin nhắn trên Firestore
+  void _listenForNewMessages() {
+    _messageSubscription = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+      if (_isFirstLoad) {
+        _isFirstLoad = false;
+        return;
+      }
+
+      if (snapshot.docChanges.isNotEmpty) {
+        for (var change in snapshot.docChanges) {
+          if (change.type == DocumentChangeType.added) {
+            final data = change.doc.data() as Map<String, dynamic>;
+            final senderId = data['senderId'];
+
+            String textBody = data['text'] ?? '';
+            if (textBody.isEmpty) {
+              if (data['imageUrl'] != null) {
+                textBody = '📷 Đã gửi một hình ảnh';
+              } else if (data['fileUrl'] != null) {
+                textBody = '📁 Đã gửi một tệp đính kèm';
+              } else {
+                textBody = 'Đã gửi một tin nhắn mới';
+              }
+            }
+
+            if (senderId != widget.currentUserId) {
+              _showNotification(
+                title: widget.targetUserName,
+                body: textBody,
+              );
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 🛠️ ĐÃ SỬA: Chuyển các tham số của hàm .show() sang dạng có tên (id:, title:, body:, notificationDetails:)
+  Future<void> _showNotification(
+      {required String title, required String body}) async {
+    const androidDetails = AndroidNotificationDetails(
+      'chat_active_channel',
+      'Tin nhắn trong ứng dụng',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+    );
+    const iosDetails = DarwinNotificationDetails();
+    const platformDetails =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    await _localNotifications.show(
+      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title: title,
+      body: body,
+      notificationDetails: platformDetails,
+    );
   }
 
   // Chọn ảnh từ bộ sưu tập
@@ -89,7 +188,7 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-// Xử lý gửi tin nhắn
+  // Xử lý gửi tin nhắn
   Future<void> _sendMessage() async {
     final text = _msgController.text.trim();
     if (text.isEmpty && _selectedImage == null && _selectedFile == null) return;
@@ -182,6 +281,37 @@ class _ChatPageState extends State<ChatPage> {
         'lastMessage': lastMsgDisplay,
         'lastTimestamp': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+
+      // 🔥 THÊM MỚI: TẠO THÔNG BÁO TIN NHẮN TỚI NGƯỜI NHẬN
+      try {
+        // Tách ID người nhận từ chuỗi chatId (định dạng uid1_uid2)
+        List<String> ids = widget.chatId.split('_');
+        String targetUserId =
+            ids.first == widget.currentUserId ? ids.last : ids.first;
+
+        // Lấy tên của chính mình để hiển thị trong thông báo
+        final myDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.currentUserId)
+            .get();
+        String myName =
+            myDoc.data()?['name'] ?? (isVN ? "Một người bạn" : "A friend");
+
+        // Ghi đè thông báo với định dạng ID cố định cho đoạn chat này
+        await FirebaseFirestore.instance
+            .collection('notifications')
+            .doc('chat_notif_${widget.chatId}_$targetUserId')
+            .set({
+          'userId': targetUserId,
+          'content_vn':
+              "💬 $myName đã gửi cho bạn 1 tin nhắn mới: $lastMsgDisplay",
+          'content_en': "💬 $myName sent you a new message: $lastMsgDisplay",
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        debugPrint("Lỗi tạo thông báo: $e");
+      }
+      // 🔥 KẾT THÚC THÊM MỚI
 
       setState(() {
         _msgController.clear();
@@ -381,7 +511,6 @@ class _ChatPageState extends State<ChatPage> {
                               border: Border.all(
                                   color: Colors.grey.shade300, width: 1),
                             ),
-                            // Tìm đoạn ClipRRect hiển thị ảnh preview cũ và thay bằng:
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(11),
                               child: _selectedImage != null

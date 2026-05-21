@@ -438,7 +438,21 @@ class _ProfilePageState extends State<ProfilePage> {
           .get();
 
       if (streakSnap.exists) {
-        int streak = (streakSnap.data() as Map<String, dynamic>)['streak'] ?? 0;
+        var data = streakSnap.data() as Map<String, dynamic>;
+        int streak = data['streak'] ?? 0;
+
+        // 🔥 KIỂM TRA CHUỖI ĐÃ QUÁ HẠN CHƯA (NẾU NGHỈ QUÁ 1 NGÀY -> VỀ 0)
+        Timestamp? lastTs = data['lastStudyDate'];
+        if (lastTs != null) {
+          DateTime now = DateTime.now();
+          DateTime today = DateTime(now.year, now.month, now.day);
+          DateTime lastDay = DateTime(
+              lastTs.toDate().year, lastTs.toDate().month, lastTs.toDate().day);
+          if (today.difference(lastDay).inDays > 1) {
+            streak = 0;
+          }
+        }
+
         if (streak >= 3) {
           var userSnap = await FirebaseFirestore.instance
               .collection('users')
@@ -776,14 +790,16 @@ class _ProfilePageState extends State<ProfilePage> {
         bool isVN = lang == "Tiếng Việt";
 
         return Scaffold(
+          extendBodyBehindAppBar: true,
           appBar: AppBar(
             title: Text(
               isVN ? "Hồ sơ cá nhân" : "Profile",
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            backgroundColor: primaryColor,
+            backgroundColor: primaryColor.withOpacity(0),
             foregroundColor: Colors.white,
             centerTitle: true,
+            elevation: 0,
           ),
           body: RefreshIndicator(
             color: primaryColor,
@@ -859,7 +875,12 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         child: Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 30),
+                          padding: EdgeInsets.only(
+                            top: MediaQuery.of(context).padding.top +
+                                kToolbarHeight +
+                                -30,
+                            bottom: 30,
+                          ),
                           decoration: BoxDecoration(
                             color: primaryColor, // Nền mặc định
                             image: (bannerUrl != null && bannerUrl.isNotEmpty)
@@ -1074,14 +1095,63 @@ class _ProfilePageState extends State<ProfilePage> {
                                                       featuredId!))
                                                   .get(),
                                               builder: (context, sSnap) {
-                                                int streak = sSnap.hasData &&
-                                                        sSnap.data!.exists
-                                                    ? (sSnap.data!.data()
-                                                                as Map<String,
-                                                                    dynamic>)[
-                                                            'streak'] ??
-                                                        0
-                                                    : 0;
+                                                if (!sSnap.hasData)
+                                                  return const Text("...");
+
+                                                int streak = 0;
+                                                if (sSnap.data!.exists) {
+                                                  var data = sSnap.data!.data()
+                                                      as Map<String, dynamic>;
+                                                  streak = data['streak'] ?? 0;
+
+                                                  // 🔥 TỰ ĐỘNG TÍNH TOÁN LẠI CHUỖI THỰC TẾ TRÊN GIAO DIỆN
+                                                  Timestamp? lastTs =
+                                                      data['lastStudyDate'];
+                                                  if (lastTs != null) {
+                                                    DateTime now =
+                                                        DateTime.now();
+                                                    DateTime today = DateTime(
+                                                        now.year,
+                                                        now.month,
+                                                        now.day);
+                                                    DateTime lastDay = DateTime(
+                                                        lastTs.toDate().year,
+                                                        lastTs.toDate().month,
+                                                        lastTs.toDate().day);
+                                                    if (today
+                                                            .difference(lastDay)
+                                                            .inDays >
+                                                        1) {
+                                                      streak =
+                                                          0; // Bị mất chuỗi do nghỉ học
+                                                    }
+                                                  }
+                                                }
+
+                                                // 🔥 NẾU CHUỖI DƯỚI 3, LẬP TỨC TỰ ĐỘNG GỠ BỎ KHỎI TÀI KHOẢN
+                                                if (streak < 3) {
+                                                  WidgetsBinding.instance
+                                                      .addPostFrameCallback(
+                                                          (_) {
+                                                    FirebaseFirestore.instance
+                                                        .collection('users')
+                                                        .doc(widget.userId)
+                                                        .update({
+                                                      'featuredFriendId':
+                                                          FieldValue.delete()
+                                                    });
+                                                  });
+                                                  return Text(
+                                                    isVN
+                                                        ? "Đã mất chuỗi, đang gỡ..."
+                                                        : "Streak lost, removing...",
+                                                    style: const TextStyle(
+                                                        color: Colors.red,
+                                                        fontStyle:
+                                                            FontStyle.italic),
+                                                  );
+                                                }
+
                                                 return Row(
                                                   children: [
                                                     Text(fName,

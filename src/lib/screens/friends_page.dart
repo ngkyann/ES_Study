@@ -765,18 +765,23 @@ class OtherUserProfilePage extends StatelessWidget {
         valueListenable: languageNotifier,
         builder: (context, lang, child) {
           bool isVN = lang == "Tiếng Việt";
+
           return Scaffold(
             backgroundColor: Colors.grey.shade50,
+
+            // 1. ÁP DỤNG APPBAR TRONG SUỐT VÀ EXTEND BODY
+            extendBodyBehindAppBar: true,
             appBar: AppBar(
               title: Text(
                 isVN ? "Hồ sơ của $userName" : "$userName's Profile",
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              backgroundColor: primaryColor,
+              backgroundColor: Colors.transparent, // Nền trong suốt
               foregroundColor: Colors.white,
               centerTitle: true,
               elevation: 0,
             ),
+
             body: FutureBuilder<Map<String, dynamic>>(
               future: _fetchUserInfo(),
               builder: (context, snapshot) {
@@ -800,8 +805,7 @@ class OtherUserProfilePage extends StatelessWidget {
                 final List<dynamic> medals = data['medals'] ?? [];
 
                 final String? avatarUrl = data['avatarUrl']?.toString();
-                final String? bannerUrl =
-                    data['bannerUrl']?.toString(); // 🔥 Đã lấy Banner
+                final String? bannerUrl = data['bannerUrl']?.toString();
                 final String bio = data['bio']?.toString() ?? "";
 
                 String joinDateText = isVN ? "Chưa rõ" : "Unknown";
@@ -830,12 +834,20 @@ class OtherUserProfilePage extends StatelessWidget {
                 }
 
                 return SingleChildScrollView(
+                  // Xóa padding mặc định của SafeArea do mình đã dùng extendBody
+                  padding: EdgeInsets.zero,
                   child: Column(
                     children: [
-                      // KHUNG AVATAR + BANNER (Thiết kế đồng bộ với ProfilePage)
+                      // KHUNG AVATAR + BANNER
+                      // 2. ÁP DỤNG PADDING ĐẨY CONTAINER XUỐNG
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 30),
+                        padding: EdgeInsets.only(
+                          top: MediaQuery.of(context).padding.top +
+                              kToolbarHeight -
+                              10, // Điều chỉnh độ đẩy xuống một chút cho cân đối
+                          bottom: 30,
+                        ),
                         decoration: BoxDecoration(
                           color: primaryColor,
                           image: (bannerUrl != null && bannerUrl.isNotEmpty)

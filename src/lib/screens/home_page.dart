@@ -64,16 +64,19 @@ class _HomePageState extends State<HomePage> {
 
   // Added missing variables to avoid compile errors
   String _activeEffect = '';
-  List<String> _ownedEffects = [];
+  // List<String> _ownedEffects = [];
   Map<String, dynamic>? userData;
 
   final PageController _pageController = PageController(initialPage: 1);
   StreamSubscription<DocumentSnapshot>? _userSubscription;
-
+  int _unreadNotifCount = 0;
+  List<DocumentReference> _unreadNotifRefs = [];
+  StreamSubscription<QuerySnapshot>? _notifSubscription;
   @override
   void dispose() {
     _pageController.dispose();
     _userSubscription?.cancel();
+    _notifSubscription?.cancel();
     super.dispose();
   }
 
@@ -84,9 +87,56 @@ class _HomePageState extends State<HomePage> {
     _realName = widget.userName;
     _realClass = widget.selectedClass;
     _startListeningUserData();
-
+    _listenForUnreadNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkTodayPlansAndShowPopup();
+    });
+  }
+
+// 🔥 THÊM HÀM 1: Lắng nghe số lượng thông báo chưa đọc
+  void _listenForUnreadNotifications() {
+    _notifSubscription = FirebaseFirestore.instance
+        .collection('notifications')
+        .where('userId', isEqualTo: widget.userId)
+        .snapshots()
+        .listen((snap) {
+      int count = 0;
+      List<DocumentReference> unreadRefs = [];
+      final now = DateTime.now();
+
+      for (var doc in snap.docs) {
+        final data = doc.data();
+        final isRead = data['isRead'] ?? false;
+        final timestamp = data['createdAt'] as Timestamp?;
+
+        if (!isRead && timestamp != null) {
+          if (timestamp.toDate().isBefore(now) ||
+              timestamp.toDate().isAtSameMomentAs(now)) {
+            count++;
+            unreadRefs.add(doc.reference);
+          }
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _unreadNotifCount = count;
+          _unreadNotifRefs = unreadRefs;
+        });
+      }
+    });
+  }
+
+  // 🔥 THÊM HÀM 2: Đánh dấu đã đọc để tắt chấm đỏ
+  void _markAllAsRead() {
+    if (_unreadNotifRefs.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (var ref in _unreadNotifRefs) {
+      batch.update(ref, {'isRead': true});
+    }
+    batch.commit().catchError((e) => debugPrint("Lỗi update isRead: $e"));
+    setState(() {
+      _unreadNotifCount = 0;
+      _unreadNotifRefs.clear();
     });
   }
 
@@ -222,7 +272,7 @@ class _HomePageState extends State<HomePage> {
             _isLoadingData = false;
             userData = data;
 
-            _ownedEffects = List<String>.from(data['ownedEffects'] ?? []);
+            // _ownedEffects = List<String>.from(data['ownedEffects'] ?? []);
           });
         } else {
           if (mounted) setState(() => _isLoadingData = false);
@@ -508,11 +558,11 @@ class _HomePageState extends State<HomePage> {
       StatefulBuilder(
         builder: (context, setStateCloud2) {
           double targetX =
-              -15.0; // Tọa độ dịch chuyển (đám mây này trôi lệch pha với đám mây kia)
+              30.0; // Tọa độ dịch chuyển (đám mây này trôi lệch pha với đám mây kia)
 
           return TweenAnimationBuilder<double>(
             tween: Tween<double>(
-                begin: 20.0, end: targetX), // Trôi từ phải (20) sang trái (-20)
+                begin: 65.0, end: targetX), // Trôi từ phải (20) sang trái (-20)
             duration: const Duration(
                 seconds:
                     5), // Tốc độ trôi khác đi một chút (5 giây) để tạo chiều sâu (Parallax)
@@ -546,13 +596,14 @@ class _HomePageState extends State<HomePage> {
   Widget _buildCustomEffect(String effectStr) {
     if (effectStr == 'firework') {
       return Positioned(
-        bottom: -30,
-        right: -10,
+        bottom: -18,
+        right: 25,
         child: IgnorePointer(
           ignoring: true,
           child: SizedBox(
-            width: 180,
-            height: 180,
+            // 90%: Giảm kích thước vùng chứa từ 180 xuống 162
+            width: 162,
+            height: 162,
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -568,14 +619,15 @@ class _HomePageState extends State<HomePage> {
                     builder: (context, value, child) {
                       return Transform.translate(
                         offset: Offset(
-                          55 * value * cos(angle),
-                          55 * value * sin(angle),
+                          // 90%: Giảm bán kính văng ra từ 55 xuống 49.5
+                          49.5 * value * cos(angle),
+                          49.5 * value * sin(angle),
                         ),
                         child: Opacity(
                           opacity: 1 - (value * 0.7),
                           child: Container(
-                            width: 8,
-                            height: 8,
+                            width: 7.2,
+                            height: 7.2,
                             decoration: BoxDecoration(
                               color: [
                                 Colors.redAccent,
@@ -595,7 +647,8 @@ class _HomePageState extends State<HomePage> {
                                     Colors.purpleAccent,
                                   ][index % 5]
                                       .withOpacity(0.8),
-                                  blurRadius: 12,
+                                  // 90%: Giảm độ mờ từ 12 xuống 10.8
+                                  blurRadius: 10.8,
                                 ),
                               ],
                             ),
@@ -619,21 +672,24 @@ class _HomePageState extends State<HomePage> {
                     builder: (context, value, child) {
                       return Transform.translate(
                         offset: Offset(
-                          35 * value * cos(angle),
-                          35 * value * sin(angle),
+                          // 90%: Giảm bán kính văng ra từ 35 xuống 31.5
+                          31.5 * value * cos(angle),
+                          31.5 * value * sin(angle),
                         ),
                         child: Opacity(
                           opacity: 1 - (value * 0.8),
                           child: Container(
-                            width: 6,
-                            height: 6,
+                            // 90%: Giảm kích thước hạt từ 6 xuống 5.4
+                            width: 5.4,
+                            height: 5.4,
                             decoration: BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.white.withOpacity(0.9),
-                                  blurRadius: 10,
+                                  // 90%: Giảm độ mờ từ 10 xuống 9
+                                  blurRadius: 9,
                                 ),
                               ],
                             ),
@@ -653,16 +709,19 @@ class _HomePageState extends State<HomePage> {
                     return Transform.scale(
                       scale: value,
                       child: Container(
-                        width: 18,
-                        height: 18,
+                        // 90%: Giảm kích thước tâm từ 18 xuống 16.2
+                        width: 16.2,
+                        height: 16.2,
                         decoration: BoxDecoration(
                           color: Colors.yellow,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
                               color: Colors.yellow.withOpacity(0.9),
-                              blurRadius: 25,
-                              spreadRadius: 4,
+                              // 90%: Giảm độ mờ từ 25 xuống 22.5
+                              blurRadius: 22.5,
+                              // 90%: Giảm độ lan từ 4 xuống 3.6
+                              spreadRadius: 3.6,
                             ),
                           ],
                         ),
@@ -974,28 +1033,67 @@ class _HomePageState extends State<HomePage> {
                   leadingWidth: 290,
                   leading: _buildAppBarLeading(),
                   actions: [
-                    IconButton(
-                      icon: const Icon(Icons.notifications_none,
-                          size: 28, color: Colors.white),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          PageRouteBuilder(
-                            opaque: false,
-                            barrierDismissible: true,
-                            pageBuilder:
-                                (context, animation, secondaryAnimation) =>
-                                    NotificationPage(userId: widget.userId),
-                            transitionsBuilder: (context, animation,
-                                secondaryAnimation, child) {
-                              return FadeTransition(
-                                opacity: animation,
-                                child: child,
-                              );
-                            },
+                    // 🔥 THAY THẾ BẰNG KHỐI STACK NÀY ĐỂ HIỂN THỊ CHẤM ĐỎ
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.notifications_none,
+                              size: 28, color: Colors.white),
+                          onPressed: () {
+                            _markAllAsRead(); // Gọi hàm tắt chấm đỏ
+
+                            // Chuyển trang Notification (giữ nguyên logic cũ của bạn)
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                opaque: false,
+                                barrierDismissible: true,
+                                pageBuilder:
+                                    (context, animation, secondaryAnimation) =>
+                                        NotificationPage(userId: widget.userId),
+                                transitionsBuilder: (context, animation,
+                                    secondaryAnimation, child) {
+                                  return FadeTransition(
+                                      opacity: animation, child: child);
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                        // NẾU CÓ THÔNG BÁO CHƯA ĐỌC THÌ HIỂN THỊ CHẤM ĐỎ
+                        if (_unreadNotifCount > 0)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(1.5),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: primaryColor,
+                                  width: 1.2,
+                                ),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              child: Text(
+                                _unreadNotifCount > 99
+                                    ? "99+"
+                                    : '$_unreadNotifCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                           ),
-                        );
-                      },
+                      ],
                     ),
                     const SizedBox(width: 4),
                   ],
