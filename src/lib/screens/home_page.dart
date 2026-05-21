@@ -36,6 +36,22 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+// Clipper hỗ trợ tự vẽ chiếc mũi hình tam giác cho người tuyết
+class TriangleClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(0, size.height / 2); // Điểm nhọn của mũi hướng về bên trái
+    path.lineTo(size.width, 0); // Góc trên gốc mũi
+    path.lineTo(size.width, size.height); // Góc dưới gốc mũi
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
+
 class _HomePageState extends State<HomePage> {
   int userPoints = 0;
   int userStreak = 0;
@@ -451,20 +467,78 @@ class _HomePageState extends State<HomePage> {
   // 2. Hàm xây dựng hiệu ứng đám mây mặc định (Trả về List<Widget> để rải trực tiếp vào Stack)
   List<Widget> _buildDefaultCloud() {
     return [
-      Positioned(
-          bottom: -50,
-          right: -30,
-          child: Transform.scale(
-              scaleX: 1.4,
-              child: Icon(Icons.cloud,
-                  color: Colors.white.withOpacity(0.32), size: 180))), //
-      Positioned(
-          bottom: 10,
-          right: 120,
-          child: Transform.scale(
-              scaleX: 1.3,
-              child: Icon(Icons.cloud,
-                  color: Colors.white.withOpacity(0.28), size: 90))), //
+      // ☁️ Đám mây lớn phía dưới
+      StatefulBuilder(
+        builder: (context, setStateCloud1) {
+          double targetX = 10.0; // Tọa độ dịch chuyển tối đa sang phải
+
+          return TweenAnimationBuilder<double>(
+            tween: Tween<double>(
+                begin: -20.0,
+                end: targetX), // Trôi từ trái (-15) sang phải (15)
+            duration: const Duration(
+                seconds: 4), // Thời gian trôi qua một lượt (4 giây)
+            curve: Curves
+                .easeInOutSine, // Chuyển động chậm dần ở hai đầu cực kỳ mượt
+            onEnd: () {
+              // Khi chạm đích, đảo ngược mục tiêu để đám mây tự động trôi ngược lại
+              targetX = targetX == 15.0 ? -15.0 : 15.0;
+              (context as Element).markNeedsBuild();
+            },
+            builder: (context, animValue, child) {
+              return Positioned(
+                bottom: -50,
+                right: -30 +
+                    animValue, // Áp dụng độ lệch trôi động vào thuộc tính right
+                child: Transform.scale(
+                  scaleX: 1.4,
+                  child: Icon(
+                    Icons.cloud,
+                    color: Colors.white.withOpacity(0.32),
+                    size: 180,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+
+      // ☁️ Đám mây nhỏ phía trên
+      StatefulBuilder(
+        builder: (context, setStateCloud2) {
+          double targetX =
+              -15.0; // Tọa độ dịch chuyển (đám mây này trôi lệch pha với đám mây kia)
+
+          return TweenAnimationBuilder<double>(
+            tween: Tween<double>(
+                begin: 20.0, end: targetX), // Trôi từ phải (20) sang trái (-20)
+            duration: const Duration(
+                seconds:
+                    5), // Tốc độ trôi khác đi một chút (5 giây) để tạo chiều sâu (Parallax)
+            curve: Curves.easeInOutSine,
+            onEnd: () {
+              targetX = targetX == -20.0 ? 20.0 : -20.0;
+              (context as Element).markNeedsBuild();
+            },
+            builder: (context, animValue, child) {
+              return Positioned(
+                bottom: 10,
+                right: 120 +
+                    animValue, // Áp dụng độ lệch trôi động vào thuộc tính right
+                child: Transform.scale(
+                  scaleX: 1.3,
+                  child: Icon(
+                    Icons.cloud,
+                    color: Colors.white.withOpacity(0.28),
+                    size: 90,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     ];
   }
 
@@ -604,76 +678,193 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (effectStr == 'snow') {
-      return Positioned.fill(
+      return Positioned(
+        bottom: -10, // Đặt sát cạnh dưới của Header
+        right: 20, // Đặt ở góc phải
         child: IgnorePointer(
           ignoring: true,
-          child: Stack(
-            children: List.generate(40, (index) {
-              final left = (index * 15.0) % MediaQuery.of(context).size.width;
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 1. Cái nón (Nón phớt màu đen/đỏ)
+              Container(
+                width: 30,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Container(
+                width: 18,
+                height: 14,
+                color: Colors.black87,
+              ),
 
-              return TweenAnimationBuilder(
-                tween: Tween<double>(
-                  begin: 50,
-                  end: 400,
+              // 2. Đầu người tuyết
+              Container(
+                width: 45,
+                height: 45,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    // 🔥 Đã đổi từ 'shadows' thành 'boxShadow'
+                    BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 4,
+                        offset: Offset(2, 2))
+                  ],
                 ),
-                duration: Duration(
-                  milliseconds: 6000 + (index * 120),
-                ),
-                curve: Curves.linear,
-                builder: (context, value, child) {
-                  return Positioned(
-                    left: left,
-                    top: value,
-                    child: Opacity(
-                      opacity: 0.8,
-                      child: Icon(
-                        Icons.ac_unit,
-                        color: Colors.white.withOpacity(0.9),
-                        size: 12 + (index % 6).toDouble(),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Mắt (Trái & Phải)
+                    Positioned(
+                      top: 14,
+                      left: 12,
+                      child: Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                              color: Colors.black, shape: BoxShape.circle)),
+                    ),
+                    Positioned(
+                      top: 14,
+                      right: 12,
+                      child: Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                              color: Colors.black, shape: BoxShape.circle)),
+                    ),
+                    // Mũi cà rốt (Hình tam giác xoay góc)
+                    Positioned(
+                      top: 18,
+                      child: Transform.rotate(
+                        angle: -0.2,
+                        child: ClipPath(
+                          clipper: TriangleClipper(),
+                          child: Container(
+                            width: 12,
+                            height: 6,
+                            color: Colors.orange,
+                          ),
+                        ),
                       ),
                     ),
-                  );
-                },
-              );
-            }),
+                  ],
+                ),
+              ),
+
+              // 3. Khăn choàng cổ màu đỏ chống lạnh
+              Transform.translate(
+                offset: const Offset(0, -4),
+                child: Container(
+                  width: 36,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+
+              // 4. Thân người tuyết
+              Transform.translate(
+                offset: const Offset(0, -6),
+                child: Container(
+                  width: 65,
+                  height: 65,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      // 🔥 Đã đổi từ 'shadows' thành 'boxShadow'
+                      BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(2, 2))
+                    ],
+                  ),
+                  child: Center(
+                    // Cúc áo (3 nút hàng dọc)
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                          3,
+                          (index) => Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 3.0),
+                                child: Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: const BoxDecoration(
+                                      color: Colors.black87,
+                                      shape: BoxShape.circle),
+                                ),
+                              )),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
 
     if (effectStr == 'sparkle') {
+      // Giảm số lượng phần tử xuống còn 10 ngôi sao để tạo cảm giác thoáng đãng, tập trung
+      const int starCount = 9;
+
       return Positioned.fill(
         child: IgnorePointer(
           ignoring: true,
           child: Stack(
-            children: List.generate(24, (index) {
-              final dx = (index * 17.0) % MediaQuery.of(context).size.width;
+            children: List.generate(starCount, (index) {
+              // Phân bổ tọa độ ngẫu nhiên dựa trên chỉ số index để không trùng vị trí
+              final double dx = (index * 37.0 + 100) %
+                  (MediaQuery.of(context).size.width - 40);
+              final double dy = (index * 19.0 + 20) %
+                  110; // Giới hạn chiều cao nằm vừa vặn trong Header
 
-              final dy = (index * 11.0) % 180;
+              // Tạo sự so le về thời gian bắt đầu hoạt ảnh giữa các ngôi sao
+              final int baseDuration = 800 + (index * 150);
 
               return Positioned(
                 left: dx,
                 top: dy,
-                child: TweenAnimationBuilder(
-                  tween: Tween<double>(
-                    begin: 0.2,
-                    end: 1,
-                  ),
-                  duration: Duration(
-                    milliseconds: 700 + (index * 40),
-                  ),
-                  curve: Curves.easeInOut,
-                  builder: (context, value, child) {
-                    return Opacity(
-                      opacity: value,
-                      child: Transform.scale(
-                        scale: value,
-                        child: Icon(
-                          Icons.auto_awesome,
-                          color: Colors.amber.withOpacity(0.9),
-                          size: 10 + (index % 10).toDouble(),
-                        ),
-                      ),
+                child: StatefulBuilder(
+                  builder: (context, setStateBuilder) {
+                    // Sử dụng biến cục bộ để đảo chiều giá trị tween liên tục khi kết thúc vòng lặp
+                    double targetValue = 1.0;
+
+                    return TweenAnimationBuilder<double>(
+                      // Chạy từ kích thước nhỏ (0.2) lên kích thước cực đại (1.2)
+                      tween: Tween<double>(begin: 0.1, end: targetValue),
+                      duration: Duration(milliseconds: baseDuration),
+                      curve:
+                          Curves.easeInOutSine, // Hiệu ứng mượt mà như nhịp thở
+                      onEnd: () {
+                        // Kỹ thuật then chốt: Kích hoạt lại hoạt ảnh đảo chiều liên tục không bao giờ dừng
+                        targetValue = targetValue == 1.0 ? 0.1 : 1.0;
+                        (context as Element).markNeedsBuild();
+                      },
+                      builder: (context, value, child) {
+                        return Opacity(
+                          // Kết hợp thuộc tính nội suy để ngôi sao mờ dần khi thu nhỏ và tỏ rõ khi phóng to
+                          opacity: value.clamp(0.1, 0.9),
+                          child: Transform.scale(
+                            scale: value,
+                            child: Icon(
+                              Icons.auto_awesome,
+                              color: Colors.amber.withOpacity(0.95),
+                              size: 20 + (index % 4) * 8.0,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
