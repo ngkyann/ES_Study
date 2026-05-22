@@ -1184,8 +1184,7 @@ class _HomePageState extends State<HomePage> {
                       Icons.leaderboard, "Bảng xếp hạng", Colors.redAccent),
                   MenuData(Icons.people, "Bạn bè", Colors.teal),
                   MenuData(Icons.history, "Lịch sử học tập", Colors.blueGrey),
-                  MenuData(
-                      Icons.emoji_events, "Thành tích học tập", Colors.indigo),
+                  MenuData(Icons.emoji_events, "Thành tích", Colors.indigo),
                   MenuData(
                       Icons.smart_toy, "Trợ lý học tập", Colors.blueAccent),
                 ],
@@ -1425,7 +1424,7 @@ class _HomePageState extends State<HomePage> {
                     HistoryPage(userId: widget.userId),
                   ),
                 );
-              } else if (item.title == "Thành tích học tập") {
+              } else if (item.title == "Thành tích") {
                 await Navigator.push(
                   context,
                   slidePageRoute(

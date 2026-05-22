@@ -190,7 +190,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
           backgroundColor: Colors.grey.shade50,
           appBar: AppBar(
             title: Text(
-              isVN ? "Thành tích học tập" : "Achievements", // 🔥 DỊCH
+              isVN ? "Thành tích" : "Achievements", // 🔥 DỊCH
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             backgroundColor: primaryColor,

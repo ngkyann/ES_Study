@@ -654,8 +654,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             'createdAt': FieldValue.serverTimestamp(),
           });
           if (!mounted) return;
-
-          if (!mounted) return;
           setState(() => _isLoading = false);
 
           // Bật màn hình chờ kích hoạt
