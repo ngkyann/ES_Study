@@ -831,8 +831,8 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 8),
               Text(
                 isVN
-                    ? "Cập nhật lần cuối: 19/05/2026"
-                    : "Last updated: 19/05/2026",
+                    ? "Cập nhật lần cuối: 22/05/2026"
+                    : "Last updated: 22/05/2026",
                 style: TextStyle(color: Colors.grey.shade700, fontSize: 15),
               ),
               const SizedBox(height: 15),
