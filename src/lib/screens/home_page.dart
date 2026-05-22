@@ -64,7 +64,6 @@ class _HomePageState extends State<HomePage> {
 
   String _activeEffect = '';
   Map<String, dynamic>? userData;
-  late final List<Widget> _pages;
 
   StreamSubscription<DocumentSnapshot>? _userSubscription;
   int _unreadNotifCount = 0;
