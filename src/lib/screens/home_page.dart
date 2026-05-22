@@ -931,7 +931,7 @@ class _HomePageState extends State<HomePage> {
         return "Friends";
       case "Lịch sử học tập":
         return "Study History";
-      case "Thành tích học tập":
+      case "Thành tích":
         return "Achievements";
       case "Trợ lý học tập":
         return "AI Assistant";
