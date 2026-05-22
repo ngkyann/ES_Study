@@ -346,7 +346,7 @@ class _HomePageState extends State<HomePage> {
       },
       {
         "id": "snow",
-        "nameVN": "Tuyết rơi",
+        "nameVN": "Người tuyết",
         "nameEN": "Snow",
         "icon": Icons.ac_unit,
         "color": Colors.cyan,

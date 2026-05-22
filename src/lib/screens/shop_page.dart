@@ -400,41 +400,43 @@ class _ShopPageState extends State<ShopPage> {
                           scale: _isProcessing ? 0.96 : 1,
                           duration: const Duration(milliseconds: 120),
                           child: SizedBox(
-                            height: 30,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isEquipped
-                                    ? Colors.blue
-                                    : isOwned
-                                        ? Colors.green
-                                        : primaryColor,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                              height: 30,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isEquipped
+                                      ? Colors.green
+                                      : (isOwned ? Colors.blue : primaryColor),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  // 1. Giảm padding hai bên xuống tối thiểu và làm nút mỏng lại
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 6),
+                                  minimumSize: const Size(50, 32),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
-                              ),
-                              onPressed: _isProcessing
-                                  ? null
-                                  : () => _processPurchase(
-                                        item,
-                                        isVN,
-                                        isOwned,
-                                        currentCoins,
-                                      ),
-                              child: Text(
-                                isEquipped
-                                    ? (isVN ? 'Đang dùng' : 'Using')
-                                    : isOwned
-                                        ? (isVN ? 'Dùng' : 'Equip')
-                                        : (isVN ? 'Mua' : 'Buy'),
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                                onPressed: () => _processPurchase(
+                                    item, isVN, isOwned, currentCoins),
+                                // 2. Dùng FittedBox để đảm bảo chữ luôn vừa vặn trong nút, không bị rớt dòng
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    isEquipped
+                                        ? (isVN
+                                            ? "Đã dùng"
+                                            : "Equipped") // 3. Rút gọn chữ thành "Đã dùng"
+                                        : (isOwned
+                                            ? (isVN ? "Dùng" : "Equip")
+                                            : (isVN ? "Mua" : "Buy")),
+                                    style: const TextStyle(
+                                      fontSize:
+                                          11, // 4. Hạ size chữ một chút cho thanh thoát
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ),
+                              )),
                         ),
                       ],
                     ),
@@ -529,8 +531,8 @@ List<ShopItemData> avatarItems(bool isVN) {
   return [
     ShopItemData(
       id: 'av_bot',
-      name: isVN ? 'Avatar Robot' : 'Robot Avatar',
-      price: 150,
+      name: isVN ? 'Rô-bốt' : 'Robot',
+      price: 300,
       value: 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png',
       icon: Icons.android,
       type: ItemType.avatar,
@@ -539,7 +541,7 @@ List<ShopItemData> avatarItems(bool isVN) {
     ShopItemData(
       id: 'av_cat',
       name: isVN ? 'Mèo Ú' : 'Chubby Cat',
-      price: 200,
+      price: 300,
       value: 'https://cdn-icons-png.flaticon.com/512/616/616430.png',
       icon: Icons.pets,
       type: ItemType.avatar,
@@ -556,8 +558,8 @@ List<ShopItemData> avatarItems(bool isVN) {
     ),
     ShopItemData(
       id: 'av_astro',
-      name: isVN ? 'Phi Hành Gia' : 'Astronaut',
-      price: 350,
+      name: isVN ? 'Chăm chỉ' : 'Diligence',
+      price: 300,
       value: 'https://cdn-icons-png.flaticon.com/512/825/825590.png',
       icon: Icons.rocket_launch,
       type: ItemType.avatar,
@@ -565,8 +567,8 @@ List<ShopItemData> avatarItems(bool isVN) {
     ),
     ShopItemData(
       id: 'av_dev',
-      name: isVN ? 'Hacker' : 'Developer',
-      price: 400,
+      name: isVN ? 'Lập trình viên' : 'Developer',
+      price: 500,
       value: 'https://cdn-icons-png.flaticon.com/512/1183/1183672.png',
       icon: Icons.terminal,
       type: ItemType.avatar,
@@ -574,8 +576,8 @@ List<ShopItemData> avatarItems(bool isVN) {
     ),
     ShopItemData(
       id: 'av_monster',
-      name: isVN ? 'Quái Vật Xanh' : 'Green Monster',
-      price: 350,
+      name: isVN ? 'Gấu Koala' : 'Koala Buddy',
+      price: 500,
       value: 'https://cdn-icons-png.flaticon.com/512/3069/3069172.png',
       icon: Icons.smart_toy,
       type: ItemType.avatar,
@@ -583,8 +585,8 @@ List<ShopItemData> avatarItems(bool isVN) {
     ),
     ShopItemData(
       id: 'av_knight',
-      name: isVN ? 'Hiệp Sĩ' : 'Knight Gamer',
-      price: 450,
+      name: isVN ? 'Bảo mật' : 'Security',
+      price: 500,
       value: 'https://cdn-icons-png.flaticon.com/512/3408/3408455.png',
       icon: Icons.shield,
       type: ItemType.avatar,
@@ -592,7 +594,7 @@ List<ShopItemData> avatarItems(bool isVN) {
     ),
     ShopItemData(
       id: 'av_ninja',
-      name: isVN ? 'Ninja Ám Sát' : 'Ninja Stealth',
+      name: isVN ? 'Doanh nhân' : 'Entrepreneur',
       price: 500,
       value: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
       icon: Icons.sports_martial_arts,
@@ -601,7 +603,7 @@ List<ShopItemData> avatarItems(bool isVN) {
     ),
     ShopItemData(
       id: 'av_wizard',
-      name: isVN ? 'Phù Thủy' : 'Wizard',
+      name: isVN ? 'Xe buýt' : 'Bus Driver',
       price: 500,
       value: 'https://cdn-icons-png.flaticon.com/512/1042/1042318.png',
       icon: Icons.auto_fix_normal,
@@ -610,8 +612,8 @@ List<ShopItemData> avatarItems(bool isVN) {
     ),
     ShopItemData(
       id: 'av_detective',
-      name: isVN ? 'Thám Tử' : 'Detective',
-      price: 550,
+      name: isVN ? 'Giàu có' : 'Wealthy',
+      price: 1000,
       value: 'https://cdn-icons-png.flaticon.com/512/4836/4836932.png',
       icon: Icons.search,
       type: ItemType.avatar,
@@ -626,7 +628,7 @@ List<ShopItemData> effectItems(bool isVN) {
     ShopItemData(
       id: 'firework',
       name: isVN ? 'Hiệu ứng Pháo Hoa' : 'Fireworks',
-      price: 500,
+      price: 1000,
       value: 'firework',
       icon: Icons.celebration,
       type: ItemType.effect,
@@ -636,8 +638,8 @@ List<ShopItemData> effectItems(bool isVN) {
     // SNOW
     ShopItemData(
       id: 'snow',
-      name: isVN ? 'Hiệu ứng Tuyết Rơi' : 'Snow Effect',
-      price: 650,
+      name: isVN ? 'Hiệu ứng Người tuyết' : 'Snow Effect',
+      price: 1000,
       value: 'snow',
       icon: Icons.ac_unit,
       type: ItemType.effect,
@@ -648,7 +650,7 @@ List<ShopItemData> effectItems(bool isVN) {
     ShopItemData(
       id: 'sparkle',
       name: isVN ? 'Hiệu ứng Lấp Lánh' : 'Sparkle Effect',
-      price: 700,
+      price: 1000,
       value: 'sparkle',
       icon: Icons.auto_awesome,
       type: ItemType.effect,
