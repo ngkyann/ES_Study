@@ -62,19 +62,17 @@ class _HomePageState extends State<HomePage> {
   String _realClass = '';
   int _currentIndex = 1;
 
-  // Added missing variables to avoid compile errors
   String _activeEffect = '';
-  // List<String> _ownedEffects = [];
   Map<String, dynamic>? userData;
+  late final List<Widget> _pages;
 
-  final PageController _pageController = PageController(initialPage: 1);
   StreamSubscription<DocumentSnapshot>? _userSubscription;
   int _unreadNotifCount = 0;
   List<DocumentReference> _unreadNotifRefs = [];
   StreamSubscription<QuerySnapshot>? _notifSubscription;
+
   @override
   void dispose() {
-    _pageController.dispose();
     _userSubscription?.cancel();
     _notifSubscription?.cancel();
     super.dispose();
@@ -93,7 +91,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-// 🔥 THÊM HÀM 1: Lắng nghe số lượng thông báo chưa đọc
   void _listenForUnreadNotifications() {
     _notifSubscription = FirebaseFirestore.instance
         .collection('notifications')
@@ -126,7 +123,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // 🔥 THÊM HÀM 2: Đánh dấu đã đọc để tắt chấm đỏ
   void _markAllAsRead() {
     if (_unreadNotifRefs.isEmpty) return;
     final batch = FirebaseFirestore.instance.batch();
@@ -216,7 +212,6 @@ class _HomePageState extends State<HomePage> {
 
   void _startListeningUserData() {
     try {
-      // Hủy lắng nghe cũ nếu có để tránh rò rỉ bộ nhớ và xung đột State chuột
       _userSubscription?.cancel();
 
       _userSubscription = FirebaseFirestore.instance
@@ -271,8 +266,6 @@ class _HomePageState extends State<HomePage> {
             _activeEffect = activeEffectFromDb;
             _isLoadingData = false;
             userData = data;
-
-            // _ownedEffects = List<String>.from(data['ownedEffects'] ?? []);
           });
         } else {
           if (mounted) setState(() => _isLoadingData = false);
@@ -325,7 +318,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // 1. Hàm hiển thị BottomSheet để chọn hiệu ứng nền
   void _showEffectOptions() {
     bool isVN = languageNotifier.value == "Tiếng Việt";
 
@@ -514,32 +506,24 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // 2. Hàm xây dựng hiệu ứng đám mây mặc định (Trả về List<Widget> để rải trực tiếp vào Stack)
   List<Widget> _buildDefaultCloud() {
     return [
-      // ☁️ Đám mây lớn phía dưới
       StatefulBuilder(
         builder: (context, setStateCloud1) {
-          double targetX = 10.0; // Tọa độ dịch chuyển tối đa sang phải
+          double targetX = 10.0;
 
           return TweenAnimationBuilder<double>(
-            tween: Tween<double>(
-                begin: -20.0,
-                end: targetX), // Trôi từ trái (-15) sang phải (15)
-            duration: const Duration(
-                seconds: 4), // Thời gian trôi qua một lượt (4 giây)
-            curve: Curves
-                .easeInOutSine, // Chuyển động chậm dần ở hai đầu cực kỳ mượt
+            tween: Tween<double>(begin: -20.0, end: targetX),
+            duration: const Duration(seconds: 4),
+            curve: Curves.easeInOutSine,
             onEnd: () {
-              // Khi chạm đích, đảo ngược mục tiêu để đám mây tự động trôi ngược lại
               targetX = targetX == 15.0 ? -15.0 : 15.0;
               (context as Element).markNeedsBuild();
             },
             builder: (context, animValue, child) {
               return Positioned(
                 bottom: -50,
-                right: -30 +
-                    animValue, // Áp dụng độ lệch trôi động vào thuộc tính right
+                right: -30 + animValue,
                 child: Transform.scale(
                   scaleX: 1.4,
                   child: Icon(
@@ -553,19 +537,13 @@ class _HomePageState extends State<HomePage> {
           );
         },
       ),
-
-      // ☁️ Đám mây nhỏ phía trên
       StatefulBuilder(
         builder: (context, setStateCloud2) {
-          double targetX =
-              30.0; // Tọa độ dịch chuyển (đám mây này trôi lệch pha với đám mây kia)
+          double targetX = 30.0;
 
           return TweenAnimationBuilder<double>(
-            tween: Tween<double>(
-                begin: 65.0, end: targetX), // Trôi từ phải (20) sang trái (-20)
-            duration: const Duration(
-                seconds:
-                    5), // Tốc độ trôi khác đi một chút (5 giây) để tạo chiều sâu (Parallax)
+            tween: Tween<double>(begin: 65.0, end: targetX),
+            duration: const Duration(seconds: 5),
             curve: Curves.easeInOutSine,
             onEnd: () {
               targetX = targetX == -20.0 ? 20.0 : -20.0;
@@ -574,8 +552,7 @@ class _HomePageState extends State<HomePage> {
             builder: (context, animValue, child) {
               return Positioned(
                 bottom: 10,
-                right: 120 +
-                    animValue, // Áp dụng độ lệch trôi động vào thuộc tính right
+                right: 120 + animValue,
                 child: Transform.scale(
                   scaleX: 1.3,
                   child: Icon(
@@ -592,7 +569,6 @@ class _HomePageState extends State<HomePage> {
     ];
   }
 
-  // 3. Hàm xây dựng hiệu ứng tùy chỉnh bằng ảnh mạng/GIF động
   Widget _buildCustomEffect(String effectStr) {
     if (effectStr == 'firework') {
       return Positioned(
@@ -601,7 +577,6 @@ class _HomePageState extends State<HomePage> {
         child: IgnorePointer(
           ignoring: true,
           child: SizedBox(
-            // 90%: Giảm kích thước vùng chứa từ 180 xuống 162
             width: 162,
             height: 162,
             child: Stack(
@@ -619,7 +594,6 @@ class _HomePageState extends State<HomePage> {
                     builder: (context, value, child) {
                       return Transform.translate(
                         offset: Offset(
-                          // 90%: Giảm bán kính văng ra từ 55 xuống 49.5
                           49.5 * value * cos(angle),
                           49.5 * value * sin(angle),
                         ),
@@ -647,7 +621,6 @@ class _HomePageState extends State<HomePage> {
                                     Colors.purpleAccent,
                                   ][index % 5]
                                       .withOpacity(0.8),
-                                  // 90%: Giảm độ mờ từ 12 xuống 10.8
                                   blurRadius: 10.8,
                                 ),
                               ],
@@ -658,8 +631,6 @@ class _HomePageState extends State<HomePage> {
                     },
                   );
                 }),
-
-                // Vòng giữa
                 ...List.generate(12, (index) {
                   final angle = (index * 30) * 3.1415926 / 180;
 
@@ -672,14 +643,12 @@ class _HomePageState extends State<HomePage> {
                     builder: (context, value, child) {
                       return Transform.translate(
                         offset: Offset(
-                          // 90%: Giảm bán kính văng ra từ 35 xuống 31.5
                           31.5 * value * cos(angle),
                           31.5 * value * sin(angle),
                         ),
                         child: Opacity(
                           opacity: 1 - (value * 0.8),
                           child: Container(
-                            // 90%: Giảm kích thước hạt từ 6 xuống 5.4
                             width: 5.4,
                             height: 5.4,
                             decoration: BoxDecoration(
@@ -688,7 +657,6 @@ class _HomePageState extends State<HomePage> {
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.white.withOpacity(0.9),
-                                  // 90%: Giảm độ mờ từ 10 xuống 9
                                   blurRadius: 9,
                                 ),
                               ],
@@ -699,8 +667,6 @@ class _HomePageState extends State<HomePage> {
                     },
                   );
                 }),
-
-                // Tâm pháo hoa
                 TweenAnimationBuilder(
                   tween: Tween<double>(begin: 0.4, end: 1.2),
                   duration: const Duration(milliseconds: 800),
@@ -709,7 +675,6 @@ class _HomePageState extends State<HomePage> {
                     return Transform.scale(
                       scale: value,
                       child: Container(
-                        // 90%: Giảm kích thước tâm từ 18 xuống 16.2
                         width: 16.2,
                         height: 16.2,
                         decoration: BoxDecoration(
@@ -718,9 +683,7 @@ class _HomePageState extends State<HomePage> {
                           boxShadow: [
                             BoxShadow(
                               color: Colors.yellow.withOpacity(0.9),
-                              // 90%: Giảm độ mờ từ 25 xuống 22.5
                               blurRadius: 22.5,
-                              // 90%: Giảm độ lan từ 4 xuống 3.6
                               spreadRadius: 3.6,
                             ),
                           ],
@@ -738,14 +701,13 @@ class _HomePageState extends State<HomePage> {
 
     if (effectStr == 'snow') {
       return Positioned(
-        bottom: -10, // Đặt sát cạnh dưới của Header
-        right: 20, // Đặt ở góc phải
+        bottom: -10,
+        right: 20,
         child: IgnorePointer(
           ignoring: true,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 1. Cái nón (Nón phớt màu đen/đỏ)
               Container(
                 width: 30,
                 height: 6,
@@ -759,8 +721,6 @@ class _HomePageState extends State<HomePage> {
                 height: 14,
                 color: Colors.black87,
               ),
-
-              // 2. Đầu người tuyết
               Container(
                 width: 45,
                 height: 45,
@@ -768,7 +728,6 @@ class _HomePageState extends State<HomePage> {
                   color: Colors.white,
                   shape: BoxShape.circle,
                   boxShadow: [
-                    // 🔥 Đã đổi từ 'shadows' thành 'boxShadow'
                     BoxShadow(
                         color: Colors.black12,
                         blurRadius: 4,
@@ -778,7 +737,6 @@ class _HomePageState extends State<HomePage> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Mắt (Trái & Phải)
                     Positioned(
                       top: 14,
                       left: 12,
@@ -797,7 +755,6 @@ class _HomePageState extends State<HomePage> {
                           decoration: const BoxDecoration(
                               color: Colors.black, shape: BoxShape.circle)),
                     ),
-                    // Mũi cà rốt (Hình tam giác xoay góc)
                     Positioned(
                       top: 18,
                       child: Transform.rotate(
@@ -815,8 +772,6 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
-
-              // 3. Khăn choàng cổ màu đỏ chống lạnh
               Transform.translate(
                 offset: const Offset(0, -4),
                 child: Container(
@@ -828,8 +783,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-
-              // 4. Thân người tuyết
               Transform.translate(
                 offset: const Offset(0, -6),
                 child: Container(
@@ -839,7 +792,6 @@ class _HomePageState extends State<HomePage> {
                     color: Colors.white,
                     shape: BoxShape.circle,
                     boxShadow: [
-                      // 🔥 Đã đổi từ 'shadows' thành 'boxShadow'
                       BoxShadow(
                           color: Colors.black12,
                           blurRadius: 4,
@@ -847,7 +799,6 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                   child: Center(
-                    // Cúc áo (3 nút hàng dọc)
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: List.generate(
@@ -874,7 +825,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (effectStr == 'sparkle') {
-      // Giảm số lượng phần tử xuống còn 10 ngôi sao để tạo cảm giác thoáng đãng, tập trung
       const int starCount = 9;
 
       return Positioned.fill(
@@ -882,13 +832,10 @@ class _HomePageState extends State<HomePage> {
           ignoring: true,
           child: Stack(
             children: List.generate(starCount, (index) {
-              // Phân bổ tọa độ ngẫu nhiên dựa trên chỉ số index để không trùng vị trí
               final double dx = (index * 37.0 + 100) %
                   (MediaQuery.of(context).size.width - 40);
-              final double dy = (index * 19.0 + 20) %
-                  110; // Giới hạn chiều cao nằm vừa vặn trong Header
+              final double dy = (index * 19.0 + 20) % 110;
 
-              // Tạo sự so le về thời gian bắt đầu hoạt ảnh giữa các ngôi sao
               final int baseDuration = 800 + (index * 150);
 
               return Positioned(
@@ -896,23 +843,18 @@ class _HomePageState extends State<HomePage> {
                 top: dy,
                 child: StatefulBuilder(
                   builder: (context, setStateBuilder) {
-                    // Sử dụng biến cục bộ để đảo chiều giá trị tween liên tục khi kết thúc vòng lặp
                     double targetValue = 1.0;
 
                     return TweenAnimationBuilder<double>(
-                      // Chạy từ kích thước nhỏ (0.2) lên kích thước cực đại (1.2)
                       tween: Tween<double>(begin: 0.1, end: targetValue),
                       duration: Duration(milliseconds: baseDuration),
-                      curve:
-                          Curves.easeInOutSine, // Hiệu ứng mượt mà như nhịp thở
+                      curve: Curves.easeInOutSine,
                       onEnd: () {
-                        // Kỹ thuật then chốt: Kích hoạt lại hoạt ảnh đảo chiều liên tục không bao giờ dừng
                         targetValue = targetValue == 1.0 ? 0.1 : 1.0;
                         (context as Element).markNeedsBuild();
                       },
                       builder: (context, value, child) {
                         return Opacity(
-                          // Kết hợp thuộc tính nội suy để ngôi sao mờ dần khi thu nhỏ và tỏ rõ khi phóng to
                           opacity: value.clamp(0.1, 0.9),
                           child: Transform.scale(
                             scale: value,
@@ -999,8 +941,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // --- UI COMPONENTS ---
-
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<String>(
@@ -1011,14 +951,8 @@ class _HomePageState extends State<HomePage> {
         return Scaffold(
           backgroundColor: Colors.grey.shade50,
           appBar: null,
-          body: PageView(
-            controller: _pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            onPageChanged: (index) {
-              setState(() {
-                _currentIndex = index;
-              });
-            },
+          body: IndexedStack(
+            index: _currentIndex,
             children: [
               // TAB 0: CỬA HÀNG VẬT PHẨM
               ShopPage(userId: widget.userId),
@@ -1033,7 +967,6 @@ class _HomePageState extends State<HomePage> {
                   leadingWidth: 290,
                   leading: _buildAppBarLeading(),
                   actions: [
-                    // 🔥 THAY THẾ BẰNG KHỐI STACK NÀY ĐỂ HIỂN THỊ CHẤM ĐỎ
                     Stack(
                       alignment: Alignment.center,
                       children: [
@@ -1041,9 +974,8 @@ class _HomePageState extends State<HomePage> {
                           icon: const Icon(Icons.notifications_none,
                               size: 28, color: Colors.white),
                           onPressed: () {
-                            _markAllAsRead(); // Gọi hàm tắt chấm đỏ
+                            _markAllAsRead();
 
-                            // Chuyển trang Notification (giữ nguyên logic cũ của bạn)
                             Navigator.push(
                               context,
                               PageRouteBuilder(
@@ -1061,7 +993,6 @@ class _HomePageState extends State<HomePage> {
                             );
                           },
                         ),
-                        // NẾU CÓ THÔNG BÁO CHƯA ĐỌC THÌ HIỂN THỊ CHẤM ĐỎ
                         if (_unreadNotifCount > 0)
                           Positioned(
                             top: 8,
@@ -1382,12 +1313,6 @@ class _HomePageState extends State<HomePage> {
       onTap: () {
         if (_currentIndex == index) return;
 
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 260),
-          curve: Curves.easeOutCubic,
-        );
-
         setState(() {
           _currentIndex = index;
         });
@@ -1434,8 +1359,6 @@ class _HomePageState extends State<HomePage> {
       itemBuilder: (context, index) {
         final item = items[index];
 
-        // SỬA LỖI UI & LOGIC TẠI ĐÂY:
-        // Sử dụng Material làm nền và đổ bóng để InkWell con bên trong hiển thị hiệu ứng ripple mượt mà
         return Material(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
