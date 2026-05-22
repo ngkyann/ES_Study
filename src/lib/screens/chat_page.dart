@@ -260,36 +260,8 @@ class _ChatPageState extends State<ChatPage> {
         lastMsgDisplay = isVN ? '[Tập tin: $fileName]' : '[File: $fileName]';
       }
 
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(widget.chatId)
-          .collection('messages')
-          .add({
-        'senderId': widget.currentUserId,
-        'text': text,
-        'imageUrl': imageUrl,
-        'fileUrl': fileUrl,
-        'fileName': fileName,
-        'timestamp': FieldValue.serverTimestamp(),
-        'deletedBy': [],
-      });
-
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(widget.chatId)
-          .set({
-        'lastMessage': lastMsgDisplay,
-        'lastTimestamp': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // 🔥 THÊM MỚI: TẠO THÔNG BÁO TIN NHẮN TỚI NGƯỜI NHẬN
       try {
-        // Tách ID người nhận từ chuỗi chatId (định dạng uid1_uid2)
-        List<String> ids = widget.chatId.split('_');
-        String targetUserId =
-            ids.first == widget.currentUserId ? ids.last : ids.first;
-
-        // Lấy tên của chính mình để hiển thị trong thông báo
+        // 🔥 1. LẤY TÊN MÌNH ĐỂ LƯU VÀO NHÓM VÀ LÀM THÔNG BÁO
         final myDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(widget.currentUserId)
@@ -297,22 +269,91 @@ class _ChatPageState extends State<ChatPage> {
         String myName =
             myDoc.data()?['name'] ?? (isVN ? "Một người bạn" : "A friend");
 
-        // Ghi đè thông báo với định dạng ID cố định cho đoạn chat này
+        // 🔥 2. LƯU TIN NHẮN (THÊM TRƯỜNG senderName)
         await FirebaseFirestore.instance
-            .collection('notifications')
-            .doc('chat_notif_${widget.chatId}_$targetUserId')
-            .set({
-          'userId': targetUserId,
-          'content_vn':
-              "💬 $myName đã gửi cho bạn 1 tin nhắn mới: $lastMsgDisplay",
-          'content_en': "💬 $myName sent you a new message: $lastMsgDisplay",
-          'createdAt': FieldValue.serverTimestamp(),
+            .collection('chats')
+            .doc(widget.chatId)
+            .collection('messages')
+            .add({
+          'senderId': widget.currentUserId,
+          'senderName': myName, // Cần lưu tên để UI biết ai vừa nhắn trong nhóm
+          'text': text,
+          'imageUrl': imageUrl,
+          'fileUrl': fileUrl,
+          'fileName': fileName,
+          'timestamp': FieldValue.serverTimestamp(),
+          'deletedBy': [],
         });
-      } catch (e) {
-        debugPrint("Lỗi tạo thông báo: $e");
-      }
-      // 🔥 KẾT THÚC THÊM MỚI
 
+        // 🔥 3. CẬP NHẬT LAST MESSAGE CHO KHUNG CHAT
+        await FirebaseFirestore.instance
+            .collection('chats')
+            .doc(widget.chatId)
+            .set({
+          'lastMessage': widget.chatId.startsWith('group_')
+              ? "$myName: $lastMsgDisplay"
+              : lastMsgDisplay,
+          'lastTimestamp': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        // 🔥 4. ĐẨY THÔNG BÁO VÀ CẬP NHẬT TAB TƯƠNG ỨNG
+        if (widget.chatId.startsWith('group_')) {
+          // --- LOGIC DÀNH CHO NHÓM ---
+          final groupDoc = await FirebaseFirestore.instance
+              .collection('groups')
+              .doc(widget.chatId)
+              .get();
+          List<dynamic> members = groupDoc.data()?['members'] ?? [];
+          String groupName = groupDoc.data()?['groupName'] ?? "Nhóm";
+
+          // Cập nhật Last Message lên Tab Nhóm
+          await FirebaseFirestore.instance
+              .collection('groups')
+              .doc(widget.chatId)
+              .update({
+            'lastMessage': "$myName: $lastMsgDisplay",
+          });
+
+          // Gửi Push Notification cho từng thành viên (Trừ mình)
+          for (String memberId in members) {
+            if (memberId != widget.currentUserId) {
+              await FirebaseFirestore.instance
+                  .collection('notifications')
+                  .doc('chat_notif_${widget.chatId}_$memberId')
+                  .set({
+                'userId': memberId,
+                'content_vn':
+                    "💬 $myName đã nhắn trong nhóm $groupName : $lastMsgDisplay",
+                'content_en':
+                    "💬 $myName messaged in $groupName : $lastMsgDisplay",
+                'createdAt': FieldValue.serverTimestamp(),
+                'isRead': false,
+              });
+            }
+          }
+        } else {
+          // --- LOGIC DÀNH CHO CHAT 1-1 ---
+          List<String> ids = widget.chatId.split('_');
+          String targetUserId =
+              ids.first == widget.currentUserId ? ids.last : ids.first;
+
+          await FirebaseFirestore.instance
+              .collection('notifications')
+              .doc('chat_notif_${widget.chatId}_$targetUserId')
+              .set({
+            'userId': targetUserId,
+            'content_vn':
+                "💬 $myName đã gửi cho bạn 1 tin nhắn mới: $lastMsgDisplay",
+            'content_en': "💬 $myName sent you a new message: $lastMsgDisplay",
+            'createdAt': FieldValue.serverTimestamp(),
+            'isRead': false,
+          });
+        }
+      } catch (e) {
+        debugPrint("Lỗi gửi tin/tạo thông báo: $e");
+      }
+
+      // Xóa form sau khi gửi thành công
       setState(() {
         _msgController.clear();
         _selectedImage = null;
@@ -321,7 +362,7 @@ class _ChatPageState extends State<ChatPage> {
         _isUploading = false;
       });
     } catch (e) {
-      debugPrint("Lỗi gửi tin nhắn: $e");
+      debugPrint("Lỗi xử lý file/ảnh: $e");
       setState(() => _isUploading = false);
     }
   }
@@ -415,6 +456,522 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+// =========================================================
+  // 🔥 KHỐI HÀM QUẢN LÝ NHÓM (THÊM THÀNH VIÊN, CHUYỂN QUYỀN, RỜI NHÓM)
+  // =========================================================
+  Future<void> _showGroupSettings() async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+    final doc = await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(widget.chatId)
+        .get();
+    if (!doc.exists) return;
+    final data = doc.data()!;
+    String leaderId = data['leaderId'] ?? '';
+    List<String> members = List<String>.from(data['members'] ?? []);
+    bool isLeader = widget.currentUserId == leaderId;
+
+    if (!mounted) return;
+    showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (ctx) {
+          return SafeArea(
+            child: Wrap(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Text(isVN ? "Quản lý nhóm" : "Group Settings",
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.people,
+                    color: primaryColor,
+                  ),
+                  title: Text(isVN ? "Thành viên" : "Members"),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showMembersDialog();
+                  },
+                ),
+                if (isLeader)
+                  ListTile(
+                    leading: const Icon(Icons.swap_horiz, color: Colors.orange),
+                    title: Text(
+                        isVN ? "Chuyển nhóm trưởng" : "Transfer ownership"),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showTransferLeaderDialog(members, leaderId);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.person_add, color: Colors.blue),
+                  title: Text(isVN ? "Mời thêm bạn bè" : "Add members"),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showAddMemberDialog(members);
+                  },
+                ),
+                if (isLeader)
+                  ListTile(
+                    leading:
+                        const Icon(Icons.delete_forever, color: Colors.red),
+                    title: Text(isVN ? "Giải tán nhóm" : "Delete group"),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _deleteGroup();
+                    },
+                  )
+                else
+                  ListTile(
+                    leading: const Icon(Icons.exit_to_app, color: Colors.red),
+                    title: Text(isVN ? "Rời nhóm" : "Leave group"),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _leaveGroup();
+                    },
+                  ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          );
+        });
+  }
+
+  Future<void> _showAddMemberDialog(List<String> currentMembers) async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+    final myDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.currentUserId)
+        .get();
+    List<String> myFriends = List<String>.from(myDoc.data()?['friends'] ?? []);
+    // Chỉ hiện những người bạn CHƯA có trong nhóm
+    List<String> availableFriends =
+        myFriends.where((f) => !currentMembers.contains(f)).toList();
+
+    if (availableFriends.isEmpty) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(isVN
+                ? "Tất cả bạn bè đã ở trong nhóm!"
+                : "All friends are already in the group!")));
+      return;
+    }
+
+    List<String> selectedToAdd = [];
+    showDialog(
+        context: context,
+        builder: (ctx) {
+          return StatefulBuilder(builder: (context, setDialogState) {
+            return AlertDialog(
+                title: Text(isVN ? "Thêm thành viên" : "Add members"),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: availableFriends.length,
+                    itemBuilder: (context, index) {
+                      String fId = availableFriends[index];
+                      return FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(fId)
+                              .get(),
+                          builder: (context, snap) {
+                            if (!snap.hasData) return const SizedBox.shrink();
+                            String fName = snap.data!.get('name') ?? 'Unknown';
+                            bool isSelected = selectedToAdd.contains(fId);
+                            return CheckboxListTile(
+                              title: Text(fName),
+                              value: isSelected,
+                              onChanged: (val) {
+                                setDialogState(() {
+                                  val == true
+                                      ? selectedToAdd.add(fId)
+                                      : selectedToAdd.remove(fId);
+                                });
+                              },
+                            );
+                          });
+                    },
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(isVN ? "Hủy" : "Cancel")),
+                  ElevatedButton(
+                    onPressed: () async {
+                      if (selectedToAdd.isEmpty) return;
+                      await FirebaseFirestore.instance
+                          .collection('groups')
+                          .doc(widget.chatId)
+                          .update({
+                        'members': FieldValue.arrayUnion(
+                            selectedToAdd) // Thêm vào Database
+                      });
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      if (mounted)
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(isVN
+                                ? "Đã thêm thành viên!"
+                                : "Members added!"),
+                            backgroundColor: Colors.green));
+                    },
+                    child: Text(isVN ? "Thêm" : "Add"),
+                  )
+                ]);
+          });
+        });
+  }
+
+  Future<void> _showTransferLeaderDialog(
+      List<String> members, String currentLeader) async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+    List<String> otherMembers =
+        members.where((m) => m != currentLeader).toList();
+
+    if (otherMembers.isEmpty) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                isVN ? "Nhóm chỉ có mình bạn!" : "You are the only member!")));
+      return;
+    }
+
+    showDialog(
+        context: context,
+        builder: (ctx) {
+          return AlertDialog(
+              title: Text(isVN ? "Chọn nhóm trưởng mới" : "Select new leader"),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: otherMembers.length,
+                  itemBuilder: (context, index) {
+                    String mId = otherMembers[index];
+                    return FutureBuilder<DocumentSnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(mId)
+                            .get(),
+                        builder: (context, snap) {
+                          if (!snap.hasData) return const SizedBox.shrink();
+                          String mName = snap.data!.get('name') ?? 'Unknown';
+                          return ListTile(
+                            title: Text(mName),
+                            trailing:
+                                const Icon(Icons.arrow_forward_ios, size: 16),
+                            onTap: () async {
+                              await FirebaseFirestore.instance
+                                  .collection('groups')
+                                  .doc(widget.chatId)
+                                  .update({
+                                'leaderId': mId // Đổi nhóm trưởng
+                              });
+                              if (ctx.mounted) Navigator.pop(ctx);
+                              if (mounted)
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(isVN
+                                            ? "Đã chuyển quyền nhóm trưởng!"
+                                            : "Leadership transferred!"),
+                                        backgroundColor: Colors.green));
+                            },
+                          );
+                        });
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(isVN ? "Đóng" : "Close")),
+              ]);
+        });
+  }
+
+  Future<void> _deleteGroup() async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+    bool confirm = await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+                    title: Text(isVN ? "Giải tán nhóm?" : "Delete group?"),
+                    content: Text(isVN
+                        ? "Nhóm sẽ bị xóa vĩnh viễn."
+                        : "Group will be permanently deleted."),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: Text(isVN ? "Hủy" : "Cancel")),
+                      ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: Text(isVN ? "Giải tán" : "Delete",
+                              style: const TextStyle(color: Colors.white))),
+                    ])) ??
+        false;
+
+    if (!confirm) return;
+
+    await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(widget.chatId)
+        .delete();
+    if (mounted) Navigator.pop(context); // Bị giải tán thì văng ra ngoài
+  }
+
+  Future<void> _leaveGroup() async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+    bool confirm = await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+                    title: Text(isVN ? "Rời nhóm?" : "Leave group?"),
+                    content: Text(isVN
+                        ? "Bạn sẽ không thể xem tin nhắn nhóm nữa."
+                        : "You will no longer see group messages."),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: Text(isVN ? "Hủy" : "Cancel")),
+                      ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: Text(isVN ? "Rời đi" : "Leave",
+                              style: const TextStyle(color: Colors.white))),
+                    ])) ??
+        false;
+
+    if (!confirm) return;
+
+    await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(widget.chatId)
+        .update({
+      'members': FieldValue.arrayRemove(
+          [widget.currentUserId]) // Xóa mình khỏi mảng members
+    });
+
+    if (mounted) Navigator.pop(context); // Rời xong thì văng ra ngoài
+  }
+
+// =========================================================
+  // HÀM HIỂN THỊ HỘP THOẠI DANH SÁCH THÀNH VIÊN
+  // =========================================================
+  void _showMembersDialog() {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text(
+            isVN ? "Thành viên nhóm" : "Group Members",
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: StreamBuilder<DocumentSnapshot>(
+              // 🔥 ĐÃ SỬA: Lắng nghe chính xác collection 'groups'
+              stream: FirebaseFirestore.instance
+                  .collection('groups')
+                  .doc(widget.chatId)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return Text(isVN
+                      ? "Không tìm thấy dữ liệu nhóm"
+                      : "Group data not found");
+                }
+
+                var groupData = snapshot.data!.data() as Map<String, dynamic>;
+                List<dynamic> members = groupData['members'] ?? [];
+
+                // 🔥 ĐÃ SỬA: Đồng bộ tên biến trưởng nhóm là 'leaderId'
+                String leaderId = groupData['leaderId'] ?? '';
+
+                // Kiểm tra xem người dùng hiện tại có phải nhóm trưởng không
+                bool isMeLeader = widget.currentUserId == leaderId;
+
+                if (members.isEmpty) {
+                  return Text(
+                      isVN ? "Nhóm chưa có thành viên" : "No members in group");
+                }
+
+                return ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: members.length,
+                  itemBuilder: (context, index) {
+                    String memberId = members[index];
+                    bool isMemberLeader = memberId == leaderId;
+
+                    // Lấy thông tin chi tiết từng thành viên từ collection 'users'
+                    return FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(memberId)
+                          .get(),
+                      builder: (context, userSnapshot) {
+                        if (!userSnapshot.hasData) {
+                          return const ListTile(title: Text("..."));
+                        }
+
+                        var userData =
+                            userSnapshot.data!.data() as Map<String, dynamic>?;
+
+                        // 🔥 ĐÃ SỬA: Đồng bộ gọi trường 'name' từ file bạn bè
+                        String memberName = userData?['name'] ??
+                            userData?['userName'] ??
+                            "User";
+                        String avatarUrl = userData?['avatarUrl'] ?? '';
+
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: primaryColor.withOpacity(0.1),
+                            backgroundImage: avatarUrl.isNotEmpty
+                                ? NetworkImage(avatarUrl)
+                                : null,
+                            child: avatarUrl.isEmpty
+                                ? Icon(Icons.person, color: primaryColor)
+                                : null,
+                          ),
+                          title: Text(
+                            memberId == widget.currentUserId
+                                ? "$memberName (${isVN ? "Bạn" : "You"})"
+                                : memberName,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: isMemberLeader
+                              ? Text(
+                                  isVN ? "Trưởng nhóm" : "Leader",
+                                  style: const TextStyle(
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12),
+                                )
+                              : null,
+                          // Nút xóa thành viên: Chỉ hiển thị nếu Mình là trưởng nhóm VÀ người này không phải là mình
+                          trailing: (isMeLeader && !isMemberLeader)
+                              ? IconButton(
+                                  icon: const Icon(Icons.person_remove,
+                                      color: Colors.redAccent),
+                                  onPressed: () {
+                                    _confirmKickMember(memberId, memberName);
+                                  },
+                                )
+                              : null,
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(isVN ? "Đóng" : "Close",
+                  style: TextStyle(color: primaryColor)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // =========================================================
+  // HÀM TIẾN HÀNH XÓA THÀNH VIÊN KHỎI NHÓM
+  // =========================================================
+  Future<void> _confirmKickMember(String memberId, String memberName) async {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(
+              Icons.person_remove,
+              color: Colors.redAccent,
+              size: 30,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isVN ? "Xác nhận xóa" : "Confirm Remove",
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          isVN
+              ? "Bạn có chắc chắn muốn mời $memberName ra khỏi nhóm không?"
+              : "Are you sure you want to remove $memberName from the group?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(isVN ? "Hủy" : "Cancel",
+                style: const TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(isVN ? "Xóa" : "Remove",
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        // 🔥 ĐÃ SỬA: Đồng bộ xóa member ở collection 'groups'
+        await FirebaseFirestore.instance
+            .collection('groups')
+            .doc(widget.chatId)
+            .update({
+          'members': FieldValue.arrayRemove([memberId])
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isVN
+                    ? "Đã xóa thành công $memberName"
+                    : "Successfully removed $memberName",
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content:
+                    Text(isVN ? "Có lỗi xảy ra: $e" : "An error occurred: $e"),
+                backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<String>(
@@ -433,6 +990,12 @@ class _ChatPageState extends State<ChatPage> {
             foregroundColor: Colors.white,
             elevation: 1,
             actions: [
+              if (widget.chatId.startsWith('group_'))
+                IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  tooltip: isVN ? "Quản lý nhóm" : "Group settings",
+                  onPressed: _showGroupSettings,
+                ),
               IconButton(
                 icon: const Icon(Icons.delete_outline),
                 tooltip: isVN ? "Xóa lịch sử trò chuyện" : "Clear chat history",
@@ -685,6 +1248,18 @@ class _ChatPageState extends State<ChatPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (!isMe && widget.chatId.startsWith('group_'))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4.0),
+                  child: Text(
+                    msg['senderName'] ?? "Thành viên",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: primaryColor.withOpacity(0.8),
+                    ),
+                  ),
+                ),
               if (imageUrl != null && imageUrl.isNotEmpty)
                 GestureDetector(
                   onTap: () => Navigator.push(

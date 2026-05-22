@@ -158,6 +158,150 @@ class _FriendsPageState extends State<FriendsPage> {
     );
   }
 
+// 🔥 HÀM TẠO NHÓM
+  // 🔥 HÀM TẠO NHÓM ĐÃ FIX LỖI CRASH VÀ TỐI ƯU STATE
+  void _showCreateGroupDialog(List<DocumentSnapshot> friendsList, bool isVN) {
+    TextEditingController nameController = TextEditingController();
+    List<String> selectedFriends = [];
+
+    showDialog(
+        context: context,
+        builder: (ctx) {
+          return StatefulBuilder(builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              title: Text(isVN ? "Tạo nhóm mới" : "Create New Group"),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min, // Chống bung layout
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(
+                        hintText: isVN ? "Tên nhóm..." : "Group name...",
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Text(isVN ? "Chọn thành viên:" : "Select members:",
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 5),
+                    // 🔥 SỬ DỤNG CONSTRAINED BOX THAY VÌ EXPANDED ĐỂ TRÁNH LỖI CHIỀU CAO
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 250),
+                      child: friendsList.isEmpty
+                          ? Text(isVN
+                              ? "Bạn chưa có bạn bè nào."
+                              : "No friends to add.")
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: friendsList.length,
+                              itemBuilder: (context, index) {
+                                // Tận dụng luôn friendsList đã tải ở ngoài, không cần gọi FutureBuilder
+                                var friendDoc = friendsList[index];
+                                var friendData =
+                                    friendDoc.data() as Map<String, dynamic>;
+                                String friendId = friendDoc.id;
+                                String fName = friendData['name'] ?? 'Unknown';
+
+                                bool isSelected =
+                                    selectedFriends.contains(friendId);
+
+                                return CheckboxListTile(
+                                  title: Text(fName),
+                                  value: isSelected,
+                                  activeColor: primaryColor,
+                                  contentPadding: EdgeInsets.zero,
+                                  onChanged: (val) {
+                                    setDialogState(() {
+                                      if (val == true) {
+                                        selectedFriends.add(friendId);
+                                      } else {
+                                        selectedFriends.remove(friendId);
+                                      }
+                                    });
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text(isVN ? "Hủy" : "Cancel",
+                        style: const TextStyle(color: Colors.grey))),
+                ElevatedButton(
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: primaryColor),
+                  onPressed: () async {
+                    if (nameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(isVN
+                            ? "Vui lòng nhập tên nhóm!"
+                            : "Please enter a group name!"),
+                        backgroundColor: Colors.red,
+                      ));
+                      return;
+                    }
+                    if (selectedFriends.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(isVN
+                            ? "Vui lòng chọn ít nhất 1 thành viên!"
+                            : "Select at least 1 member!"),
+                        backgroundColor: Colors.red,
+                      ));
+                      return;
+                    }
+
+                    // Tạo ID nhóm định dạng riêng
+                    String groupId =
+                        'group_${DateTime.now().millisecondsSinceEpoch}';
+
+                    // Danh sách thành viên bao gồm cả bản thân mình
+                    List<String> allMembers = [
+                      widget.currentUserId,
+                      ...selectedFriends
+                    ];
+
+                    await FirebaseFirestore.instance
+                        .collection('groups')
+                        .doc(groupId)
+                        .set({
+                      'groupId': groupId,
+                      'groupName': nameController.text.trim(),
+                      'members': allMembers,
+                      'leaderId': widget.currentUserId,
+                      'lastMessage': '',
+                      'createdAt': FieldValue.serverTimestamp(),
+                    });
+
+                    if (ctx.mounted) Navigator.pop(ctx);
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(isVN
+                            ? "Tạo nhóm thành công!"
+                            : "Group created successfully!"),
+                        backgroundColor: Colors.green,
+                      ));
+                    }
+                  },
+                  child: Text(isVN ? "Tạo" : "Create",
+                      style: const TextStyle(color: Colors.white)),
+                )
+              ],
+            );
+          });
+        });
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<String>(
@@ -221,7 +365,7 @@ class _FriendsPageState extends State<FriendsPage> {
               }
 
               return DefaultTabController(
-                length: 3,
+                length: 4,
                 child: Scaffold(
                   appBar: AppBar(
                     title: Text(
@@ -238,6 +382,7 @@ class _FriendsPageState extends State<FriendsPage> {
                       unselectedLabelColor: Colors.white70,
                       tabs: [
                         Tab(text: isVN ? "Bạn bè" : "Friends"),
+                        Tab(text: isVN ? "Nhóm" : "Groups"),
                         Tab(
                           child: Badge(
                             offset: const Offset(15, -6),
@@ -377,7 +522,93 @@ class _FriendsPageState extends State<FriendsPage> {
                                     });
                               },
                             ),
+                      Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.group_add),
+                              label: Text(isVN
+                                  ? "Tạo nhóm học tập"
+                                  : "Create Study Group"),
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryColor,
+                                  foregroundColor: Colors.white,
+                                  minimumSize: const Size(double.infinity, 45),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(15))),
+                              onPressed: () =>
+                                  _showCreateGroupDialog(friendsList, isVN),
+                            ),
+                          ),
+                          Expanded(
+                            child: StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('groups')
+                                  .where('members',
+                                      arrayContains: widget.currentUserId)
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData)
+                                  return const Center(
+                                      child: CircularProgressIndicator());
+                                final groups = snapshot.data!.docs;
 
+                                if (groups.isEmpty) {
+                                  return Center(
+                                      child: Text(
+                                          isVN
+                                              ? "Bạn chưa tham gia nhóm nào."
+                                              : "No groups yet.",
+                                          style: const TextStyle(
+                                              color: Colors.grey)));
+                                }
+
+                                return ListView.builder(
+                                  itemCount: groups.length,
+                                  itemBuilder: (context, index) {
+                                    final group = groups[index].data()
+                                        as Map<String, dynamic>;
+                                    final groupId = groups[index].id;
+                                    return ListTile(
+                                      leading: CircleAvatar(
+                                        backgroundColor:
+                                            primaryColor.withOpacity(0.2),
+                                        child: const Icon(Icons.group,
+                                            color: Colors.blue),
+                                      ),
+                                      title: Text(group['groupName'] ?? "Nhóm",
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold)),
+                                      subtitle: Text(
+                                          group['lastMessage'] ??
+                                              (isVN
+                                                  ? "Chưa có tin nhắn"
+                                                  : "No messages"),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ChatPage(
+                                              chatId: groupId,
+                                              currentUserId:
+                                                  widget.currentUserId,
+                                              targetUserName:
+                                                  group['groupName'] ?? "Nhóm",
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
                       // TAB 2: LỜI MỜI
                       requestsList.isEmpty
                           ? Center(
