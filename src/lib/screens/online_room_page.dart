@@ -57,6 +57,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   bool _isMuted = true;
   bool _isVideoOff = true;
   bool _isChatOpen = false;
+  bool _isScreenSharing = false;
   String? _hostId;
   // CHAT & NOTIFICATIONS
   final TextEditingController _chatController = TextEditingController();
@@ -121,7 +122,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     _initRoom();
   }
 
-  // 🔥 HÀM ĐẾM NGƯỢC ĐỒNG BỘ MỚI
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -146,7 +146,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           _remainingSeconds--;
         });
 
-        // Host liên tục đẩy giờ chuẩn lên Firebase mỗi 5s
         if (widget.isHost && _remainingSeconds % 5 == 0) {
           FirebaseFirestore.instance
               .collection('study_rooms')
@@ -156,7 +155,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           }).catchError((e) {});
         }
       } else {
-        // Hết giờ
         timer.cancel();
         _leaveRoomLogic(isFailedAFK: false, isFinishedNatural: true);
       }
@@ -174,10 +172,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
       if (_localStream != null) {
         _localStream!.getAudioTracks().forEach(
-              (track) => track.enabled = false, // Khởi tạo ban đầu bị Muted
+              (track) => track.enabled = false,
             );
         _localStream!.getVideoTracks().forEach(
-              (track) => track.enabled = false, // Khởi tạo ban đầu tắt Cam
+              (track) => track.enabled = false,
             );
         Helper.setSpeakerphoneOn(true);
       }
@@ -231,7 +229,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         ? "${widget.userName} đã vào phòng."
         : "${widget.userName} joined the room.");
 
-    // Lắng nghe tín hiệu Signaling NGAY TỪ ĐẦU (Để không lỡ Offer)
     _signalingSub = FirebaseFirestore.instance
         .collection('study_rooms')
         .doc(widget.roomId)
@@ -261,18 +258,15 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           snap.docChanges.first.type == DocumentChangeType.added) {
         final msg = snap.docChanges.first.doc.data();
         if (msg != null) {
-          // 🔥 THÊM MỚI: LẮNG NGHE LỆNH KẾT THÚC PHÒNG TỪ HOST
           if (msg['isSystem'] == true && msg['text'] == '[CMD_ROOM_FINISHED]') {
             if (mounted && !widget.isHost) {
               _remainingSeconds = 0;
               _timer?.cancel();
-              // Ép thành viên hoàn thành tự nhiên và nhận đủ điểm!
               _leaveRoomLogic(isFailedAFK: false, isFinishedNatural: true);
             }
             return;
           }
 
-          // Đoạn xử lý thông báo chat cũ giữ nguyên
           if (_isFirstMessageFetch) {
             _isFirstMessageFetch = false;
             return;
@@ -292,12 +286,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     _participantsSub = roomRef.snapshots().listen((snap) {
       if (!snap.exists) {
         if (!widget.isHost && mounted && !_hasLeft) {
-          // 🔥 NẾU PHÒNG BỊ XÓA MÀ GIỜ CHỈ CÒN DƯỚI 5 GIÂY -> LÀ DO HOST VỪA KẾT THÚC THÀNH CÔNG!
           if (_remainingSeconds <= 5) {
             _timer?.cancel();
             _leaveRoomLogic(isFailedAFK: false, isFinishedNatural: true);
           } else {
-            // Host out sớm thật sự -> Không được cộng điểm
             _leaveRoomLogic(
                 isFailedAFK: false,
                 isFinishedNatural: false,
@@ -311,14 +303,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       _hostId = data['hostId'];
       _currentParticipantsCount = List.from(data['participants'] ?? []).length;
 
-      // Khởi động đồng hồ lần đầu
       if (!_isTimerStarted) {
         _isTimerStarted = true;
         _remainingSeconds = widget.duration * 60;
         _startTimer();
       }
 
-      // 🔥 ĐỒNG BỘ THỜI GIAN VỚI HOST: Nếu lệch quá 3 giây thì ép thành viên nhảy số theo Host
       if (!widget.isHost && data.containsKey('currentRemaining')) {
         int hostRemaining = data['currentRemaining'];
         if ((_remainingSeconds - hostRemaining).abs() > 3) {
@@ -341,9 +331,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         if (pid != widget.userId && !_peers.containsKey(pid)) {
           _remoteNames[pid] = pname;
           Future.delayed(const Duration(milliseconds: 500), () {
-            if (!mounted || _peers.containsKey(pid)) return; // Tránh gọi 2 lần
-            // 🔥 BUG FIX 1: Xác định Caller rạch ròi bằng so sánh ID
-            // Điều này tránh trường hợp 2 máy cùng tạo Offer đè lên nhau.
+            if (!mounted || _peers.containsKey(pid)) return;
             bool amICaller = widget.userId.compareTo(pid) > 0;
             _createPeerConnection(pid, isCaller: amICaller);
           });
@@ -504,6 +492,53 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     ).then((_) => _isAfkDialogOpen = false);
   }
 
+  Future<void> _toggleScreenShare() async {
+    try {
+      if (_isScreenSharing) {
+        MediaStream cameraStream = await navigator.mediaDevices.getUserMedia({
+          'video': true,
+          'audio': false,
+        });
+        var newVideoTrack = cameraStream.getVideoTracks()[0];
+
+        var oldVideoTrack = _localStream?.getVideoTracks()[0];
+        if (oldVideoTrack != null) {
+          _localStream?.removeTrack(oldVideoTrack);
+          oldVideoTrack.stop();
+        }
+        _localStream?.addTrack(newVideoTrack);
+
+        setState(() {
+          _isScreenSharing = false;
+        });
+      } else {
+        MediaStream screenStream =
+            await navigator.mediaDevices.getDisplayMedia({
+          'video': true,
+          'audio': false,
+        });
+        var newVideoTrack = screenStream.getVideoTracks()[0];
+
+        newVideoTrack.onEnded = () {
+          if (mounted && _isScreenSharing) _toggleScreenShare();
+        };
+
+        var oldVideoTrack = _localStream?.getVideoTracks()[0];
+        if (oldVideoTrack != null) {
+          _localStream?.removeTrack(oldVideoTrack);
+          oldVideoTrack.stop();
+        }
+        _localStream?.addTrack(newVideoTrack);
+
+        setState(() {
+          _isScreenSharing = true;
+        });
+      }
+    } catch (e) {
+      debugPrint("Lỗi chia sẻ màn hình: $e");
+    }
+  }
+
   Future<void> _createPeerConnection(
     String peerId, {
     required bool isCaller,
@@ -516,14 +551,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     _remoteRenderers[peerId] = renderer;
     if (mounted) setState(() {});
 
-    // 🔥 BUG FIX 2: Thay `addStream` bằng `addTrack` để WebRTC thế hệ mới chạy mượt
     if (_localStream != null) {
       _localStream!.getTracks().forEach((track) {
         pc.addTrack(track, _localStream!);
       });
     }
 
-    // 🔥 Sửa `onAddStream` sang `onTrack`
     pc.onTrack = (RTCTrackEvent event) {
       if (event.streams.isNotEmpty) {
         renderer.srcObject = event.streams[0];
@@ -560,7 +593,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   ) async {
     final type = data['type'];
 
-    // Nếu chưa có connection, tạo mới dưới quyền Callee (Người nghe)
     if (!_peers.containsKey(fromPeerId)) {
       await _createPeerConnection(fromPeerId, isCaller: false);
     }
@@ -572,7 +604,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       final answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       _sendSignaling(fromPeerId, {'type': 'answer', 'sdp': answer.sdp});
-      _drainQueue(fromPeerId, pc); // Xả hàng đợi ICE
+      _drainQueue(fromPeerId, pc);
     } else if (type == 'answer') {
       await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], type));
       _drainQueue(fromPeerId, pc);
@@ -584,7 +616,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         candMap['sdpMLineIndex'],
       );
 
-      // 🔥 BUG FIX 3: Chỉ cho add ICE Candidate sau khi đã SetRemoteDescription
       var remoteDesc = await pc.getRemoteDescription();
       if (remoteDesc != null) {
         await pc.addCandidate(candidate);
@@ -689,14 +720,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     );
   }
 
-  // 🔥 THAY THẾ TOÀN BỘ HÀM _leaveRoomLogic CŨ BẰNG HÀM NÀY
   Future<void> _leaveRoomLogic({
     required bool isFailedAFK,
     required bool isFinishedNatural,
-    bool isHostForcedClose =
-        false, // Thêm tham số này để báo hiệu Host đóng phòng
+    bool isHostForcedClose = false,
   }) async {
-    if (_hasLeft) return; // Tránh việc gọi 2 lần
+    if (_hasLeft) return;
     _hasLeft = true;
     _timer?.cancel();
 
@@ -709,7 +738,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         FirebaseFirestore.instance.collection('study_rooms').doc(widget.roomId);
     final roomSnap = await roomRef.get();
 
-    // Dùng số lượng thành viên đã lưu, vì nếu phòng bị xóa roomSnap sẽ không đọc được
     int currentParticipants = _currentParticipantsCount;
 
     if (roomSnap.exists) {
@@ -727,15 +755,11 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
       }
     }
 
-    // 🔥 NẾU TỰ THOÁT SỚM, BỊ AFK HOẶC HOST HỦY PHÒNG (Không cộng điểm cho ai cả)
-    // 🔥 ĐÓNG SẠCH MỌI BOTTOM SHEET (CHAT, NHIỆM VỤ, NHÓM) ĐANG MỞ TRƯỚC KHI THOÁT
     if (_myRoute != null && Navigator.of(context).canPop()) {
       Navigator.of(context).popUntil((route) => route == _myRoute);
     }
 
-    // 1. NẾU THẤT BẠI HOẶC HOST OUT SỚM (Không ai có điểm)
     if (isFailedAFK || !isFinishedNatural || isHostForcedClose) {
-      // Phạt Host
       if (widget.isHost &&
           !isFinishedNatural &&
           !isFailedAFK &&
@@ -746,7 +770,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
             .doc(widget.userId)
             .update({'points': FieldValue.increment(-penalty)});
 
-        // 🔥 THÊM MỚI: Bắn thông báo phạt về bảng notifications cho Host
         await FirebaseFirestore.instance.collection('notifications').add({
           'userId': widget.userId,
           'content_vn':
@@ -767,9 +790,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         }
       }
 
-      // Báo cho thành viên Host đã out
       if (!widget.isHost && isHostForcedClose) {
-        // 🔥 THÊM MỚI: Bắn thông báo về bảng notifications cho Thành viên bị ảnh hưởng
         await FirebaseFirestore.instance.collection('notifications').add({
           'userId': widget.userId,
           'content_vn':
@@ -801,8 +822,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                         backgroundColor: primaryColor,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(15))),
-                    onPressed: () =>
-                        Navigator.pop(dialogCtx), // Chỉ đóng hộp thoại
+                    onPressed: () => Navigator.pop(dialogCtx),
                     child: Text(isVN ? "Đóng" : "Close",
                         style: const TextStyle(color: Colors.white)),
                   ),
@@ -813,13 +833,11 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         }
       }
 
-      if (mounted && !isFailedAFK) Navigator.pop(context); // Đóng phòng học
+      if (mounted && !isFailedAFK) Navigator.pop(context);
       return;
     }
 
-    // 2. NẾU HOÀN THÀNH THÀNH CÔNG (Tất cả nhận điểm)
-    int actualMinutes = widget
-        .duration; // Đã hoàn thành tự nhiên thì nhận Full thời gian cài đặt
+    int actualMinutes = widget.duration;
     int earnedPoints = actualMinutes * currentParticipants;
     int earnedCoins = (earnedPoints / 2.0).round();
 
@@ -868,7 +886,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         'lastStudyDate': Timestamp.fromDate(now),
       }, SetOptions(merge: true));
 
-      // 🔥 THÊM MỚI: Bắn thông báo cập nhật điểm/coin về bảng notifications
       await FirebaseFirestore.instance.collection('notifications').add({
         'userId': widget.userId,
         'content_vn':
@@ -878,7 +895,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Cập nhật Friend Streak
       if (currentParticipants > 1 && roomSnap.exists) {
         final data = roomSnap.data() as Map<String, dynamic>;
         List<String> participants =
@@ -936,8 +952,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                     backgroundColor: primaryColor,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15))),
-                onPressed: () =>
-                    Navigator.pop(dialogCtx), // Chỉ đóng Dialog thưởng
+                onPressed: () => Navigator.pop(dialogCtx),
                 child: Text(isVN ? "Nhận thưởng" : "Claim reward",
                     style: const TextStyle(color: Colors.white)),
               ),
@@ -945,17 +960,14 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           ],
         ),
       );
-      if (mounted) Navigator.pop(context); // Thoát khỏi phòng học
+      if (mounted) Navigator.pop(context);
     }
   }
 
-// end
-// 🔥 THÊM 1: Hàm tạo ID chat 1-1 (Giống bên trang FriendsPage)
   String _getChatId(String uid1, String uid2) {
     return uid1.compareTo(uid2) < 0 ? '${uid1}_$uid2' : '${uid2}_$uid1';
   }
 
-  // 🔥 THÊM 2: Hàm hiển thị danh sách bạn bè và gửi mã
   void _showShareToFriendBottomSheet() {
     bool isVN = languageNotifier.value == "Tiếng Việt";
     showModalBottomSheet(
@@ -1043,16 +1055,13 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                     style: ElevatedButton.styleFrom(
                                         backgroundColor: primaryColor),
                                     onPressed: () async {
-                                      // 1. Tạo ID cuộc trò chuyện
                                       String chatId =
                                           _getChatId(widget.userId, friendId);
 
-                                      // 2. Nội dung tin nhắn rủ rê
                                       String msg = isVN
                                           ? "Vào học cùng mình nhé! Mã phòng riêng tư là: ${widget.roomCode}"
                                           : "Join my study room! The private code is: ${widget.roomCode}";
 
-                                      // 3. Lưu vào Firebase Chats
                                       await FirebaseFirestore.instance
                                           .collection('chats')
                                           .doc(chatId)
@@ -1074,7 +1083,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                             FieldValue.serverTimestamp(),
                                       }, SetOptions(merge: true));
 
-                                      // 4. Đóng thông báo
                                       if (ctx.mounted) Navigator.pop(ctx);
                                       if (context.mounted)
                                         Navigator.pop(context);
@@ -1102,6 +1110,186 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 );
               });
         });
+  }
+
+  Widget _buildChatPanel() {
+    bool isVN = languageNotifier.value == "Tiếng Việt";
+
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: [
+          // --- 1. HEADER KHUNG CHAT ---
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            color: primaryColor.withOpacity(0.1),
+            width: double.infinity,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  isVN ? "Khung Chat" : "Chat Box",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isChatOpen = false;
+                    });
+                  },
+                  child:
+                      const Icon(Icons.close, color: Colors.black54, size: 22),
+                ),
+              ],
+            ),
+          ),
+
+          // --- 2. DANH SÁCH TIN NHẮN ---
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('study_rooms')
+                  .doc(widget.roomId)
+                  .collection('messages')
+                  .orderBy('timestamp', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+                final docs = snapshot.data!.docs;
+                return ListView.builder(
+                  reverse: true,
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(12),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final msg = docs[index].data() as Map<String, dynamic>;
+                    final isMe = msg['senderId'] == widget.userId;
+                    final isSystem = msg['isSystem'] ?? false;
+
+                    if (isSystem) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            msg['text'],
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return Align(
+                      alignment:
+                          isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? primaryColor.withOpacity(0.9)
+                              : Colors.grey.shade200,
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(16),
+                            topRight: const Radius.circular(16),
+                            bottomLeft: Radius.circular(isMe ? 16 : 4),
+                            bottomRight: Radius.circular(isMe ? 4 : 16),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: isMe
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
+                          children: [
+                            if (!isMe)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  msg['senderName'],
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                              ),
+                            Text(
+                              msg['text'],
+                              style: TextStyle(
+                                color: isMe ? Colors.white : Colors.black87,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+
+          // --- 3. KHUNG NHẬP TIN NHẮN ---
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                top: BorderSide(color: Colors.grey.shade200),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: TextField(
+                      controller: _chatController,
+                      decoration: InputDecoration(
+                        hintText:
+                            isVN ? "Nhập tin nhắn..." : "Type a message...",
+                        border: InputBorder.none,
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.send_rounded,
+                        color: Colors.white, size: 20),
+                    onPressed: _sendMessage,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showRoomCodeDialog() {
@@ -1141,7 +1329,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           TextButton.icon(
             icon: Icon(Icons.share, color: primaryColor),
             onPressed: () {
-              _showShareToFriendBottomSheet(); // Gọi hàm vừa thêm ở trên
+              _showShareToFriendBottomSheet();
             },
             label: Text(isVN ? "Gửi bạn bè" : "Send to friend",
                 style: TextStyle(
@@ -1239,24 +1427,20 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         builder: (context, lang, child) {
           bool isVN = lang == "Tiếng Việt";
           List<Widget> videoWidgets = [];
-          // 1. Thêm khung hình của BẢN THÂN
+
           videoWidgets.add(
             _buildVideoView(
               _localRenderer,
               isVN ? "${widget.userName} (Bạn)" : "${widget.userName} (You)",
               _isVideoOff,
               _isMuted,
-              isHost:
-                  widget.isHost, // 🔥 THÊM MỚI: Truyền trạng thái Host của mình
+              isHost: widget.isHost,
             ),
           );
 
-          // 2. Thêm khung hình của CÁC THÀNH VIÊN KHÁC
           _remoteRenderers.forEach((peerId, renderer) {
             bool isRemoteCamOff = _remoteStates[peerId]?['camOff'] ?? false;
             bool isRemoteMicOff = _remoteStates[peerId]?['micOff'] ?? false;
-
-            // 🔥 THÊM MỚI: Kiểm tra xem thành viên này có phải là Host hay không
             bool isRemoteHost = peerId == _hostId;
 
             videoWidgets.add(
@@ -1265,8 +1449,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 _remoteNames[peerId] ?? (isVN ? "Người dùng" : "User"),
                 isRemoteCamOff,
                 isRemoteMicOff,
-                isHost:
-                    isRemoteHost, // 🔥 THÊM MỚI: Truyền trạng thái Host của bạn bè
+                isHost: isRemoteHost,
               ),
             );
           });
@@ -1279,10 +1462,10 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           Widget mainBody = Column(
             children: [
               Expanded(
-                child: Row(
+                child: Stack(
                   children: [
-                    Expanded(
-                      flex: 3,
+                    // Nội dung video nằm ở dưới
+                    Positioned.fill(
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: GridView.count(
@@ -1295,160 +1478,17 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                         ),
                       ),
                     ),
-                    if (_isChatOpen)
-                      Expanded(
-                        flex: 2,
-                        child: Container(
-                          color: Colors.white,
-                          child: Column(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                color: primaryColor.withOpacity(0.1),
-                                width: double.infinity,
-                                child: Text(
-                                  isVN ? "Khung Chat" : "Chat Box",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: StreamBuilder<QuerySnapshot>(
-                                  stream: FirebaseFirestore.instance
-                                      .collection('study_rooms')
-                                      .doc(widget.roomId)
-                                      .collection('messages')
-                                      .orderBy('timestamp', descending: true)
-                                      .snapshots(),
-                                  builder: (context, snapshot) {
-                                    if (!snapshot.hasData)
-                                      return const Center(
-                                        child: CircularProgressIndicator(),
-                                      );
-                                    final docs = snapshot.data!.docs;
-                                    return ListView.builder(
-                                      reverse: true,
-                                      controller: _scrollController,
-                                      padding: const EdgeInsets.all(8),
-                                      itemCount: docs.length,
-                                      itemBuilder: (context, index) {
-                                        final msg = docs[index].data()
-                                            as Map<String, dynamic>;
-                                        final isMe =
-                                            msg['senderId'] == widget.userId;
-                                        final isSystem =
-                                            msg['isSystem'] ?? false;
-                                        if (isSystem) {
-                                          return Center(
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                vertical: 4,
-                                              ),
-                                              child: Text(
-                                                msg['text'],
-                                                style: const TextStyle(
-                                                  color: Colors.grey,
-                                                  fontSize: 12,
-                                                  fontStyle: FontStyle.italic,
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                        return Align(
-                                          alignment: isMe
-                                              ? Alignment.centerRight
-                                              : Alignment.centerLeft,
-                                          child: Container(
-                                            margin: const EdgeInsets.symmetric(
-                                              vertical: 4,
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 8,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: isMe
-                                                  ? primaryColor
-                                                      .withOpacity(0.9)
-                                                  : Colors.grey.shade200,
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            child: Column(
-                                              crossAxisAlignment: isMe
-                                                  ? CrossAxisAlignment.end
-                                                  : CrossAxisAlignment.start,
-                                              children: [
-                                                if (!isMe)
-                                                  Text(
-                                                    msg['senderName'],
-                                                    style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 10,
-                                                      color: Colors.black54,
-                                                    ),
-                                                  ),
-                                                Text(
-                                                  msg['text'],
-                                                  style: TextStyle(
-                                                    color: isMe
-                                                        ? Colors.white
-                                                        : Colors.black87,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey.shade100,
-                                  border: Border(
-                                    top:
-                                        BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: TextField(
-                                        controller: _chatController,
-                                        decoration: InputDecoration(
-                                          hintText: isVN
-                                              ? "Nhập tin nhắn..."
-                                              : "Type a message...",
-                                          border: InputBorder.none,
-                                        ),
-                                        onSubmitted: (_) => _sendMessage(),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon:
-                                          Icon(Icons.send, color: primaryColor),
-                                      onPressed: _sendMessage,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+
+                    // Khung Chat trượt nằm ở trên lớp video (sửa lỗi ParentDataWidget)
+                    AnimatedPositioned(
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.fastOutSlowIn,
+                      top: 0,
+                      bottom: 0,
+                      right: _isChatOpen ? 0 : -340,
+                      width: 340,
+                      child: _buildChatPanel(),
+                    ),
                   ],
                 ),
               ),
@@ -1456,7 +1496,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 color: Colors.black87,
                 child: SafeArea(
-                  // 🔥 FIX: Dùng LayoutBuilder để lấy chính xác chiều rộng của khung 500px thay vì toàn bộ màn hình
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       return SingleChildScrollView(
@@ -1480,6 +1519,20 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                 label: "Cam",
                                 color: _isVideoOff ? Colors.red : Colors.white,
                                 onTap: _toggleVideo,
+                              ),
+                              _buildControlButton(
+                                icon: _isScreenSharing
+                                    ? Icons.stop_screen_share
+                                    : Icons.screen_share,
+                                label:
+                                    _isScreenSharing ? "Dừng Share" : "Chia sẻ",
+                                color: _isScreenSharing
+                                    ? Colors.redAccent
+                                    : Colors.white,
+                                bgColor: _isScreenSharing
+                                    ? Colors.red.withOpacity(0.2)
+                                    : null,
+                                onTap: _toggleScreenShare,
                               ),
                               _buildControlButton(
                                 icon: Icons.checklist,
@@ -1512,10 +1565,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                                   title: Text(widget.goals[i]),
                                                   value: _personalTaskStatus[i],
                                                   onChanged: (val) {
-                                                    setState(
-                                                      () => _personalTaskStatus[
-                                                          i] = val!,
-                                                    );
+                                                    setState(() =>
+                                                        _personalTaskStatus[i] =
+                                                            val!);
                                                     this.setState(() {});
                                                   },
                                                 ),
@@ -1552,16 +1604,13 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                           Expanded(
                                             child: ListView(
                                               children: [
-                                                // Hiển thị Bản thân (có check luôn nếu bản thân là Host)
                                                 ListTile(
                                                   title: Text(isVN
                                                       ? "${widget.userName} (Bạn)${widget.isHost ? ' (Chủ phòng)' : ''}"
                                                       : "${widget.userName} (You)${widget.isHost ? ' (Host)' : ''}"),
                                                 ),
-                                                // Hiển thị những người khác
                                                 ..._remoteNames.entries.map(
                                                   (entry) {
-                                                    // 🔥 KIỂM TRA AI LÀ HOST ĐỂ GẮN TAG
                                                     bool isRemoteHost =
                                                         entry.key == _hostId;
                                                     return ListTile(
@@ -1633,11 +1682,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                       ],
                                     ),
                                     const SizedBox(height: 4),
-                                    const Text(
-                                      "Chat",
-                                      style: TextStyle(
-                                          color: Colors.white, fontSize: 12),
-                                    ),
+                                    const Text("Chat",
+                                        style: TextStyle(
+                                            color: Colors.white, fontSize: 12)),
                                   ],
                                 ),
                               ),
@@ -1694,17 +1741,13 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                   ],
                 ),
                 centerTitle: true,
-
-                // 🔥 ĐOẠN CODE THÊM MỚI: NÚT XEM VÀ CHIA SẺ MÃ PHÒNG (Góc trên bên phải)
                 actions: [
                   if (widget.isPrivate && widget.roomCode != null)
                     IconButton(
                       icon: const Icon(Icons.share, color: Colors.white),
-                      onPressed:
-                          _showRoomCodeDialog, // Gọi lại hộp thoại hiện mã phòng
+                      onPressed: _showRoomCodeDialog,
                     ),
                 ],
-                // 🔥 KẾT THÚC ĐOẠN THÊM MỚI
               ),
               body: Stack(
                 children: [
@@ -1719,9 +1762,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
                                 color: Colors.redAccent,
                                 borderRadius: BorderRadius.circular(12),
@@ -1736,10 +1777,9 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                               child: Text(
                                 "${_afkTimeoutSeconds ~/ 60}:${(_afkTimeoutSeconds % 60).toString().padLeft(2, '0')}",
                                 style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13),
                               ),
                             ),
                             const SizedBox(height: 5),
@@ -1756,11 +1796,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                   ),
                                 ],
                               ),
-                              child: const Icon(
-                                Icons.mark_chat_unread,
-                                color: Colors.white,
-                                size: 35,
-                              ),
+                              child: const Icon(Icons.mark_chat_unread,
+                                  color: Colors.white, size: 35),
                             ),
                           ],
                         ),
@@ -1778,7 +1815,7 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     String name,
     bool isCamOff,
     bool isMuted, {
-    required bool isHost, // 🔥 THÊM MỚI: Nhận tham số kiểm tra Host
+    required bool isHost,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -1802,8 +1839,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                 child: const Icon(Icons.person, size: 30, color: Colors.white),
               ),
             ),
-
-          // THANH HIỂN THỊ TÊN VÀ TRẠNG THÁI HOST (Góc dưới bên trái)
           Positioned(
             bottom: 10,
             left: 10,
@@ -1816,7 +1851,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 🔥 THÊM MỚI: Nếu là Host, hiển thị thêm biểu tượng ngôi sao vàng xịn sò
                   if (isHost) ...[
                     const Icon(Icons.stars, color: Colors.amber, size: 14),
                     const SizedBox(width: 4),
@@ -1832,7 +1866,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
               ),
             ),
           ),
-
           if (isMuted)
             const Positioned(
               top: 10,

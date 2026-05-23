@@ -1343,11 +1343,13 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Hàm build lưới menu - Chỉ cập nhật phần đổ bóng cho các nút
   Widget _buildGridMenu(BuildContext context, List<MenuData> items, bool isVN) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16),
+      clipBehavior: Clip.none,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
           mainAxisSpacing: 12,
@@ -1357,107 +1359,124 @@ class _HomePageState extends State<HomePage> {
       itemBuilder: (context, index) {
         final item = items[index];
 
-        return Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          shadowColor: Colors.black.withOpacity(0.06),
-          elevation: 2,
-          child: InkWell(
-            splashColor: item.color.withOpacity(0.12),
-            highlightColor: item.color.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(20),
-            onTap: () async {
-              if (item.title == "Tạo phòng học") {
-                await Navigator.push(
-                  context,
-                  slidePageRoute(
-                    CreateRoomPage(
-                      userId: widget.userId,
-                      userName: _realName,
-                      userClass: _realClass,
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white, // Giữ nguyên màu nền trắng
+            borderRadius: BorderRadius.circular(20), // Giữ nguyên bo góc
+            boxShadow: [
+              BoxShadow(
+                // Tăng nhẹ lên 0.12 để bóng rõ nét hơn trên nền sáng
+                color: Colors.black.withOpacity(0.1),
+                // Thu gọn lại tầm 16 - 20 để bóng tập trung đổ quanh viền nút
+                blurRadius: 18,
+                // Lệch xuống dưới một chút
+                offset: const Offset(0, 8),
+                // Giảm độ co giãn của bóng để nó không bị lấn quá sâu sang ô khác
+                spreadRadius: -2,
+              ),
+            ],
+          ),
+          child: Material(
+            // Bọc InkWell trong Material trong suốt để giữ hiệu ứng nhấn (ripple)
+            color: Colors.transparent,
+            child: InkWell(
+              splashColor: item.color.withOpacity(0.12),
+              highlightColor: item.color.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(20),
+              onTap: () async {
+                // ... (Giữ nguyên toàn bộ logic onTap cũ của bạn) ...
+                if (item.title == "Tạo phòng học") {
+                  await Navigator.push(
+                    context,
+                    slidePageRoute(
+                      CreateRoomPage(
+                        userId: widget.userId,
+                        userName: _realName,
+                        userClass: _realClass,
+                      ),
                     ),
-                  ),
-                );
-              } else if (item.title == "Học offline") {
-                final result = await Navigator.push(
-                  context,
-                  slidePageRoute(
-                    OfflineStudyPage(userId: widget.userId),
-                  ),
-                );
-                if (result is int) await _updateStudyProgress(result);
-              } else if (item.title == "Trợ lý học tập") {
-                await Navigator.push(
-                  context,
-                  slidePageRoute(
-                    const AIAssistantPage(),
-                  ),
-                );
-              } else if (item.title == "Tìm phòng học") {
-                await Navigator.push(
-                  context,
-                  slidePageRoute(
-                    RoomSearchPage(
-                      currentUserId: widget.userId,
-                      currentUserName: _realName,
+                  );
+                } else if (item.title == "Học offline") {
+                  final result = await Navigator.push(
+                    context,
+                    slidePageRoute(
+                      OfflineStudyPage(userId: widget.userId),
                     ),
-                  ),
-                );
-              } else if (item.title == "Kế hoạch học tập") {
-                await Navigator.push(
-                  context,
-                  slidePageRoute(
-                    PlanPage(userId: widget.userId),
-                  ),
-                );
-              } else if (item.title == "Bảng xếp hạng") {
-                await Navigator.push(
-                  context,
-                  slidePageRoute(
-                    LeaderboardPage(currentUserId: widget.userId),
-                  ),
-                );
-              } else if (item.title == "Lịch sử học tập") {
-                await Navigator.push(
-                  context,
-                  slidePageRoute(
-                    HistoryPage(userId: widget.userId),
-                  ),
-                );
-              } else if (item.title == "Thành tích") {
-                await Navigator.push(
-                  context,
-                  slidePageRoute(
-                    StatisticsPage(userId: widget.userId),
-                  ),
-                );
-              } else if (item.title == "Bạn bè") {
-                await Navigator.push(
-                  context,
-                  slidePageRoute(
-                    FriendsPage(
-                      currentUserId: widget.userId,
-                      currentUserName: _realName,
+                  );
+                  if (result is int) await _updateStudyProgress(result);
+                } else if (item.title == "Trợ lý học tập") {
+                  await Navigator.push(
+                    context,
+                    slidePageRoute(
+                      const AIAssistantPage(),
                     ),
-                  ),
-                );
-              }
-            },
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                        color: item.color.withOpacity(0.1),
-                        shape: BoxShape.circle),
-                    child: Icon(item.icon, color: item.color, size: 30)),
-                const SizedBox(height: 8),
-                Text(_getMenuTitle(item.title, isVN),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.bold)),
-              ],
+                  );
+                } else if (item.title == "Tìm phòng học") {
+                  await Navigator.push(
+                    context,
+                    slidePageRoute(
+                      RoomSearchPage(
+                        currentUserId: widget.userId,
+                        currentUserName: _realName,
+                      ),
+                    ),
+                  );
+                } else if (item.title == "Kế hoạch học tập") {
+                  await Navigator.push(
+                    context,
+                    slidePageRoute(
+                      PlanPage(userId: widget.userId),
+                    ),
+                  );
+                } else if (item.title == "Bảng xếp hạng") {
+                  await Navigator.push(
+                    context,
+                    slidePageRoute(
+                      LeaderboardPage(currentUserId: widget.userId),
+                    ),
+                  );
+                } else if (item.title == "Lịch sử học tập") {
+                  await Navigator.push(
+                    context,
+                    slidePageRoute(
+                      HistoryPage(userId: widget.userId),
+                    ),
+                  );
+                } else if (item.title == "Thành tích") {
+                  await Navigator.push(
+                    context,
+                    slidePageRoute(
+                      StatisticsPage(userId: widget.userId),
+                    ),
+                  );
+                } else if (item.title == "Bạn bè") {
+                  await Navigator.push(
+                    context,
+                    slidePageRoute(
+                      FriendsPage(
+                        currentUserId: widget.userId,
+                        currentUserName: _realName,
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                          color: item.color.withOpacity(0.1),
+                          shape: BoxShape.circle),
+                      child: Icon(item.icon, color: item.color, size: 30)),
+                  const SizedBox(height: 8),
+                  Text(_getMenuTitle(item.title, isVN),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold)),
+                ],
+              ),
             ),
           ),
         );
