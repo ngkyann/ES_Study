@@ -190,9 +190,9 @@ class _SettingsPageState extends State<SettingsPage> {
     VoidCallback? onTap,
   }) {
     return Container(
-      color: Colors.white,
       margin: const EdgeInsets.only(bottom: 1),
       child: ListTile(
+        tileColor: Colors.white,
         leading: Icon(icon, color: primaryColor),
         title: Text(title, style: const TextStyle(fontSize: 15)),
         subtitle: Text(
