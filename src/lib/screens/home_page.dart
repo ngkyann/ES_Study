@@ -433,6 +433,31 @@ class _HomePageState extends State<HomePage> {
                                   });
 
                                   if (mounted) {
+                                    // 2. Lấy tên hiệu ứng theo ngôn ngữ hiện tại
+                                    String effectName = isVN
+                                        ? effect["nameVN"] as String
+                                        : effect["nameEN"] as String;
+
+                                    // 3. Hiển thị thông báo SnackBar
+                                    ScaffoldMessenger.of(context)
+                                      ..hideCurrentSnackBar()
+                                      ..showSnackBar(
+                                        SnackBar(
+                                          backgroundColor:
+                                              primaryColor, // Bạn có thể đổi màu tùy thích
+                                          content: Text(
+                                            isVN
+                                                ? 'Đã trang bị hiệu ứng: $effectName ✨'
+                                                : 'Equipped effect: $effectName ✨',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+
+                                    // 4. Đóng cửa sổ chọn hiệu ứng
                                     Navigator.pop(context);
                                   }
                                 },
@@ -891,12 +916,24 @@ class _HomePageState extends State<HomePage> {
   }
 
   Route slidePageRoute(Widget page) {
+    // 1. Khởi tạo vị trí bắt đầu mặc định (Trượt từ phải qua trái)
+    Offset begin = const Offset(1.0, 0.0);
+
+    // 2. Dùng if-else để bắt các trang muốn trượt từ trái qua phải
+    if (page is CreateRoomPage ||
+        page is PlanPage ||
+        page is HistoryPage ||
+        page is ProfilePage) {
+      begin = const Offset(-1.0, 0.0); // Đổi hướng: Bắt đầu từ rìa trái (-1.0)
+    }
+    // Các trang còn lại (OfflineStudyPage, RoomSearchPage, LeaderboardPage,
+    // StatisticsPage, FriendsPage, AIAssistantPage) sẽ tự động dùng mặc định (1.0)
+
     return PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 280),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionDuration: const Duration(milliseconds: 320),
+      reverseTransitionDuration: const Duration(milliseconds: 240),
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(1.0, 0.0);
         const end = Offset.zero;
 
         final tween = Tween(
@@ -950,7 +987,7 @@ class _HomePageState extends State<HomePage> {
         return Scaffold(
           backgroundColor: Colors.grey.shade50,
           appBar: null,
-          body: IndexedStack(
+          body: AnimatedSlideIndexedStack(
             index: _currentIndex,
             children: [
               // TAB 0: CỬA HÀNG VẬT PHẨM
@@ -1361,24 +1398,22 @@ class _HomePageState extends State<HomePage> {
 
         return Container(
           decoration: BoxDecoration(
-            color: Colors.white, // Giữ nguyên màu nền trắng
-            borderRadius: BorderRadius.circular(20), // Giữ nguyên bo góc
+            // 1. ĐÃ XÓA color: Colors.white ở đây
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                // Tăng nhẹ lên 0.12 để bóng rõ nét hơn trên nền sáng
                 color: Colors.black.withOpacity(0.1),
-                // Thu gọn lại tầm 16 - 20 để bóng tập trung đổ quanh viền nút
                 blurRadius: 18,
-                // Lệch xuống dưới một chút
                 offset: const Offset(0, 8),
-                // Giảm độ co giãn của bóng để nó không bị lấn quá sâu sang ô khác
                 spreadRadius: -2,
               ),
             ],
           ),
           child: Material(
-            // Bọc InkWell trong Material trong suốt để giữ hiệu ứng nhấn (ripple)
-            color: Colors.transparent,
+            // 2. CHUYỂN màu trắng vào đây để làm nền chuẩn cho InkWell
+            color: Colors.white,
+            // 3. Thêm bo góc cho Material để nó khớp với viền bóng đổ
+            borderRadius: BorderRadius.circular(20),
             child: InkWell(
               splashColor: item.color.withOpacity(0.12),
               highlightColor: item.color.withOpacity(0.06),
@@ -1481,6 +1516,116 @@ class _HomePageState extends State<HomePage> {
           ),
         );
       },
+    );
+  }
+}
+
+class AnimatedSlideIndexedStack extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+
+  const AnimatedSlideIndexedStack({
+    super.key,
+    required this.index,
+    required this.children,
+  });
+
+  @override
+  State<AnimatedSlideIndexedStack> createState() =>
+      _AnimatedSlideIndexedStackState();
+}
+
+class _AnimatedSlideIndexedStackState extends State<AnimatedSlideIndexedStack>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late int _currentIndex;
+  late int _previousIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.index;
+    _previousIndex = widget.index;
+    // Khởi tạo controller quản lý thời gian trượt (có thể chỉnh milliseconds tùy ý)
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _controller.value = 1.0;
+  }
+
+  @override
+  void didUpdateWidget(AnimatedSlideIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index != oldWidget.index) {
+      _previousIndex = oldWidget.index;
+      _currentIndex = widget.index;
+      // Kích hoạt animation chạy từ đầu mỗi khi đổi tab
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: List.generate(widget.children.length, (index) {
+        final child = widget.children[index];
+        final isCurrent = index == _currentIndex;
+        final isPrevious = index == _previousIndex;
+
+        if (!isCurrent && !isPrevious) {
+          return Offstage(offstage: true, child: child);
+        }
+
+        final bool isSlidingLeft = _currentIndex > _previousIndex;
+
+        if (isCurrent) {
+          // Trang MỚI: Vẫn trượt vào bình thường
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: Offset(isSlidingLeft ? 1.0 : -1.0, 0.0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
+              parent: _controller,
+              curve: Curves.easeOutCubic,
+            )),
+            child: child,
+          );
+        } else if (isPrevious) {
+          // 🔥 Trang CŨ: Bọc thêm IgnorePointer để vô hiệu hóa hoàn toàn cảm ứng
+          return IgnorePointer(
+            ignoring: true, // Khóa click, vuốt... vào trang cũ
+            child: FadeTransition(
+              opacity: Tween<double>(
+                begin: 1.0,
+                end: 0.0,
+              ).animate(CurvedAnimation(
+                parent: _controller,
+                curve: Curves.easeOutCubic,
+              )),
+              // Vẫn giữ trượt nhẹ (0.3) để tạo chiều sâu
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset.zero,
+                  end: Offset(isSlidingLeft ? -0.3 : 0.3, 0.0),
+                ).animate(CurvedAnimation(
+                  parent: _controller,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: child,
+              ),
+            ),
+          );
+        }
+
+        return const SizedBox.shrink();
+      }),
     );
   }
 }

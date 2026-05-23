@@ -37,6 +37,7 @@ class _ShopPageState extends State<ShopPage> {
 
     try {
       if (isOwned) {
+        // --- 1. LUỒNG TRANG BỊ (Khi đã sở hữu) ---
         if (item.type == ItemType.background) {
           await userRef.update({'bannerUrl': item.value});
         } else if (item.type == ItemType.avatar) {
@@ -47,6 +48,7 @@ class _ShopPageState extends State<ShopPage> {
 
         if (!mounted) return;
 
+        // Vẫn giữ SnackBar cho thao tác trang bị để nó diễn ra nhanh gọn
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
@@ -63,6 +65,7 @@ class _ShopPageState extends State<ShopPage> {
         return;
       }
 
+      // --- 2. LUỒNG MUA HÀNG (Chưa sở hữu) ---
       if (currentCoins < item.price) {
         if (!mounted) return;
 
@@ -80,18 +83,16 @@ class _ShopPageState extends State<ShopPage> {
         return;
       }
 
+      // CHỈ trừ tiền và thêm vào kho (KHÔNG tự động cập nhật banner/avatar đang dùng)
       Map<String, dynamic> updates = {
         'coin': FieldValue.increment(-item.price),
       };
 
       if (item.type == ItemType.background) {
-        updates['bannerUrl'] = item.value;
         updates['ownedBanners'] = FieldValue.arrayUnion([item.value]);
       } else if (item.type == ItemType.avatar) {
-        updates['avatarUrl'] = item.value;
         updates['ownedAvatars'] = FieldValue.arrayUnion([item.value]);
       } else {
-        updates['activeEffect'] = item.value;
         updates['ownedEffects'] = FieldValue.arrayUnion([item.value]);
       }
 
@@ -99,18 +100,47 @@ class _ShopPageState extends State<ShopPage> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.green,
+      // HIỂN THỊ POPUP CHÚC MỪNG MUA THÀNH CÔNG
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.celebration, color: Colors.orange, size: 28),
+                const SizedBox(width: 10),
+                Text(
+                  isVN ? 'Thành công!' : 'Success!',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
             content: Text(
               isVN
-                  ? 'Đã mua và trang bị: ${item.name} 🎉'
-                  : 'Purchased and equipped: ${item.name} 🎉',
+                  ? 'Chúc mừng bạn đã mua "${item.name}" thành công!'
+                  : 'Congratulations on purchasing "${item.name}"!',
+              style: const TextStyle(fontSize: 16),
             ),
-          ),
-        );
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: Text(
+                  isVN ? 'Đóng' : 'Close',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
     } catch (e) {
       debugPrint('Purchase error: $e');
     } finally {

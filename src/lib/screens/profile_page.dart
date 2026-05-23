@@ -353,7 +353,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 content: Text(isVN
                                     ? "Đã áp dụng thành công!"
                                     : "Applied successfully!"),
-                                backgroundColor: Colors.green,
+                                backgroundColor: primaryColor,
                               ),
                             );
                           },
