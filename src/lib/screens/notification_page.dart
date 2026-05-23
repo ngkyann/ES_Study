@@ -43,6 +43,13 @@ class _NotificationPageState extends State<NotificationPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_rounded),
+            tooltip: isVN ? "Xóa tất cả" : "Clear all",
+            onPressed: () => _confirmAndClearAll(context, isVN),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -323,5 +330,80 @@ class _NotificationPageState extends State<NotificationPage> {
         ],
       ),
     );
+  }
+
+  // Hàm hiển thị Dialog xác nhận và xử lý xóa
+  Future<void> _confirmAndClearAll(BuildContext context, bool isVN) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color.fromARGB(255, 255, 255, 255),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          isVN ? "Xóa tất cả?" : "Clear all?",
+          style: const TextStyle(color: Colors.black),
+        ),
+        content: Text(
+          isVN
+              ? "Bạn có chắc chắn muốn xóa toàn bộ thông báo không?"
+              : "Are you sure you want to delete all notifications?",
+          style: const TextStyle(color: Colors.black),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(isVN ? "Hủy" : "Cancel",
+                style: const TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(isVN ? "Xóa" : "Delete",
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    // Nếu người dùng chọn "Hủy" hoặc bấm ra ngoài
+    if (confirm != true) return;
+
+    // Xử lý xóa bằng WriteBatch
+    try {
+      final collection = FirebaseFirestore.instance.collection('notifications');
+      final snapshot =
+          await collection.where('userId', isEqualTo: widget.userId).get();
+
+      if (snapshot.docs.isEmpty) return; // Không có gì để xóa
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isVN
+                ? "Đã xóa toàn bộ thông báo!"
+                : "All notifications cleared!"),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                isVN ? "Lỗi khi xóa: $e" : "Error clearing notifications: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

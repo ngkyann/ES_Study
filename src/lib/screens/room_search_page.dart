@@ -338,8 +338,8 @@ class _RoomSearchPageState extends State<RoomSearchPage> {
                           setState(() => _searchId = value.trim()),
                       decoration: InputDecoration(
                         hintText: isVN
-                            ? "Tìm kiếm theo @ID...(@id_chủ_phòng)"
-                            : "Search by @ID...(@host_id)",
+                            ? "Tìm kiếm theo @ID...(@chủ_phòng)"
+                            : "Search by @ID...(@host)",
                         prefixIcon: const Icon(Icons.search),
                         filled: true,
                         fillColor: Colors.grey.shade100,

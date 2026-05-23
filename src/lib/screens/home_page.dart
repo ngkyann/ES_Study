@@ -61,6 +61,7 @@ class _HomePageState extends State<HomePage> {
   String _realName = '';
   String _realClass = '';
   int _currentIndex = 1;
+  bool _isUpdating = false;
 
   String _activeEffect = '';
   Map<String, dynamic>? userData;
@@ -421,44 +422,51 @@ class _HomePageState extends State<HomePage> {
                         elevation: selected ? 8 : 2,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(24),
-                          onTap: !owned
+                          onTap: (!owned || _isUpdating)
                               ? null
                               : () async {
-                                  await FirebaseFirestore.instance
-                                      .collection('users')
-                                      .doc(widget.userId)
-                                      .update({
-                                    'activeEffect':
-                                        effectId == "cloud" ? "" : effectId,
-                                  });
+                                  setState(() => _isUpdating = true);
+                                  try {
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(widget.userId)
+                                        .update({
+                                      'activeEffect':
+                                          effectId == "cloud" ? "" : effectId,
+                                    });
+                                    if (mounted) {
+                                      // 2. Lấy tên hiệu ứng theo ngôn ngữ hiện tại
+                                      String effectName = isVN
+                                          ? effect["nameVN"] as String
+                                          : effect["nameEN"] as String;
 
-                                  if (mounted) {
-                                    // 2. Lấy tên hiệu ứng theo ngôn ngữ hiện tại
-                                    String effectName = isVN
-                                        ? effect["nameVN"] as String
-                                        : effect["nameEN"] as String;
-
-                                    // 3. Hiển thị thông báo SnackBar
-                                    ScaffoldMessenger.of(context)
-                                      ..hideCurrentSnackBar()
-                                      ..showSnackBar(
-                                        SnackBar(
-                                          backgroundColor:
-                                              primaryColor, // Bạn có thể đổi màu tùy thích
-                                          content: Text(
-                                            isVN
-                                                ? 'Đã trang bị hiệu ứng: $effectName ✨'
-                                                : 'Equipped effect: $effectName ✨',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
+                                      // 3. Hiển thị thông báo SnackBar
+                                      ScaffoldMessenger.of(context)
+                                        ..hideCurrentSnackBar()
+                                        ..showSnackBar(
+                                          SnackBar(
+                                            backgroundColor:
+                                                primaryColor, // Bạn có thể đổi màu tùy thích
+                                            content: Text(
+                                              isVN
+                                                  ? 'Đã trang bị hiệu ứng: $effectName ✨'
+                                                  : 'Equipped effect: $effectName ✨',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
+                                            duration:
+                                                const Duration(seconds: 2),
                                           ),
-                                          duration: const Duration(seconds: 2),
-                                        ),
-                                      );
-
-                                    // 4. Đóng cửa sổ chọn hiệu ứng
-                                    Navigator.pop(context);
+                                        );
+                                      // 4. Đóng cửa sổ chọn hiệu ứng
+                                      Navigator.pop(context);
+                                    }
+                                  } catch (e) {
+                                    debugPrint("Lỗi cập nhật hiệu ứng: $e");
+                                  } finally {
+                                    if (mounted)
+                                      setState(() => _isUpdating = false);
                                   }
                                 },
                           child: Container(
@@ -1182,7 +1190,13 @@ class _HomePageState extends State<HomePage> {
   Widget _buildHomeContent(bool isVN) {
     return RefreshIndicator(
       color: primaryColor,
-      onRefresh: () async => _startListeningUserData(),
+      backgroundColor: Colors.white,
+      displacement: 50,
+      strokeWidth: 3,
+      onRefresh: () async {
+        _startListeningUserData();
+        await Future.delayed(const Duration(milliseconds: 1000));
+      },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Column(

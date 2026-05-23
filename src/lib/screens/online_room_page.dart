@@ -57,7 +57,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
   bool _isMuted = true;
   bool _isVideoOff = true;
   bool _isChatOpen = false;
-  bool _isScreenSharing = false;
   String? _hostId;
   // CHAT & NOTIFICATIONS
   final TextEditingController _chatController = TextEditingController();
@@ -490,53 +489,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
         ],
       ),
     ).then((_) => _isAfkDialogOpen = false);
-  }
-
-  Future<void> _toggleScreenShare() async {
-    try {
-      if (_isScreenSharing) {
-        MediaStream cameraStream = await navigator.mediaDevices.getUserMedia({
-          'video': true,
-          'audio': false,
-        });
-        var newVideoTrack = cameraStream.getVideoTracks()[0];
-
-        var oldVideoTrack = _localStream?.getVideoTracks()[0];
-        if (oldVideoTrack != null) {
-          _localStream?.removeTrack(oldVideoTrack);
-          oldVideoTrack.stop();
-        }
-        _localStream?.addTrack(newVideoTrack);
-
-        setState(() {
-          _isScreenSharing = false;
-        });
-      } else {
-        MediaStream screenStream =
-            await navigator.mediaDevices.getDisplayMedia({
-          'video': true,
-          'audio': false,
-        });
-        var newVideoTrack = screenStream.getVideoTracks()[0];
-
-        newVideoTrack.onEnded = () {
-          if (mounted && _isScreenSharing) _toggleScreenShare();
-        };
-
-        var oldVideoTrack = _localStream?.getVideoTracks()[0];
-        if (oldVideoTrack != null) {
-          _localStream?.removeTrack(oldVideoTrack);
-          oldVideoTrack.stop();
-        }
-        _localStream?.addTrack(newVideoTrack);
-
-        setState(() {
-          _isScreenSharing = true;
-        });
-      }
-    } catch (e) {
-      debugPrint("Lỗi chia sẻ màn hình: $e");
-    }
   }
 
   Future<void> _createPeerConnection(
@@ -1116,7 +1068,14 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     bool isVN = languageNotifier.value == "Tiếng Việt";
 
     return Container(
-      color: Colors.white,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24), // Bo tròn góc trên bên trái
+          bottomLeft:
+              Radius.circular(24), // Bo tròn góc dưới bên trái (nếu cần)
+        ),
+      ),
       child: Column(
         children: [
           // --- 1. HEADER KHUNG CHAT ---
@@ -1245,10 +1204,12 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
           // --- 3. KHUNG NHẬP TIN NHẮN ---
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Colors.grey.shade200),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(24), // Bo tròn góc trên bên trái
+                bottomLeft:
+                    Radius.circular(24), // Bo tròn góc dưới bên trái (nếu cần)
               ),
             ),
             child: Row(
@@ -1519,20 +1480,6 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
                                 label: "Cam",
                                 color: _isVideoOff ? Colors.red : Colors.white,
                                 onTap: _toggleVideo,
-                              ),
-                              _buildControlButton(
-                                icon: _isScreenSharing
-                                    ? Icons.stop_screen_share
-                                    : Icons.screen_share,
-                                label:
-                                    _isScreenSharing ? "Dừng Share" : "Chia sẻ",
-                                color: _isScreenSharing
-                                    ? Colors.redAccent
-                                    : Colors.white,
-                                bgColor: _isScreenSharing
-                                    ? Colors.red.withOpacity(0.2)
-                                    : null,
-                                onTap: _toggleScreenShare,
                               ),
                               _buildControlButton(
                                 icon: Icons.checklist,

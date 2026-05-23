@@ -588,7 +588,7 @@ List<ShopItemData> avatarItems(bool isVN) {
     ),
     ShopItemData(
       id: 'av_astro',
-      name: isVN ? 'Chăm chỉ' : 'Diligence',
+      name: isVN ? 'Học tập' : 'Study',
       price: 300,
       value: 'https://cdn-icons-png.flaticon.com/512/825/825590.png',
       icon: Icons.rocket_launch,
@@ -630,15 +630,6 @@ List<ShopItemData> avatarItems(bool isVN) {
       icon: Icons.pets,
       type: ItemType.avatar,
       color: Colors.blueAccent,
-    ),
-    ShopItemData(
-      id: 'av_dragon',
-      name: isVN ? 'Rồng' : 'Dragon',
-      price: 1000,
-      value: 'https://cdn-icons-png.flaticon.com/512/3069/3069174.png',
-      icon: Icons.pets,
-      type: ItemType.avatar,
-      color: Colors.deepOrange,
     ),
     ShopItemData(
       id: 'av_knight',
