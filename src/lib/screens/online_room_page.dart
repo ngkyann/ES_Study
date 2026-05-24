@@ -118,6 +118,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
     if (_maxAfkChecks > 0) {
       _nextAfkTargetSeconds = _random.nextInt(121) + 780;
     }
+    debugPrint(
+        "🤖 [Anti-AFK]: Lần điểm danh tiếp theo sẽ xuất hiện sau $_nextAfkTargetSeconds giây nữa!");
     _initRoom();
   }
 
