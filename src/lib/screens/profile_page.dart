@@ -475,8 +475,9 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _showSelectFeaturedFriendDialog(
-      List<dynamic> myFriends, String? currentFeaturedId, bool isVN) {
-    String? localSelectedId = currentFeaturedId;
+      List<dynamic> myFriends, List<String> currentFeaturedIds, bool isVN) {
+    // Tạo bản sao danh sách ID để thao tác
+    List<String> localSelectedIds = List.from(currentFeaturedIds);
 
     showModalBottomSheet(
         context: context,
@@ -490,7 +491,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
-                      isVN ? "Chọn Bạn thân nổi bật" : "Select Featured Friend",
+                      isVN
+                          ? "Chọn Bạn thân nổi bật"
+                          : "Select Featured Friends",
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
@@ -523,7 +526,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             itemBuilder: (context, index) {
                               final friend = validFriends[index];
                               final bool isSelected =
-                                  friend['id'] == localSelectedId;
+                                  localSelectedIds.contains(friend['id']);
 
                               return ListTile(
                                 leading: CircleAvatar(
@@ -554,9 +557,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                             color: Colors.orange,
                                             fontWeight: FontWeight.bold)),
                                     const SizedBox(width: 10),
+                                    // 🔥 HIỂN THỊ TICK XANH NẾU ĐÃ CHỌN
                                     if (isSelected)
-                                      const Icon(Icons.remove_circle,
-                                          color: Colors.red, size: 24)
+                                      const Icon(Icons.check_circle,
+                                          color: Colors.green, size: 24)
                                     else
                                       Icon(Icons.circle_outlined,
                                           color: Colors.grey.shade400,
@@ -564,41 +568,22 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ],
                                 ),
                                 onTap: () async {
+                                  // 🔥 LOGIC THÊM/BỚT NHIỀU NGƯỜI
                                   if (isSelected) {
-                                    setModalState(() => localSelectedId = null);
-                                    await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(widget.userId)
-                                        .update({
-                                      'featuredFriendId': FieldValue.delete()
-                                    });
-
-                                    if (context.mounted) Navigator.pop(ctx);
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(SnackBar(
-                                              content: Text(isVN
-                                                  ? "Đã gỡ bạn thân nổi bật!"
-                                                  : "Featured friend removed!")));
-                                    }
+                                    setModalState(() =>
+                                        localSelectedIds.remove(friend['id']));
                                   } else {
-                                    setModalState(
-                                        () => localSelectedId = friend['id']);
-                                    await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(widget.userId)
-                                        .update(
-                                            {'featuredFriendId': friend['id']});
-
-                                    if (context.mounted) Navigator.pop(ctx);
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(SnackBar(
-                                              content: Text(isVN
-                                                  ? "Đã cài đặt bạn thân nổi bật!"
-                                                  : "Featured friend set!")));
-                                    }
+                                    setModalState(() =>
+                                        localSelectedIds.add(friend['id']));
                                   }
+
+                                  // Lưu trực tiếp vào Database để cập nhật Realtime
+                                  await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(widget.userId)
+                                      .update({
+                                    'featuredFriendIds': localSelectedIds
+                                  });
                                 },
                               );
                             });
@@ -823,7 +808,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 int currentStreak = widget.userStreak;
                 String joinDateText = isVN ? "Đang tải..." : "Loading...";
                 List<dynamic> myFriends = [];
-                String? featuredId = widget.userId;
+                List<String> featuredIds = [];
 
                 List<String> ownedAvatars = [];
                 List<String> ownedBanners = [];
@@ -841,7 +826,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     currentPoints = data['points'] ?? widget.userPoints;
                     currentStreak = data['streak'] ?? widget.userStreak;
                     myFriends = data['friends'] ?? [];
-                    featuredId = data['featuredFriendId'];
+                    if (data['featuredFriendIds'] != null) {
+                      featuredIds =
+                          List<String>.from(data['featuredFriendIds']);
+                    } else if (data['featuredFriendId'] != null) {
+                      featuredIds = [data['featuredFriendId']];
+                    }
 
                     ownedAvatars =
                         List<String>.from(data['ownedAvatars'] ?? []);
@@ -1060,129 +1050,170 @@ class _ProfilePageState extends State<ProfilePage> {
                                   side: BorderSide(
                                       color: Colors.orange.shade200)),
                               color: Colors.orange.shade50,
-                              child: ListTile(
-                                onTap: () => _showSelectFeaturedFriendDialog(
-                                    myFriends, featuredId, isVN),
-                                leading: const Icon(Icons.favorite,
-                                    color: Colors.redAccent),
-                                title: Text(
-                                    isVN ? "Bạn thân học tập" : "Study Bestie",
-                                    style: const TextStyle(
-                                        fontSize: 13, color: Colors.grey)),
-                                subtitle: featuredId == null
-                                    ? Text(
-                                        isVN
-                                            ? "Chạm để chọn..."
-                                            : "Tap to select...",
-                                        style: const TextStyle(
-                                            color: Colors.orange,
-                                            fontStyle: FontStyle.italic))
-                                    : FutureBuilder<DocumentSnapshot>(
-                                        future: FirebaseFirestore.instance
-                                            .collection('users')
-                                            .doc(featuredId)
-                                            .get(),
-                                        builder: (context, fSnap) {
-                                          if (!fSnap.hasData)
-                                            return const Text("...");
-                                          String fName =
-                                              fSnap.data!.get('name');
-                                          return FutureBuilder<
-                                                  DocumentSnapshot>(
-                                              future: FirebaseFirestore.instance
-                                                  .collection('friend_streaks')
-                                                  .doc(_getChatId(widget.userId,
-                                                      featuredId!))
-                                                  .get(),
-                                              builder: (context, sSnap) {
-                                                if (!sSnap.hasData)
-                                                  return const Text("...");
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Column(
+                                  children: [
+                                    ListTile(
+                                      onTap: () =>
+                                          _showSelectFeaturedFriendDialog(
+                                              myFriends, featuredIds, isVN),
+                                      leading: const Icon(Icons.favorite,
+                                          color: Colors.redAccent),
+                                      title: Text(
+                                          isVN
+                                              ? "Bạn thân học tập"
+                                              : "Study Besties",
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey)),
+                                      trailing: const Icon(Icons.edit,
+                                          size: 16, color: Colors.grey),
+                                    ),
+                                    if (featuredIds.isEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                            left: 72.0, bottom: 8.0),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                              isVN
+                                                  ? "Chạm để chọn..."
+                                                  : "Tap to select...",
+                                              style: const TextStyle(
+                                                  color: Colors.orange,
+                                                  fontStyle: FontStyle.italic)),
+                                        ),
+                                      )
+                                    else
+                                      ...featuredIds.map((fId) {
+                                        return FutureBuilder<DocumentSnapshot>(
+                                            future: FirebaseFirestore.instance
+                                                .collection('users')
+                                                .doc(fId)
+                                                .get(),
+                                            builder: (context, fSnap) {
+                                              if (!fSnap.hasData)
+                                                return const SizedBox();
+                                              String fName =
+                                                  fSnap.data!.get('name');
 
-                                                int streak = 0;
-                                                if (sSnap.data!.exists) {
-                                                  var data = sSnap.data!.data()
-                                                      as Map<String, dynamic>;
-                                                  streak = data['streak'] ?? 0;
+                                              return FutureBuilder<
+                                                      DocumentSnapshot>(
+                                                  future: FirebaseFirestore
+                                                      .instance
+                                                      .collection(
+                                                          'friend_streaks')
+                                                      .doc(_getChatId(
+                                                          widget.userId, fId))
+                                                      .get(),
+                                                  builder: (context, sSnap) {
+                                                    if (!sSnap.hasData)
+                                                      return const SizedBox();
 
-                                                  // 🔥 TỰ ĐỘNG TÍNH TOÁN LẠI CHUỖI THỰC TẾ TRÊN GIAO DIỆN
-                                                  Timestamp? lastTs =
-                                                      data['lastStudyDate'];
-                                                  if (lastTs != null) {
-                                                    DateTime now =
-                                                        DateTime.now();
-                                                    DateTime today = DateTime(
-                                                        now.year,
-                                                        now.month,
-                                                        now.day);
-                                                    DateTime lastDay = DateTime(
-                                                        lastTs.toDate().year,
-                                                        lastTs.toDate().month,
-                                                        lastTs.toDate().day);
-                                                    if (today
-                                                            .difference(lastDay)
-                                                            .inDays >
-                                                        1) {
+                                                    int streak = 0;
+                                                    if (sSnap.data!.exists) {
+                                                      var data =
+                                                          sSnap.data!.data()
+                                                              as Map<String,
+                                                                  dynamic>;
                                                       streak =
-                                                          0; // Bị mất chuỗi do nghỉ học
+                                                          data['streak'] ?? 0;
+
+                                                      // Tính toán tự động
+                                                      Timestamp? lastTs =
+                                                          data['lastStudyDate'];
+                                                      if (lastTs != null) {
+                                                        DateTime now =
+                                                            DateTime.now();
+                                                        DateTime today =
+                                                            DateTime(
+                                                                now.year,
+                                                                now.month,
+                                                                now.day);
+                                                        DateTime lastDay =
+                                                            DateTime(
+                                                                lastTs
+                                                                    .toDate()
+                                                                    .year,
+                                                                lastTs
+                                                                    .toDate()
+                                                                    .month,
+                                                                lastTs
+                                                                    .toDate()
+                                                                    .day);
+                                                        if (today
+                                                                .difference(
+                                                                    lastDay)
+                                                                .inDays >
+                                                            1) {
+                                                          streak = 0;
+                                                        }
+                                                      }
                                                     }
-                                                  }
-                                                }
 
-                                                // 🔥 NẾU CHUỖI DƯỚI 3, LẬP TỨC TỰ ĐỘNG GỠ BỎ KHỎI TÀI KHOẢN
-                                                if (streak < 3) {
-                                                  WidgetsBinding.instance
-                                                      .addPostFrameCallback(
-                                                          (_) {
-                                                    FirebaseFirestore.instance
-                                                        .collection('users')
-                                                        .doc(widget.userId)
-                                                        .update({
-                                                      'featuredFriendId':
-                                                          FieldValue.delete()
-                                                    });
+                                                    // Gỡ tự động nếu dưới 3
+                                                    if (streak < 3) {
+                                                      WidgetsBinding.instance
+                                                          .addPostFrameCallback(
+                                                              (_) {
+                                                        FirebaseFirestore
+                                                            .instance
+                                                            .collection('users')
+                                                            .doc(widget.userId)
+                                                            .update({
+                                                          'featuredFriendIds':
+                                                              FieldValue
+                                                                  .arrayRemove(
+                                                                      [fId])
+                                                        });
+                                                      });
+                                                      return const SizedBox();
+                                                    }
+
+                                                    // UI 1 Hàng Bạn Thân
+                                                    return Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              left: 72.0,
+                                                              bottom: 12.0),
+                                                      child: Row(
+                                                        children: [
+                                                          Text(fName,
+                                                              style: const TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize: 16,
+                                                                  color: Colors
+                                                                      .black87)),
+                                                          const SizedBox(
+                                                              width: 8),
+                                                          const Icon(
+                                                              Icons
+                                                                  .local_fire_department,
+                                                              color:
+                                                                  Colors.orange,
+                                                              size: 20),
+                                                          Text("$streak",
+                                                              style: const TextStyle(
+                                                                  color: Colors
+                                                                      .orange,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize:
+                                                                      16)),
+                                                        ],
+                                                      ),
+                                                    );
                                                   });
-                                                  return Text(
-                                                    isVN
-                                                        ? "Đã mất chuỗi, đang gỡ..."
-                                                        : "Streak lost, removing...",
-                                                    style: const TextStyle(
-                                                        color: Colors.red,
-                                                        fontStyle:
-                                                            FontStyle.italic),
-                                                  );
-                                                }
-
-                                                return Row(
-                                                  children: [
-                                                    Text(fName,
-                                                        style: const TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 16,
-                                                            color: Colors
-                                                                .black87)),
-                                                    const SizedBox(width: 8),
-                                                    const Icon(
-                                                        Icons
-                                                            .local_fire_department,
-                                                        color: Colors.orange,
-                                                        size: 20),
-                                                    Text("$streak",
-                                                        style: const TextStyle(
-                                                            color:
-                                                                Colors.orange,
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 16)),
-                                                  ],
-                                                );
-                                              });
-                                        }),
-                                trailing: const Icon(Icons.edit,
-                                    size: 16, color: Colors.grey),
+                                            });
+                                      }).toList(),
+                                  ],
+                                ),
                               ),
                             ),
-
                             _infoCard(
                               Icons.alternate_email,
                               isVN ? "ID người dùng" : "User ID",
