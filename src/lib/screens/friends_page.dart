@@ -914,23 +914,41 @@ class OtherUserProfilePage extends StatelessWidget {
       int rank = (higherScoreQuery.count ?? 0) + 1;
       data['rank'] = rank;
 
-      // Xử lý lấy thông tin Bạn thân học tập của họ
-      if (data['featuredFriendId'] != null) {
-        String fId = data['featuredFriendId'];
+      // 🔥 Xử lý lấy thông tin Bạn thân học tập của họ (Hỗ trợ danh sách mảng)
+      List<String> featuredIds = [];
+      if (data['featuredFriendIds'] != null) {
+        featuredIds = List<String>.from(data['featuredFriendIds']);
+      } else if (data['featuredFriendId'] != null) {
+        featuredIds = [data['featuredFriendId']];
+      }
+
+      List<Map<String, dynamic>> featuredFriendsData = [];
+      for (String fId in featuredIds) {
         var fDoc = await userRef.doc(fId).get();
         if (fDoc.exists) {
-          data['featuredFriendName'] = fDoc.data()?['name'] ?? 'Ẩn danh';
+          String fName = fDoc.data()?['name'] ?? 'Ẩn danh';
           String streakId =
               userId.compareTo(fId) < 0 ? '${userId}_$fId' : '${fId}_$userId';
           var streakDoc = await FirebaseFirestore.instance
               .collection('friend_streaks')
               .doc(streakId)
               .get();
+          int streak = 0;
           if (streakDoc.exists) {
-            data['featuredFriendStreak'] = streakDoc.data()?['streak'] ?? 0;
+            streak = streakDoc.data()?['streak'] ?? 0;
+          }
+          // Chỉ lấy những bạn thân có chuỗi >= 3
+          if (streak >= 3) {
+            featuredFriendsData.add({
+              'id': fId,
+              'name': fName,
+              'streak': streak,
+            });
           }
         }
       }
+      data['featuredFriendsData'] = featuredFriendsData;
+
       return data;
     } catch (e) {
       debugPrint("Lỗi khi tải thông tin user: $e");
@@ -1202,9 +1220,10 @@ class OtherUserProfilePage extends StatelessWidget {
                             _buildReadOnlyBioSection(isVN, bio),
 
                             // 2. Khối Bạn thân nổi bật
-                            if (data['featuredFriendId'] != null &&
-                                data['featuredFriendStreak'] != null &&
-                                data['featuredFriendStreak'] >= 3)
+                            // 2. Khối Bạn thân nổi bật (Hỗ trợ danh sách)
+                            if (data['featuredFriendsData'] != null &&
+                                (data['featuredFriendsData'] as List)
+                                    .isNotEmpty)
                               Card(
                                 elevation: 0,
                                 margin: const EdgeInsets.symmetric(vertical: 8),
@@ -1213,35 +1232,57 @@ class OtherUserProfilePage extends StatelessWidget {
                                     side: BorderSide(
                                         color: Colors.orange.shade200)),
                                 color: Colors.orange.shade50,
-                                child: ListTile(
-                                  leading: const Icon(Icons.favorite,
-                                      color: Colors.redAccent),
-                                  title: Text(
-                                      isVN
-                                          ? "Bạn thân học tập"
-                                          : "Study Bestie",
-                                      style: const TextStyle(
-                                          fontSize: 13, color: Colors.grey)),
-                                  subtitle: Row(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(data['featuredFriendName'],
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                              color: Colors.black87)),
-                                      const SizedBox(width: 8),
-                                      const Icon(Icons.local_fire_department,
-                                          color: Colors.orange, size: 20),
-                                      Text("${data['featuredFriendStreak']}",
-                                          style: const TextStyle(
-                                              color: Colors.orange,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16)),
+                                      ListTile(
+                                        leading: const Icon(Icons.favorite,
+                                            color: Colors.redAccent),
+                                        title: Text(
+                                            isVN
+                                                ? "Bạn thân học tập"
+                                                : "Study Besties",
+                                            style: const TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.grey)),
+                                      ),
+                                      ...(data['featuredFriendsData'] as List)
+                                          .map((fData) => Padding(
+                                                padding: const EdgeInsets.only(
+                                                    left: 72.0, bottom: 12.0),
+                                                child: Row(
+                                                  children: [
+                                                    Text(fData['name'],
+                                                        style: const TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 16,
+                                                            color: Colors
+                                                                .black87)),
+                                                    const SizedBox(width: 8),
+                                                    const Icon(
+                                                        Icons
+                                                            .local_fire_department,
+                                                        color: Colors.orange,
+                                                        size: 20),
+                                                    Text("${fData['streak']}",
+                                                        style: const TextStyle(
+                                                            color:
+                                                                Colors.orange,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 16)),
+                                                  ],
+                                                ),
+                                              ))
+                                          .toList(),
                                     ],
                                   ),
                                 ),
                               ),
-
                             // 3. Các Info Card thông tin
                             _infoCard(Icons.alternate_email,
                                 isVN ? "ID người dùng" : "User ID", "@$userId"),
