@@ -363,7 +363,15 @@ class _PlanPageState extends State<PlanPage> {
                             parsedDate =
                                 DateTime(year, month, day, hour, minute);
 
-                            if (parsedDate.isBefore(DateTime.now())) {
+                            DateTime exactNow = DateTime.now();
+                            DateTime currentMinute = DateTime(
+                                exactNow.year,
+                                exactNow.month,
+                                exactNow.day,
+                                exactNow.hour,
+                                exactNow.minute);
+
+                            if (parsedDate.isBefore(currentMinute)) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(isVN
