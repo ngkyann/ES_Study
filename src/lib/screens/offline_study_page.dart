@@ -18,6 +18,9 @@ class OfflineStudyPage extends StatefulWidget {
 class _OfflineStudyPageState extends State<OfflineStudyPage> {
   int selectedMinutes = 30;
   final Map<int, List<List<int>>> timePlans = {
+    1: [
+      [1],
+    ],
     15: [
       [15],
     ],
