@@ -778,7 +778,37 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                           ),
                         ),
-
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Stack(
+                            children: [
+                              // Lớp viền: Dùng 4 cái shadow mỏng để tạo viền mịn mà không cần "stroke" thô
+                              Text(
+                                "ES STUDY",
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                  foreground: Paint()
+                                    ..style = PaintingStyle.stroke
+                                    ..strokeWidth = 4 // Độ dày của viền
+                                    ..color =
+                                        const Color(0xFF81D4FA), // Màu viền
+                                ),
+                              ),
+                              // Lớp chữ chính bên trên
+                              Text(
+                                "ES STUDY",
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                  color: Color.fromARGB(255, 255, 255, 255),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(height: 18),
 
                         Center(
