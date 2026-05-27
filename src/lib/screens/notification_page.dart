@@ -290,20 +290,8 @@ class _NotificationPageState extends State<NotificationPage> {
                                                   children: [
                                                     Text(
                                                       '$contentStr.',
-                                                      style: TextStyle(
-                                                        foreground: Paint()
-                                                          ..style =
-                                                              PaintingStyle
-                                                                  .stroke
-                                                          ..strokeWidth = 2
-                                                          ..color =
-                                                              Colors.black,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      '$contentStr.',
                                                       style: const TextStyle(
-                                                        color: Colors.white,
+                                                        color: Colors.black,
                                                       ),
                                                     ),
                                                   ],
