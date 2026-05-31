@@ -929,14 +929,24 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               suffixIcon: Padding(
                                 padding: const EdgeInsets.only(right: 8),
                                 child: IconButton(
-                                  icon: Icon(
-                                    _obscureText
-                                        ? Icons.visibility_off_outlined
-                                        : Icons.visibility_outlined,
-                                    color: Colors.grey.shade400,
-                                  ),
                                   onPressed: () => setState(
-                                    () => _obscureText = !_obscureText,
+                                      () => _obscureText = !_obscureText),
+                                  icon: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 300),
+                                    transitionBuilder: (Widget child,
+                                        Animation<double> animation) {
+                                      return ScaleTransition(
+                                        scale: animation,
+                                        child: child,
+                                      );
+                                    },
+                                    child: Icon(
+                                      _obscureText
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                      key: ValueKey<bool>(_obscureText),
+                                      color: Colors.grey.shade400,
+                                    ),
                                   ),
                                 ),
                               ),
