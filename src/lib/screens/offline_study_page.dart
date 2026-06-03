@@ -90,9 +90,16 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                             isVN ? "Thời gian học" : "Study Duration",
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
+                          const SizedBox(height: 4),
                           DropdownButton<int>(
                             value: selectedMinutes,
                             isExpanded: true,
+                            underline:
+                                const SizedBox(), // Ẩn đường gạch chân thô mặc định
+                            dropdownColor:
+                                Colors.white, // Đảm bảo màu nền menu đồng bộ
+                            borderRadius: BorderRadius.circular(
+                                16), // 🔥 BO GÓC MENU POPUP
                             items: timePlans.keys
                                 .map(
                                   (e) => DropdownMenuItem(
@@ -106,14 +113,21 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                               selectedPlanIndex = 0;
                             }),
                           ),
-                          const SizedBox(height: 10),
+                          const Divider(
+                              height: 20), // Thêm vạch chia nhẹ cho thanh lịch
                           Text(
                             isVN ? "Chế độ học tập" : "Study Mode",
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
+                          const SizedBox(height: 4),
                           DropdownButton<int>(
                             value: selectedPlanIndex,
                             isExpanded: true,
+                            underline:
+                                const SizedBox(), // Ẩn đường gạch chân thô mặc định
+                            dropdownColor: Colors.white,
+                            borderRadius: BorderRadius.circular(
+                                16), // 🔥 BO GÓC MENU POPUP
                             items: List.generate(
                               plans.length,
                               (index) => DropdownMenuItem(
@@ -136,7 +150,7 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                             isVN ? "Chọn kế hoạch" : "Select Plan",
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 4),
                           StreamBuilder<QuerySnapshot>(
                             stream: FirebaseFirestore.instance
                                 .collection('plans')
@@ -158,6 +172,11 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                               return DropdownButton<String?>(
                                 value: selectedFirebasePlanId,
                                 isExpanded: true,
+                                underline:
+                                    const SizedBox(), // Ẩn đường gạch chân thô mặc định
+                                dropdownColor: Colors.white,
+                                borderRadius: BorderRadius.circular(
+                                    16), // 🔥 BO GÓC MENU POPUP
                                 hint: Text(isVN
                                     ? "Chọn kế hoạch..."
                                     : "Select a plan..."),
@@ -224,10 +243,16 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                                 fontSize: 12,
                               ),
                             ),
+                            const SizedBox(height: 5),
                             ...filteredGoals.map(
-                              (g) => Text(
-                                "• $g",
-                                style: const TextStyle(fontSize: 13),
+                              (g) => Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 2),
+                                child: Text(
+                                  "• $g",
+                                  style: const TextStyle(
+                                      fontSize: 13, color: Colors.black87),
+                                ),
                               ),
                             ),
                           ] else if (selectedFirebasePlanId != null)
@@ -238,13 +263,15 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                                     ? "🎉 Tuyệt vời! Bạn đã hoàn thành hết mục tiêu của kế hoạch này."
                                     : "🎉 Awesome! You have completed all goals for this plan.",
                                 style: const TextStyle(
-                                    color: Colors.green, fontSize: 13),
+                                    color: Colors.green,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600),
                               ),
                             ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 30),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
@@ -252,6 +279,7 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
+                        elevation: 2,
                       ),
                       onPressed: (selectedFirebasePlanId != null &&
                               filteredGoals.isEmpty)
@@ -276,8 +304,10 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
                             },
                       child: Text(
                         isVN ? "Bắt đầu học" : "Start Studying",
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 18),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -293,15 +323,15 @@ class _OfflineStudyPageState extends State<OfflineStudyPage> {
   Widget _buildCard({required Widget child}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -571,7 +601,6 @@ class _StudySessionPageState extends State<StudySessionPage> {
   Future<void> _finishStudySession() async {
     int minutes = sessions.fold(0, (a, b) => a + b);
 
-    // Tính toán coin (1 nửa số phút/điểm, làm tròn lên)
     int earnedCoins = (minutes / 2.0).round();
 
     List<bool> updatedStatus = List.from(widget.allStatus);
@@ -585,7 +614,6 @@ class _StudySessionPageState extends State<StudySessionPage> {
       }
     }
 
-    // Lưu lịch sử học
     await FirebaseFirestore.instance.collection('study_history').add({
       'userId': widget.userId,
       'time': DateTime.now(),
@@ -597,7 +625,6 @@ class _StudySessionPageState extends State<StudySessionPage> {
       'minutes': minutes,
     });
 
-    // Cập nhật tiến độ kế hoạch
     if (widget.planId != null) {
       bool isAllFinished = updatedStatus.every((status) => status == true);
       if (isAllFinished) {
@@ -613,17 +640,14 @@ class _StudySessionPageState extends State<StudySessionPage> {
       }
     }
 
-    // Cập nhật số Coin VÀ ĐIỂM vào tài khoản
     await FirebaseFirestore.instance
         .collection('users')
         .doc(widget.userId)
         .set({
       'coin': FieldValue.increment(earnedCoins),
-      'points':
-          FieldValue.increment(minutes), // 🔥 ĐÃ BỔ SUNG: Cộng điểm học tập
+      'points': FieldValue.increment(minutes),
     }, SetOptions(merge: true));
 
-    // 🔥 THÊM MỚI: Bắn thông báo về bảng notifications để hiển thị bên NotificationPage
     await FirebaseFirestore.instance.collection('notifications').add({
       'userId': widget.userId,
       'content_vn':
@@ -635,12 +659,10 @@ class _StudySessionPageState extends State<StudySessionPage> {
 
     int completedCount = sessionDone.where((e) => e).length;
 
-    // Hiển thị Popup kết quả
     _showResult(
         completedCount, widget.goalsForRoom.length, minutes, earnedCoins);
   }
 
-  // 🔥 CẬP NHẬT: Nhận thêm tham số earnedCoins để hiển thị
   void _showResult(
       int completedTasks, int totalTasks, int minutes, int earnedCoins) {
     bool isVN = languageNotifier.value == "Tiếng Việt";
@@ -653,7 +675,6 @@ class _StudySessionPageState extends State<StudySessionPage> {
             textAlign: TextAlign.center),
         content: Text(
           isVN
-              // 🔥 CẬP NHẬT: Thêm dòng thông báo nhận Coin
               ? "Bạn đã hoàn thành $completedTasks/$totalTasks nhiệm vụ.\nTiến độ đã được cập nhật vào Kế hoạch.\n\n🎁 Thưởng: +$minutes điểm & +$earnedCoins coin"
               : "You have completed $completedTasks/$totalTasks tasks.\nProgress has been updated to your Plan.\n\n🎁 Reward: +$minutes points & +$earnedCoins coins",
           textAlign: TextAlign.center,
@@ -670,8 +691,7 @@ class _StudySessionPageState extends State<StudySessionPage> {
               ),
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.pop(
-                    context, minutes); // Trả số phút (điểm) về trang chủ
+                Navigator.pop(context, minutes);
               },
               child: Text(
                 isVN ? "Tuyệt vời!" : "Awesome!",

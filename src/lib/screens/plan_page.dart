@@ -5,7 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter/foundation.dart';
-import 'package:esstudy/constants/var.dart'; // 🔥 IMPORT BIẾN NGÔN NGỮ
+import 'package:esstudy/constants/var.dart';
 
 class PlanPage extends StatefulWidget {
   final String userId;
@@ -20,6 +20,10 @@ class _PlanPageState extends State<PlanPage> {
       FlutterLocalNotificationsPlugin();
 
   List<QueryDocumentSnapshot>? _cachedDocs;
+
+  String _searchQuery = "";
+  DateTime? _selectedFilterDate;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -107,6 +111,22 @@ class _PlanPageState extends State<PlanPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickFilterDate(bool isVN) async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedFilterDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      helpText: isVN ? "CHỌN NGÀY CẦN LỌC" : "SELECT DATE TO FILTER",
+      cancelText: isVN ? "HỦY LỌC" : "CLEAR",
+      confirmText: isVN ? "CHỌN" : "SELECT",
+    );
+
+    setState(() {
+      _selectedFilterDate = picked;
+    });
   }
 
   Future<void> _addPlan() async {
@@ -490,166 +510,328 @@ class _PlanPageState extends State<PlanPage> {
             onPressed: _addPlan,
             child: const Icon(Icons.add, color: Colors.white),
           ),
-          body: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('plans')
-                .where('userId', isEqualTo: widget.userId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting &&
-                  _cachedDocs == null) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(
-                    child: Text(isVN
-                        ? "Lỗi: ${snapshot.error}"
-                        : "Error: ${snapshot.error}"));
-              }
-              if (snapshot.hasData) _cachedDocs = snapshot.data!.docs;
+          body: Column(
+            children: [
+              // 🔥 1. THANH SEARCH VÀ NÚT LỌC ĐƯỢC THÊM TẠI ĐÂY
+              Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value.trim().toLowerCase();
+                            });
+                          },
+                          decoration: InputDecoration(
+                            hintText: isVN
+                                ? "Tìm kiếm kế hoạch..."
+                                : "Search plans...",
+                            hintStyle: TextStyle(
+                                color: Colors.grey.shade400, fontSize: 14),
+                            prefixIcon: Icon(Icons.search, color: primaryColor),
+                            suffixIcon: _searchQuery.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() {
+                                        _searchQuery = "";
+                                      });
+                                    },
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Nút Lọc theo ngày
+                    GestureDetector(
+                      onTap: () => _pickFilterDate(isVN),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _selectedFilterDate != null
+                              ? primaryColor
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _selectedFilterDate != null
+                                ? primaryColor
+                                : Colors.grey.shade300,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.filter_alt_rounded,
+                          color: _selectedFilterDate != null
+                              ? Colors.white
+                              : primaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
-              final docs = List<QueryDocumentSnapshot>.from(_cachedDocs ?? []);
-              if (docs.isEmpty) {
-                return RefreshIndicator(
-                  onRefresh: () async =>
-                      await Future.delayed(const Duration(seconds: 1)),
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
+              // Hiển thị tag ngày đang lọc nếu người dùng chọn ngày
+              if (_selectedFilterDate != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  child: Row(
                     children: [
-                      const SizedBox(height: 300),
-                      Center(
-                        child: Text(
-                          isVN ? "Chưa có kế hoạch nào" : "No plans yet",
-                          style: const TextStyle(color: Colors.grey),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_today,
+                                size: 14, color: primaryColor),
+                            const SizedBox(width: 5),
+                            Text(
+                              "${_selectedFilterDate!.day.toString().padLeft(2, '0')}/${_selectedFilterDate!.month.toString().padLeft(2, '0')}/${_selectedFilterDate!.year}",
+                              style: TextStyle(
+                                  color: primaryColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 5),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedFilterDate = null;
+                                });
+                              },
+                              child: Icon(Icons.close,
+                                  size: 14, color: primaryColor),
+                            )
+                          ],
                         ),
                       ),
                     ],
                   ),
-                );
-              }
+                ),
 
-              docs.sort((a, b) {
-                DateTime timeA = (a['time'] as Timestamp).toDate();
-                DateTime timeB = (b['time'] as Timestamp).toDate();
-                return timeA.compareTo(timeB);
-              });
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('plans')
+                      .where('userId', isEqualTo: widget.userId)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        _cachedDocs == null) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                          child: Text(isVN
+                              ? "Lỗi: ${snapshot.error}"
+                              : "Error: ${snapshot.error}"));
+                    }
+                    if (snapshot.hasData) _cachedDocs = snapshot.data!.docs;
 
-              return RefreshIndicator(
-                onRefresh: () async =>
-                    await Future.delayed(const Duration(seconds: 1)),
-                child: ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  itemCount: docs.length,
-                  itemBuilder: (_, index) {
-                    final data = docs[index];
-                    DateTime time = (data['time'] as Timestamp).toDate();
-                    final mapData = data.data() as Map<String, dynamic>;
-                    final tasksList = List<String>.from(mapData['tasks'] ?? []);
-                    final completedTasks = List<bool>.from(
-                      mapData['completedTasks'] ??
-                          List.generate(tasksList.length, (_) => false),
-                    );
-                    final completedCount =
-                        completedTasks.where((e) => e).length;
+                    // 🔥 LẤY TOÀN BỘ DOCS GỐC
+                    final rawDocs =
+                        List<QueryDocumentSnapshot>.from(_cachedDocs ?? []);
 
-                    return ListTile(
-                      leading: Icon(Icons.schedule, color: primaryColor),
-                      title: Text(
-                        data['title'],
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(
-                        "${time.day.toString().padLeft(2, '0')}/${time.month.toString().padLeft(2, '0')}/${time.year} - ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}\n" +
-                            (isVN ? "Tiến độ" : "Progress") +
-                            ": $completedCount/${tasksList.length} " +
-                            (isVN ? "nhiệm vụ" : "tasks"),
-                      ),
-                      trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () async {
-                            // 🔥 ĐÃ SỬA: Hàm hủy thông báo cũng cần khai báo "id:"
-                            await notificationsPlugin.cancel(
-                                id: data.id.hashCode);
+                    // 🔥 2. THỰC HIỆN LOGIC LỌC DATA TẠI ĐÂY (SEARCH + FILTER DATE)
+                    final docs = rawDocs.where((doc) {
+                      final title = (doc['title'] as String).toLowerCase();
+                      DateTime time = (doc['time'] as Timestamp).toDate();
 
-                            await FirebaseFirestore.instance
-                                .collection('plans')
-                                .doc(data.id)
-                                .delete();
-                            await FirebaseFirestore.instance
-                                .collection('notifications')
-                                .doc('plan_${data.id}')
-                                .delete();
-                          }),
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                      // Kiểm tra điều kiện tìm kiếm theo tên
+                      bool matchesSearch = title.contains(_searchQuery);
+
+                      // Kiểm tra điều kiện lọc theo ngày/tháng/năm
+                      bool matchesDate = true;
+                      if (_selectedFilterDate != null) {
+                        matchesDate = time.year == _selectedFilterDate!.year &&
+                            time.month == _selectedFilterDate!.month &&
+                            time.day == _selectedFilterDate!.day;
+                      }
+
+                      return matchesSearch && matchesDate;
+                    }).toList();
+
+                    if (docs.isEmpty) {
+                      return RefreshIndicator(
+                        onRefresh: () async =>
+                            await Future.delayed(const Duration(seconds: 1)),
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            const SizedBox(height: 200),
+                            Center(
+                              child: Text(
+                                isVN
+                                    ? "Chưa có kế hoạch nào phù hợp"
+                                    : "No matching plans",
+                                style: const TextStyle(color: Colors.grey),
                               ),
-                              title: Text(
-                                data['title'],
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              content: SizedBox(
-                                width: double.maxFinite,
-                                child: ListView.builder(
-                                  shrinkWrap: true,
-                                  itemCount: tasksList.length,
-                                  itemBuilder: (context, i) {
-                                    bool isDone = completedTasks[i];
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 8.0,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            isDone
-                                                ? Icons.check_circle
-                                                : Icons.radio_button_unchecked,
-                                            color: isDone
-                                                ? Colors.green
-                                                : Colors.grey,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              tasksList[i],
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                decoration: isDone
-                                                    ? TextDecoration.lineThrough
-                                                    : null,
-                                                color: isDone
-                                                    ? Colors.grey
-                                                    : Colors.black87,
-                                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    docs.sort((a, b) {
+                      DateTime timeA = (a['time'] as Timestamp).toDate();
+                      DateTime timeB = (b['time'] as Timestamp).toDate();
+                      return timeA.compareTo(timeB);
+                    });
+
+                    return RefreshIndicator(
+                      onRefresh: () async =>
+                          await Future.delayed(const Duration(seconds: 1)),
+                      child: ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemCount: docs.length,
+                        itemBuilder: (_, index) {
+                          final data = docs[index];
+                          DateTime time = (data['time'] as Timestamp).toDate();
+                          final mapData = data.data() as Map<String, dynamic>;
+                          final tasksList =
+                              List<String>.from(mapData['tasks'] ?? []);
+                          final completedTasks = List<bool>.from(
+                            mapData['completedTasks'] ??
+                                List.generate(tasksList.length, (_) => false),
+                          );
+                          final completedCount =
+                              completedTasks.where((e) => e).length;
+
+                          return ListTile(
+                            leading: Icon(Icons.schedule, color: primaryColor),
+                            title: Text(
+                              data['title'],
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              "${time.day.toString().padLeft(2, '0')}/${time.month.toString().padLeft(2, '0')}/${time.year} - ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}\n" +
+                                  (isVN ? "Tiến độ" : "Progress") +
+                                  ": $completedCount/${tasksList.length} " +
+                                  (isVN ? "nhiệm vụ" : "tasks"),
+                            ),
+                            trailing: IconButton(
+                                icon:
+                                    const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () async {
+                                  await notificationsPlugin.cancel(
+                                      id: data.id.hashCode);
+
+                                  await FirebaseFirestore.instance
+                                      .collection('plans')
+                                      .doc(data.id)
+                                      .delete();
+                                  await FirebaseFirestore.instance
+                                      .collection('notifications')
+                                      .doc('plan_${data.id}')
+                                      .delete();
+                                }),
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) {
+                                  return AlertDialog(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    title: Text(
+                                      data['title'],
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                    content: SizedBox(
+                                      width: double.maxFinite,
+                                      child: ListView.builder(
+                                        shrinkWrap: true,
+                                        itemCount: tasksList.length,
+                                        itemBuilder: (context, i) {
+                                          bool isDone = completedTasks[i];
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 8.0,
                                             ),
-                                          ),
-                                        ],
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  isDone
+                                                      ? Icons.check_circle
+                                                      : Icons
+                                                          .radio_button_unchecked,
+                                                  color: isDone
+                                                      ? Colors.green
+                                                      : Colors.grey,
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    tasksList[i],
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      decoration: isDone
+                                                          ? TextDecoration
+                                                              .lineThrough
+                                                          : null,
+                                                      color: isDone
+                                                          ? Colors.grey
+                                                          : Colors.black87,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
                                       ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: Text(isVN ? "Đóng" : "Close"),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                      },
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: Text(isVN ? "Đóng" : "Close"),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
                     );
                   },
                 ),
-              );
-            },
+              ),
+            ],
           ),
         );
       },

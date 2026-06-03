@@ -34,6 +34,8 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
   String? _selectedPlanId;
   String _selectedPlanTitle =
       languageNotifier.value == "Tiếng Việt" ? "Học tự do" : "Free Study";
+
+  // Các biến State cũ được giữ nguyên đầy đủ để không bị lỗi ở hàm Navigator
   List<String> _goalsForRoom = [];
   bool _isPrivate = false;
   String _roomCode = "";
@@ -62,13 +64,14 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
           ),
         ),
       );
-      // Sửa lỗi kẹt loading khi tên phòng bị trống
       setState(() => _isLoading = false);
       return;
     }
 
     final String roomName = _roomNameController.text.trim();
-    final String newRoomId = const Uuid().v4();
+
+    // Tối ưu sinh mã phòng ngắn gọn 8 ký tự hoặc giữ nguyên tùy ý bạn
+    final String newRoomId = const Uuid().v4().substring(0, 8).toUpperCase();
 
     // Tạo mã phòng 6 chữ số nếu là phòng riêng tư
     if (_isPrivate) {
@@ -78,6 +81,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
+    // Điều hướng sang OnlineRoomPage với đầy đủ tham số của bản cũ không lo bị thiếu dữ liệu
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -110,7 +114,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
           appBar: AppBar(
             title: Text(
               isVN ? "Tạo phòng học" : "Create Room",
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             backgroundColor: primaryColor,
             foregroundColor: Colors.white,
@@ -126,9 +130,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                   icon: Icons.edit_note,
                   child: TextField(
                     controller: _roomNameController,
-                    // THÊM: Định dạng nút Enter trên bàn phím là 'Done/Go'
                     textInputAction: TextInputAction.done,
-                    // THÊM: Gọi hàm tạo phòng ngay khi nhấn Enter
                     onSubmitted: (_) => _createAndJoinRoom(),
                     decoration: InputDecoration(
                       hintText:
@@ -151,6 +153,9 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                         icon: Icons.timer,
                         child: DropdownButtonFormField<int>(
                           value: _selectedMinutes,
+                          dropdownColor: Colors.white, // Màu nền menu popup
+                          borderRadius: BorderRadius.circular(
+                              16), // 🔥 BO GÓC MENU POPUP TÙY CHỌN
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: Colors.grey.shade100,
@@ -179,6 +184,9 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                         icon: Icons.people_alt,
                         child: DropdownButtonFormField<int>(
                           value: _maxMembers,
+                          dropdownColor: Colors.white, // Màu nền menu popup
+                          borderRadius: BorderRadius.circular(
+                              16), // 🔥 BO GÓC MENU POPUP TÙY CHỌN
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: Colors.grey.shade100,
@@ -212,13 +220,13 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                     contentPadding: EdgeInsets.zero,
                     title: Text(
                       isVN ? "Phòng học riêng tư" : "Private Study Room",
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
                       isVN
                           ? "Yêu cầu nhập mã 6 số để tham gia. Phòng học sẽ bị ẩn trên danh sách tìm kiếm chung."
                           : "Requires a 6-digit code to join. The room will be hidden from public search.",
-                      style: TextStyle(fontSize: 12),
+                      style: const TextStyle(fontSize: 12),
                     ),
                     value: _isPrivate,
                     activeColor: primaryColor,
@@ -237,8 +245,9 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                         .where('userId', isEqualTo: widget.userId)
                         .snapshots(),
                     builder: (context, snapshot) {
-                      if (!snapshot.hasData)
+                      if (!snapshot.hasData) {
                         return const LinearProgressIndicator();
+                      }
 
                       final now = DateTime.now();
                       final validDocs = snapshot.data!.docs.where((doc) {
@@ -249,6 +258,9 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                       return DropdownButtonFormField<String?>(
                         value: _selectedPlanId,
                         isExpanded: true,
+                        dropdownColor: Colors.white, // Màu nền menu popup
+                        borderRadius: BorderRadius.circular(
+                            16), // 🔥 BO GÓC MENU POPUP TÙY CHỌN
                         hint: Text(
                           isVN
                               ? "Học tự do (Không nhiệm vụ)"
@@ -297,8 +309,9 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                               );
 
                               for (int i = 0; i < allTasks.length; i++) {
-                                if (!allStatus[i])
+                                if (!allStatus[i]) {
                                   _goalsForRoom.add(allTasks[i]);
+                                }
                               }
                             } else {
                               _selectedPlanTitle =
@@ -325,7 +338,7 @@ class _CreateRoomPageState extends State<CreateRoomPage> {
                       ? const CircularProgressIndicator(color: Colors.white)
                       : Text(
                           isVN ? "Tạo phòng học" : "Create Room",
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
