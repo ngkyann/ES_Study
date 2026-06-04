@@ -6,6 +6,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter/foundation.dart';
 import 'package:esstudy/constants/var.dart';
+import 'dart:convert';
 
 class PlanPage extends StatefulWidget {
   final String userId;
@@ -412,7 +413,6 @@ class _PlanPageState extends State<PlanPage> {
                             return;
                           }
 
-                          // 🔥 BẬT TRẠNG THÁI LOADING (XOAY VÒNG) TẠI ĐÂY
                           setDialogState(() {
                             isSubmitting = true;
                           });
@@ -432,7 +432,6 @@ class _PlanPageState extends State<PlanPage> {
                               ),
                             });
 
-                            // 🔥 LƯU THÔNG BÁO VỚI CẢ 2 NGÔN NGỮ
                             await FirebaseFirestore.instance
                                 .collection('notifications')
                                 .doc('plan_${docRef.id}')
@@ -445,17 +444,13 @@ class _PlanPageState extends State<PlanPage> {
                               'createdAt': Timestamp.fromDate(parsedDate),
                             });
 
-                            // Gọi thông báo chuẩn xác với ID từ Firebase
                             await _scheduleNotification(
                               docRef.id.hashCode,
                               titleController.text,
                               parsedDate,
                             );
-
-                            // Nếu tạo thành công, tắt pop up đi
                             if (mounted) Navigator.pop(context);
                           } catch (e) {
-                            // Nếu lỗi Firebase thì báo lỗi và tắt vòng xoay
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                   content: Text(isVN
@@ -467,7 +462,6 @@ class _PlanPageState extends State<PlanPage> {
                             });
                           }
                         },
-                  // 🔥 ĐỔI GIAO DIỆN NÚT KHI ĐANG LOADING
                   child: isSubmitting
                       ? const SizedBox(
                           width: 20,
@@ -512,7 +506,6 @@ class _PlanPageState extends State<PlanPage> {
           ),
           body: Column(
             children: [
-              // 🔥 1. THANH SEARCH VÀ NÚT LỌC ĐƯỢC THÊM TẠI ĐÂY
               Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Row(
@@ -563,7 +556,6 @@ class _PlanPageState extends State<PlanPage> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    // Nút Lọc theo ngày
                     GestureDetector(
                       onTap: () => _pickFilterDate(isVN),
                       child: Container(

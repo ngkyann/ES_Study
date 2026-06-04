@@ -1457,7 +1457,7 @@ class _HomePageState extends State<HomePage> {
                   await Navigator.push(
                     context,
                     slidePageRoute(
-                      const AIAssistantPage(),
+                      AIAssistantPage(userId: widget.userId),
                     ),
                   );
                 } else if (item.title == "Tìm phòng học") {
