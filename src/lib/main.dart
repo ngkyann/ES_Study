@@ -11,6 +11,10 @@ import 'package:esstudy/screens/home_page.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:esstudy/constants/var.dart';
+import 'package:esstudy/screens/note_page.dart';
+
+final GlobalKey<NavigatorState> globalNavigatorKey =
+    GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,15 +42,40 @@ class MyApp extends StatelessWidget {
       valueListenable: themeNotifier,
       builder: (context, currentPrimaryColor, _) {
         return MaterialApp(
+          navigatorKey: globalNavigatorKey,
           debugShowCheckedModeBanner: false,
           title: 'ES Study',
           theme: ThemeData(primaryColor: currentPrimaryColor),
           builder: (context, child) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 500),
-                child: child,
-              ),
+            return StreamBuilder<User?>(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: (context, authSnapshot) {
+                bool isLoggedIn = false;
+                if (authSnapshot.hasData && authSnapshot.data != null) {
+                  final user = authSnapshot.data!;
+                  if (user.email != null) {
+                    if (user.email!.endsWith('@esstudy.com') ||
+                        user.emailVerified) {
+                      isLoggedIn = true;
+                    }
+                  }
+                }
+
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 500),
+                    child: Stack(
+                      children: [
+                        if (child != null) child,
+
+                        // 🔥 Thay thế bằng Widget Bong Bóng toàn cục tự custom
+                        if (isLoggedIn)
+                          GlobalDraggableBubble(userId: authSnapshot.data!.uid),
+                      ],
+                    ),
+                  ),
+                );
+              },
             );
           },
           home: StreamBuilder<User?>(
@@ -66,7 +95,6 @@ class MyApp extends StatelessWidget {
                   return const LoginPage();
                 }
 
-                // --- 1. TÀI KHOẢN HỆ THỐNG CŨ (EMAIL ẢO) ---
                 if (user.email!.endsWith('@esstudy.com')) {
                   final String docId = user.email!.split('@')[0];
                   return FutureBuilder<DocumentSnapshot>(
@@ -96,9 +124,7 @@ class MyApp extends StatelessWidget {
                   );
                 }
 
-                // --- 2. TÀI KHOẢN MỚI (EMAIL THẬT) ---
                 if (!user.emailVerified) {
-                  // Đã đăng nhập nhưng chưa kích hoạt -> Giữ lại ở trang Login
                   return const LoginPage();
                 }
 
@@ -128,7 +154,6 @@ class MyApp extends StatelessWidget {
                       );
                     }
 
-                    // Không tìm thấy trong Database thì đăng xuất
                     FirebaseAuth.instance.signOut();
                     return const LoginPage();
                   },
@@ -139,6 +164,112 @@ class MyApp extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ============================================================================
+// 🔥 WIDGET ĐỘC LẬP: BONG BÓNG GHI CHÚ KÉO THẢ TOÀN CỤC
+// ============================================================================
+class GlobalDraggableBubble extends StatefulWidget {
+  final String userId;
+  const GlobalDraggableBubble({super.key, required this.userId});
+
+  @override
+  State<GlobalDraggableBubble> createState() => _GlobalDraggableBubbleState();
+}
+
+class _GlobalDraggableBubbleState extends State<GlobalDraggableBubble> {
+  // Dùng biến nullable để thiết lập vị trí mặc định lần đầu khởi động
+  double? bubbleX;
+  double? bubbleY;
+
+  // 🔥 THÊM MỚI: Biến kiểm soát trạng thái hiển thị của bong bóng
+  bool _isVisible = true;
+
+  @override
+  Widget build(BuildContext context) {
+    // 🔥 THÊM MỚI: Nếu đang mở Note thì ẩn bong bóng hoàn toàn
+    if (!_isVisible) return const SizedBox.shrink();
+
+    final screenSize = MediaQuery.of(context).size;
+
+    // Tính toán chiều rộng thực tế của khung App (bị giới hạn tối đa 500 bởi ConstrainedBox)
+    final double appWidth = screenSize.width > 500 ? 500 : screenSize.width;
+
+    // Thiết lập vị trí mặc định (Góc dưới bên phải)
+    if (bubbleX == null || bubbleX! > appWidth) {
+      bubbleX = appWidth - 75;
+    }
+    if (bubbleY == null || bubbleY! > screenSize.height) {
+      bubbleY = screenSize.height - 180;
+    }
+
+    return Positioned(
+      left: bubbleX,
+      top: bubbleY,
+      child: GestureDetector(
+        onPanUpdate: (details) {
+          setState(() {
+            bubbleX = (bubbleX! + details.delta.dx);
+            bubbleY = (bubbleY! + details.delta.dy);
+
+            // Chặn biên an toàn để bong bóng không bay ra ngoài appWidth (500)
+            if (bubbleX! < 0) bubbleX = 0;
+            if (bubbleX! > appWidth - 55) bubbleX = appWidth - 55;
+            if (bubbleY! < 40) bubbleY = 40;
+            if (bubbleY! > screenSize.height - 140) {
+              bubbleY = screenSize.height - 140;
+            }
+          });
+        },
+        // 🔥 ĐÃ SỬA: Chuyển hàm thành async để chờ hộp thoại đóng lại
+        onTap: () async {
+          // 1. Ẩn bong bóng đi trước khi mở Note
+          setState(() {
+            _isVisible = false;
+          });
+
+          // 2. Dùng await để code "đứng chờ" ở đây cho đến khi người dùng tắt QuickNoteDialog
+          await showDialog(
+            context: globalNavigatorKey.currentContext!,
+            barrierDismissible: true,
+            builder: (context) => QuickNoteDialog(
+              userId: widget.userId,
+              isVN: languageNotifier.value == "Tiếng Việt",
+            ),
+          );
+
+          // 3. Sau khi hộp thoại Note bị tắt, khôi phục lại bong bóng
+          if (mounted) {
+            setState(() {
+              _isVisible = true;
+            });
+          }
+        },
+        child: Material(
+          elevation: 5,
+          shape: const CircleBorder(),
+          color: Colors.transparent,
+          child: Container(
+            width: 55,
+            height: 55,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [primaryColor, primaryColor.withOpacity(0.85)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const Icon(
+              Icons.sticky_note_2_rounded,
+              color: Colors.white,
+              size: 26,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

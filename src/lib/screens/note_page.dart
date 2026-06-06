@@ -5,6 +5,9 @@ import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/constants/var.dart';
 import 'package:rich_text_controller/rich_text_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // 🔥 Thêm thư viện lưu tạm
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_latex/flutter_markdown_latex.dart';
+import 'package:markdown/markdown.dart' as md;
 
 class QuickNoteDialog extends StatefulWidget {
   final String userId;
@@ -20,7 +23,7 @@ class _QuickNoteDialogState extends State<QuickNoteDialog> {
   final TextEditingController _titleController = TextEditingController();
   bool _isAiLoading = false;
   bool _isChanged = true;
-
+  bool _isPreviewMode = false;
   @override
   void initState() {
     super.initState();
@@ -81,6 +84,7 @@ class _QuickNoteDialogState extends State<QuickNoteDialog> {
       setState(() {
         _noteController.text = draft;
         _isChanged = true; // Cho phép AI xử lý tiếp text tạm này nếu muốn
+        _isPreviewMode = true;
       });
     }
   }
@@ -153,7 +157,7 @@ class _QuickNoteDialogState extends State<QuickNoteDialog> {
       final prompt = """
 Bạn là một trợ lý ghi chú học tập thông minh. 
 Nhiệm vụ của bạn là đọc đoạn ghi chú thô dưới đây của học sinh, tiến hành TỈNH LƯỢC (bỏ từ thừa, giữ từ khóa) và TỰ PHÂN CẤP cấu trúc (dạng danh sách bullet points) để dễ nhìn, dễ học thuộc nhất.
-Đầu ra CHỈ trả về đoạn văn bản đã xử lý xong, không chào hỏi, không giải thích dài dòng.
+Đầu ra CHỈ trả về đoạn văn bản đã xử lý xong viết dưới định dạng Markdown đẹp mắt, có thể sử dụng biểu thức LaTeX nếu cần ghi công thức toán/lý/hóa. Không chào hỏi, không giải thích dài dòng.
 
 Nội dung ghi chú thô:
 "$text"
@@ -166,6 +170,7 @@ Nội dung ghi chú thô:
         setState(() {
           _noteController.text = aiResult.trim();
           _isChanged = false;
+          _isPreviewMode = true;
         });
         // 🔥 Lưu tạm kết quả AI trả về vào máy phòng khi người dùng tắt ngang
         _saveDraftNote(_noteController.text);
@@ -417,6 +422,7 @@ Nội dung ghi chú thô:
                           _titleController.text = data['title'] ?? '';
                           _noteController.text = data['content'] ?? '';
                           _isChanged = true;
+                          _isPreviewMode = true;
                         });
                         // 🔥 Lưu tạm ghi chú cũ vừa load này xuống máy luôn phòng khi thoát ra
                         _saveDraftNote(_noteController.text);
@@ -499,25 +505,57 @@ Nội dung ghi chú thô:
                       Expanded(
                         child: _isAiLoading
                             ? const Center(child: CircularProgressIndicator())
-                            : TextField(
-                                controller: _noteController,
-                                maxLines: null,
-                                textAlignVertical: TextAlignVertical.top,
-                                keyboardType: TextInputType.multiline,
-                                decoration: InputDecoration(
-                                  hintText: widget.isVN
-                                      ? "Ghi chú nhanh kiến thức tại đây..."
-                                      : "Jot down something quickly...",
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                                style: const TextStyle(
-                                  fontFamily: 'Courier',
-                                  fontSize: 14,
-                                  height: 1.4,
-                                  color: Colors.black87,
-                                ),
-                              ),
+                            : _isPreviewMode
+                                // 👉 THÊM ĐOẠN NÀY: Giao diện hiển thị Markdown + LaTeX
+                                ? Markdown(
+                                    data: _noteController.text,
+                                    selectable: true,
+                                    padding: EdgeInsets
+                                        .zero, // Giúp căn lề khớp với giao diện TextField cũ
+                                    builders: {
+                                      // 👉 SỬA LẠI ĐOẠN NÀY
+                                      'latex': LatexElementBuilder(),
+                                    },
+                                    extensionSet: md.ExtensionSet(
+                                      [
+                                        LatexBlockSyntax(),
+                                        ...md.ExtensionSet.gitHubFlavored
+                                            .blockSyntaxes
+                                      ],
+                                      [
+                                        LatexInlineSyntax(),
+                                        ...md.ExtensionSet.gitHubFlavored
+                                            .inlineSyntaxes
+                                      ],
+                                    ),
+                                    styleSheet: MarkdownStyleSheet(
+                                      p: const TextStyle(
+                                          fontSize: 14,
+                                          height: 1.5,
+                                          color: Colors.black87),
+                                      listBullet: const TextStyle(
+                                          fontSize: 14, color: Colors.black87),
+                                    ),
+                                  )
+                                : TextField(
+                                    controller: _noteController,
+                                    maxLines: null,
+                                    textAlignVertical: TextAlignVertical.top,
+                                    keyboardType: TextInputType.multiline,
+                                    decoration: InputDecoration(
+                                      hintText: widget.isVN
+                                          ? "Ghi chú nhanh kiến thức tại đây..."
+                                          : "Jot down something quickly...",
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                    style: const TextStyle(
+                                      fontFamily: 'Courier',
+                                      fontSize: 14,
+                                      height: 1.4,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
                       ),
                     ],
                   ),
@@ -546,6 +584,20 @@ Nội dung ghi chú thô:
                       label: widget.isVN ? "Tải" : "Load",
                       color: Colors.orange,
                       onTap: _loadNotesList,
+                    ),
+                    _NoteSideButton(
+                      icon: _isPreviewMode
+                          ? Icons.edit_document
+                          : Icons.menu_book_rounded,
+                      label: _isPreviewMode
+                          ? (widget.isVN ? "Sửa" : "Edit")
+                          : (widget.isVN ? "Xem" : "View"),
+                      color: Colors.teal,
+                      onTap: () {
+                        setState(() {
+                          _isPreviewMode = !_isPreviewMode;
+                        });
+                      },
                     ),
                     _NoteSideButton(
                       icon: Icons.auto_awesome,

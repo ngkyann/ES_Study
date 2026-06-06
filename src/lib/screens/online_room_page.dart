@@ -1419,7 +1419,8 @@ class _OnlineRoomPageState extends State<OnlineRoomPage>
 
           final screenWidth = MediaQuery.of(context).size.width;
           final screenHeight = MediaQuery.of(context).size.height;
-          final double safeLeft = 20 + _bubbleX * (screenWidth - 100);
+          final double appWidth = screenWidth > 500 ? 500 : screenWidth;
+          final double safeLeft = 20 + _bubbleX * (appWidth - 100);
           final double safeTop = 100 + _bubbleY * (screenHeight - 250);
 
           Widget mainBody = Column(

@@ -16,7 +16,6 @@ import 'package:esstudy/screens/create_room_page.dart';
 import 'package:esstudy/constants/var.dart';
 import 'package:esstudy/screens/notification_page.dart';
 import 'package:esstudy/screens/shop_page.dart';
-import 'package:esstudy/screens/note_page.dart';
 import 'dart:async';
 import 'dart:math';
 
@@ -993,8 +992,6 @@ class _HomePageState extends State<HomePage> {
       valueListenable: languageNotifier,
       builder: (context, lang, child) {
         bool isVN = lang == "Tiếng Việt";
-        final screenSize = MediaQuery.of(context)
-            .size; // Lấy kích thước màn hình để giới hạn biên an toàn
 
         return Scaffold(
           backgroundColor: Colors.grey.shade50,
@@ -1092,65 +1089,6 @@ class _HomePageState extends State<HomePage> {
                     email: _realEmail,
                   ),
                 ],
-              ),
-
-              // 🔥 2. LỚP NỔI TRÊN: BONG BÓNG GHI CHÚ KÉO THẢ DI CHUYỂN MỌI NƠI
-              Positioned(
-                left: bubbleX,
-                top: bubbleY,
-                child: GestureDetector(
-                  // Logic tính toán dịch chuyển vị trí theo ngón tay kéo
-                  onPanUpdate: (details) {
-                    setState(() {
-                      bubbleX += details.delta.dx;
-                      bubbleY += details.delta.dy;
-
-                      // Chặn biên an toàn không cho kéo tuột mất tiêu khỏi màn hình
-                      if (bubbleX < 0) bubbleX = 0;
-                      if (bubbleX > screenSize.width - 55)
-                        bubbleX = screenSize.width - 55;
-                      if (bubbleY < 40) bubbleY = 40;
-                      if (bubbleY > screenSize.height - 140)
-                        bubbleY = screenSize.height - 140;
-                    });
-                  },
-                  // Nhấp nhẹ vào bong bóng để hiển thị trang sổ tay thon dài
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      barrierDismissible: true,
-                      builder: (context) => QuickNoteDialog(
-                        userId: widget.userId,
-                        isVN: isVN,
-                      ),
-                    );
-                  },
-                  child: Material(
-                    elevation: 5,
-                    shape: const CircleBorder(),
-                    color: Colors.transparent,
-                    child: Container(
-                      width: 55,
-                      height: 55,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            primaryColor,
-                            primaryColor.withOpacity(0.85)
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.sticky_note_2_rounded,
-                        color: Colors.white,
-                        size: 26,
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),
