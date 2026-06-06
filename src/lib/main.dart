@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/screens/home_page.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:esstudy/screens/note_page.dart';
 import 'package:esstudy/constants/var.dart';
 
 void main() async {

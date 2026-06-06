@@ -9,6 +9,7 @@ import 'package:esstudy/constants/var.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
+  static final ValueNotifier<bool> isLoginNotifier = ValueNotifier<bool>(false);
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -34,7 +35,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     12,
     (index) => 'Lớp ${index + 1}',
   );
-
   @override
   void deactivate() {
     FocusScope.of(context).unfocus();

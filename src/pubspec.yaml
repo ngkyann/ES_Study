@@ -44,7 +44,7 @@ dependencies:
   permission_handler: ^11.3.1
 
   # Utility
-  shared_preferences: ^2.3.5
+  shared_preferences: ^2.5.5
   universal_html: ^2.3.0
   flutter_webrtc: ^1.4.1
   flutter_launcher_icons: ^0.14.3
@@ -53,6 +53,7 @@ dependencies:
   markdown: ^7.3.1
   file_picker: ^11.0.2
   url_launcher: ^6.3.2
+  rich_text_controller: ^3.0.1
 
 dev_dependencies:
   flutter_lints: ^5.0.0   # Hoặc ^6.0.0 nếu bạn muốn

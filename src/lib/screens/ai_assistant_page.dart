@@ -464,7 +464,7 @@ Nhiệm vụ 2: BẮT BUỘC kẹp thêm một khối dữ liệu cấu trúc JS
 <PLAN_DATA>
 {
   "title": "Tên ngắn gọn của kế hoạch",
-  "date": "$currentDateStr",
+  "date": "$currentDateStr + 1 ngày",
   "time": "$currentTimeStr",
   "quest": [
     "Nhiệm vụ cụ thể 1",
@@ -474,7 +474,7 @@ Nhiệm vụ 2: BẮT BUỘC kẹp thêm một khối dữ liệu cấu trúc JS
 }
 </PLAN_DATA>
 
-Lưu ý quan trọng: Phải phân tích kỹ yêu cầu của người dùng để sinh ra các nhiệm vụ trong mảng "quest" thật thực tế, khả thi và tuyệt đối không để trống. Ngày giờ thực hiện mặc định ưu tiên lấy mốc hiện tại ($currentDateStr lúc $currentTimeStr).
+Lưu ý quan trọng: Phải phân tích kỹ yêu cầu của người dùng để sinh ra các nhiệm vụ trong mảng "quest" thật thực tế, khả thi và tuyệt đối không để trống. Ngày giờ thực hiện mặc định ưu tiên lấy mốc hiện tại ($currentDateStr + 1 ngày lúc $currentTimeStr). Trong trường hợp user có gửi kèm date và time, hãy lấy theo user.
 """;
     }
 
@@ -536,10 +536,7 @@ Lưu ý quan trọng: Phải phân tích kỹ yêu cầu của người dùng đ
 
     // Cấu trúc gói Content gửi đi
     final Content userContentContent = Content('user', partsToModel);
-
-    // Sau khi xử lý xong các tệp đính kèm hiện tại, xóa sạch bộ nhớ đệm chọn file để chuẩn bị cho tin tiếp theo
     XFile? tempSelectedImage = _selectedImage;
-    PlatformFile? tempSelectedFile = _selectedFile;
     setState(() {
       _selectedImage = null;
       _webImageBytes = null;

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esstudy/constants/colors.dart';
 import 'package:esstudy/constants/var.dart';
-import 'package:esstudy/screens/friends_page.dart';
 
 class StatisticsPage extends StatefulWidget {
   final String userId;
@@ -38,18 +37,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
   void initState() {
     super.initState();
     _loadStatistics();
-  }
-
-  // Mở trang Hồ sơ người khác khi click vào bảng xếp hạng
-  void _openUserProfile(
-      BuildContext context, String targetId, String targetName) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            OtherUserProfilePage(userId: targetId, userName: targetName),
-      ),
-    );
   }
 
   Future<void> _loadStatistics() async {

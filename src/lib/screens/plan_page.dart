@@ -6,7 +6,6 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter/foundation.dart';
 import 'package:esstudy/constants/var.dart';
-import 'dart:convert';
 
 class PlanPage extends StatefulWidget {
   final String userId;

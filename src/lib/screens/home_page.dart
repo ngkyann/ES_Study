@@ -16,6 +16,7 @@ import 'package:esstudy/screens/create_room_page.dart';
 import 'package:esstudy/constants/var.dart';
 import 'package:esstudy/screens/notification_page.dart';
 import 'package:esstudy/screens/shop_page.dart';
+import 'package:esstudy/screens/note_page.dart';
 import 'dart:async';
 import 'dart:math';
 
@@ -62,7 +63,8 @@ class _HomePageState extends State<HomePage> {
   String _realClass = '';
   int _currentIndex = 1;
   bool _isUpdating = false;
-
+  double bubbleX = 425.0; // Khoảng cách mặc định từ lề trái
+  double bubbleY = 125.0; // Khoảng cách mặc định từ lề trên
   String _activeEffect = '';
   Map<String, dynamic>? userData;
 
@@ -991,97 +993,164 @@ class _HomePageState extends State<HomePage> {
       valueListenable: languageNotifier,
       builder: (context, lang, child) {
         bool isVN = lang == "Tiếng Việt";
+        final screenSize = MediaQuery.of(context)
+            .size; // Lấy kích thước màn hình để giới hạn biên an toàn
 
         return Scaffold(
           backgroundColor: Colors.grey.shade50,
           appBar: null,
-          body: AnimatedSlideIndexedStack(
-            index: _currentIndex,
+          body: Stack(
+            // 🔥 1. Chèn Stack ở đây để làm lớp nền quản lý bong bóng nổi
             children: [
-              // TAB 0: CỬA HÀNG VẬT PHẨM
-              ShopPage(userId: widget.userId),
+              // LỚP NỀN DƯỚI: Toàn bộ hệ thống quản lý chuyển trang hiện tại của bạn
+              AnimatedSlideIndexedStack(
+                index: _currentIndex,
+                children: [
+                  // TAB 0: CỬA HÀNG VẬT PHẨM
+                  ShopPage(userId: widget.userId),
 
-              // TAB 1: TRANG CHỦ
-              Scaffold(
-                backgroundColor: Colors.grey.shade50,
-                appBar: AppBar(
-                  elevation: 0,
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                  leadingWidth: 290,
-                  leading: _buildAppBarLeading(),
-                  actions: [
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.notifications_none,
-                              size: 28, color: Colors.white),
-                          onPressed: () {
-                            _markAllAsRead();
+                  // TAB 1: TRANG CHỦ
+                  Scaffold(
+                    backgroundColor: Colors.grey.shade50,
+                    appBar: AppBar(
+                      elevation: 0,
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      leadingWidth: 290,
+                      leading: _buildAppBarLeading(),
+                      actions: [
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.notifications_none,
+                                  size: 28, color: Colors.white),
+                              onPressed: () {
+                                _markAllAsRead();
 
-                            Navigator.push(
-                              context,
-                              PageRouteBuilder(
-                                opaque: false,
-                                barrierDismissible: true,
-                                pageBuilder:
-                                    (context, animation, secondaryAnimation) =>
+                                Navigator.push(
+                                  context,
+                                  PageRouteBuilder(
+                                    opaque: false,
+                                    barrierDismissible: true,
+                                    pageBuilder: (context, animation,
+                                            secondaryAnimation) =>
                                         NotificationPage(userId: widget.userId),
-                                transitionsBuilder: (context, animation,
-                                    secondaryAnimation, child) {
-                                  return FadeTransition(
-                                      opacity: animation, child: child);
-                                },
-                              ),
-                            );
-                          },
-                        ),
-                        if (_unreadNotifCount > 0)
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(1.5),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: primaryColor,
-                                  width: 1.2,
-                                ),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              child: Text(
-                                _unreadNotifCount > 99
-                                    ? "99+"
-                                    : '$_unreadNotifCount',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
+                                    transitionsBuilder: (context, animation,
+                                        secondaryAnimation, child) {
+                                      return FadeTransition(
+                                          opacity: animation, child: child);
+                                    },
+                                  ),
+                                );
+                              },
                             ),
-                          ),
+                            if (_unreadNotifCount > 0)
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(1.5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: primaryColor,
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 16,
+                                    minHeight: 16,
+                                  ),
+                                  child: Text(
+                                    _unreadNotifCount > 99
+                                        ? "99+"
+                                        : '$_unreadNotifCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(width: 4),
                       ],
                     ),
-                    const SizedBox(width: 4),
-                  ],
-                ),
-                body: _buildHomeContent(isVN),
+                    body: _buildHomeContent(isVN),
+                  ),
+
+                  // TAB 2: CÀI ĐẶT
+                  SettingsPage(
+                    userName: _realName,
+                    selectedClass: _realClass,
+                    userId: widget.userId,
+                    email: _realEmail,
+                  ),
+                ],
               ),
 
-              // TAB 2: CÀI ĐẶT
-              SettingsPage(
-                userName: _realName,
-                selectedClass: _realClass,
-                userId: widget.userId,
-                email: _realEmail,
+              // 🔥 2. LỚP NỔI TRÊN: BONG BÓNG GHI CHÚ KÉO THẢ DI CHUYỂN MỌI NƠI
+              Positioned(
+                left: bubbleX,
+                top: bubbleY,
+                child: GestureDetector(
+                  // Logic tính toán dịch chuyển vị trí theo ngón tay kéo
+                  onPanUpdate: (details) {
+                    setState(() {
+                      bubbleX += details.delta.dx;
+                      bubbleY += details.delta.dy;
+
+                      // Chặn biên an toàn không cho kéo tuột mất tiêu khỏi màn hình
+                      if (bubbleX < 0) bubbleX = 0;
+                      if (bubbleX > screenSize.width - 55)
+                        bubbleX = screenSize.width - 55;
+                      if (bubbleY < 40) bubbleY = 40;
+                      if (bubbleY > screenSize.height - 140)
+                        bubbleY = screenSize.height - 140;
+                    });
+                  },
+                  // Nhấp nhẹ vào bong bóng để hiển thị trang sổ tay thon dài
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: true,
+                      builder: (context) => QuickNoteDialog(
+                        userId: widget.userId,
+                        isVN: isVN,
+                      ),
+                    );
+                  },
+                  child: Material(
+                    elevation: 5,
+                    shape: const CircleBorder(),
+                    color: Colors.transparent,
+                    child: Container(
+                      width: 55,
+                      height: 55,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            primaryColor,
+                            primaryColor.withOpacity(0.85)
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.sticky_note_2_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
