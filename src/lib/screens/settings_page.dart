@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:esstudy/constants/var.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsPage extends StatefulWidget {
   final String userName;
@@ -149,6 +150,25 @@ class _SettingsPageState extends State<SettingsPage> {
                     isVN ? "Chính sách bảo mật" : "Privacy Policy",
                     "",
                     onTap: () => _showPrivacyPolicyDialog(context),
+                  ),
+                  _buildActionTile(
+                    Icons.feedback_rounded,
+                    isVN ? "Phản hồi ý kiến" : "Send Feedback",
+                    "",
+                    onTap: () async {
+                      final Uri url =
+                          Uri.parse('https://forms.gle/qoGPWWNxmnA8zEyz7');
+                      if (!await launchUrl(url,
+                          mode: LaunchMode.externalApplication)) {
+                        if (context.mounted) {
+                          _showSnackBar(
+                              context,
+                              isVN
+                                  ? "Không thể mở liên kết!"
+                                  : "Could not launch link!");
+                        }
+                      }
+                    },
                   ),
                   _buildActionTile(
                     Icons.info,
