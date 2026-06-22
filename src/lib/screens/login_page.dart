@@ -792,8 +792,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                   foreground: Paint()
                                     ..style = PaintingStyle.stroke
                                     ..strokeWidth = 4 // Độ dày của viền
-                                    ..color =
-                                        const Color(0xFF81D4FA), // Màu viền
+                                    ..color = primaryColor, // Màu viền
                                 ),
                               ),
                               // Lớp chữ chính bên trên
@@ -970,8 +969,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                     isVN
                                         ? 'Quên mật khẩu?'
                                         : 'Forgot password?',
-                                    style: const TextStyle(
-                                      color: Color(0xFFA6E0FF),
+                                    style: TextStyle(
+                                      color: primaryColor,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
